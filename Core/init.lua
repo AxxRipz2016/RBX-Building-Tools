@@ -302,6 +302,7 @@ function InitializeUI()
 	-- Create the root UI
 	UI = Instance.new('ScreenGui')
 	UI.Name = 'Building Tools by F3X (UI)'
+	Core.UI = UI
 
 	-- Create dock
 	local ToolList = {}
@@ -415,6 +416,7 @@ if Mode == 'Plugin' then
 
 	-- Set the UI root
 	UIContainer = CoreGui;
+	Core.UIContainer = UIContainer
 
 	-- Create the toolbar button
 	PluginButton = Plugin:CreateToolbar('Building Tools by F3X'):CreateButton(
@@ -480,6 +482,7 @@ elseif Mode == 'Tool' then
 
 	-- Set the UI root
 	UIContainer = Player:WaitForChild 'PlayerGui';
+	Core.UIContainer = UIContainer
 
 	-- Connect the tool to the system
 	Tool.Equipped:Connect(Enable);
