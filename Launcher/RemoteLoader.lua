@@ -10,8 +10,8 @@ local moduleCache: { [string]: any } = {}
 local registry: { [ModuleScript]: string } = {}
 local failedPaths: { [string]: string } = {}
 
-local FETCH_DELAY = 0.06
-local MAX_RETRIES = 4
+local FETCH_DELAY = 0.08
+local MAX_RETRIES = 5
 local lastFetchAt = 0
 local fetchCount = 0
 
@@ -83,7 +83,10 @@ end
 
 local function isLikelyLuaSource(body: string): boolean
 	local head = body:sub(1, 120):lower()
-	if head:match("^%s*404") or head:find("not found", 1, true) then
+	if head:match("^%s*404") or head:match("^%s*403") or head:find("not found", 1, true) then
+		return false
+	end
+	if head:find("rate limit", 1, true) or head:find("too many requests", 1, true) then
 		return false
 	end
 	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) then
@@ -170,16 +173,16 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 			return true, result
 		else
 			lastErr = if ok and type(result) == "string" and #result > 0
-				then "404 / не Lua (проверь URL или submodule)"
+				then `не Lua ({url})`
 				else if ok then "пустой ответ" else tostring(result)
 		end
 
 		if attempt < MAX_RETRIES then
-			task.wait(0.15 * attempt)
+			task.wait(0.2 * attempt)
 		end
 	end
 
-	failedPaths[path] = lastErr or "HttpGet failed"
+	failedPaths[path] = lastErr or `HttpGet failed ({url})`
 	if progressCallback then
 		progressCallback(path, false, failedPaths[path])
 	end

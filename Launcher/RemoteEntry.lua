@@ -67,7 +67,7 @@ local Version = loadFn(httpGet(BASE_URL .. "Launcher/Version.lua"), "@Version")(
 local LoadStatusUI = loadFn(httpGet(BASE_URL .. "Launcher/LoadStatusUI.lua"), "@LoadStatusUI")()
 local ui = LoadStatusUI.create()
 ui.setVersionInfo(
-	`Launcher r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · {Version.Branch}`
+	`Launcher r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo}`
 )
 
 local ok, err = pcall(function()
@@ -114,7 +114,7 @@ local ok, err = pcall(function()
 		else `r{Version.Launcher} · OK · {RemoteLoader.getFetchCount()} файлов · Tool в Backpack`
 	ui.setDone(doneText)
 
-	print(`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} — готов`)
+	print(`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo} — готов`)
 end)
 
 if not ok then
