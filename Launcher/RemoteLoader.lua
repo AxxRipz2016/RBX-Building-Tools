@@ -475,6 +475,13 @@ local function rewriteCommon(source: string): string
 end
 
 -- ModuleScript: окружение = таблица Core (как в Roblox), без local Core = getfenv(0)
+local function prepareModuleSource(path: string, raw: string): string
+	if path == "Loader/init.lua" then
+		raw = raw:gsub("local Tool = script%.Parent;", "local Tool = __bt_tool;")
+	end
+	return rewriteForModuleEnv(raw)
+end
+
 local function rewriteForModuleEnv(source: string): string
 	source = rewriteCommon(source)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
@@ -577,7 +584,7 @@ local function runModuleWithEnv(
 	btRequire: any
 ): any
 	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
-	local body = rewriteForModuleEnv(raw)
+	local body = prepareModuleSource(path, raw)
 	local compileFn = RemoteLoader.compile or defaultCompile
 	local fn, compileError = compileFn(body, "@" .. path, coreEnv)
 	if not fn then
