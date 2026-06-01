@@ -365,10 +365,14 @@ local function __bt_parent(__bt_script, __bt_tool)
 end
 ]]
 
-local function rewriteForRemote(source: string): string
+local function rewriteForRemote(source: string, isLocalScript: boolean): string
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
-	source = source:gsub("__bt_script%.Parent", "__bt_parent(__bt_script, __bt_tool)")
+	if isLocalScript then
+		source = source:gsub("__bt_script%.Parent", "__bt_parent(__bt_script, __bt_tool)")
+	else
+		source = source:gsub("__bt_script%.Parent", "(__bt_script.Parent or __bt_tool)")
+	end
 	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
 	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
 	source = source:gsub("getfenv%(%s*0%s*%)", "__bt_env")
@@ -376,7 +380,7 @@ local function rewriteForRemote(source: string): string
 end
 
 local function wrapChunkSource(source: string): string
-	local body = rewriteForRemote(source)
+	local body = rewriteForRemote(source, true)
 	return "return function(__bt_script, __bt_tool, __bt_require)\n"
 		.. WRAP_PARENT_PREAMBLE
 		.. "if __bt_script == nil then error('[BT] __bt_script is nil', 0) end\n"
@@ -456,7 +460,8 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 
 	local btRequire = buildRequire(tool)
 	local raw = sourceCache[path]
-	local body = rewriteForRemote(raw)
+	local isLocalScript = scriptInstance:IsA("LocalScript")
+	local body = rewriteForRemote(raw, isLocalScript)
 	local env = buildModuleEnv(tool, scriptInstance, btRequire)
 	env.__bt_env = env
 	env.__bt_getfenv = function(_level: number?)
