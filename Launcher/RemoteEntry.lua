@@ -39,6 +39,8 @@ local function loadFromGit(path: string)
 	return moduleCache[path]
 end
 
+_G.BT_LAUNCHER_LOAD = loadFromGit
+
 local Config = loadFromGit("Launcher/Config.lua")
 Config.LoadMode = "Remote"
 Config.RemoteBaseUrl = BASE_URL

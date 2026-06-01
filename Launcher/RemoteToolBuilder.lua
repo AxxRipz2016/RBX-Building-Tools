@@ -1,12 +1,19 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config = require(script.Parent.Config)
-local RemoteLoader = require(script.Parent.RemoteLoader)
+local function req(moduleName: string)
+	if _G.BT_LAUNCHER_LOAD then
+		return _G.BT_LAUNCHER_LOAD("Launcher/" .. moduleName .. ".lua")
+	end
+	return require(script.Parent[moduleName])
+end
+
+local Config = req("Config")
+local RemoteLoader = req("RemoteLoader")
 
 local RemoteToolBuilder = {}
 
-local manifestModule = script.Parent and script.Parent:FindFirstChild("manifest")
+local manifestModule = (script and script.Parent and script.Parent:FindFirstChild("manifest")) or nil
 local manifestOverride: { string }? = nil
 
 function RemoteToolBuilder.setManifest(paths: { string })
