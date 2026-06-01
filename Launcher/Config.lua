@@ -14,6 +14,11 @@ Config.LoadMode = "Payload"
 -- https://github.com/utststs95/RBX-Building-Tools (ветка development)
 Config.RemoteBaseUrl = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 
+-- Submodule Vendor/Roact не попадает на GitHub — качаем с upstream (версия rotriever.toml)
+Config.RemoteVendorUrls = {
+	["Vendor/Roact/"] = "https://raw.githubusercontent.com/Roblox/roact/v1.3.0/",
+}
+
 -- Пример: { 123456789 } — только эти UserId
 Config.AllowedUserIds = {247402615}
 

@@ -51,6 +51,9 @@ local function parsePath(path: string): (string, { string })
 	end
 
 	local moduleName = string.gsub(fileName, "%.lua$", "")
+	if segments[#segments] == "src" then
+		table.remove(segments, #segments)
+	end
 	return moduleName, segments
 end
 

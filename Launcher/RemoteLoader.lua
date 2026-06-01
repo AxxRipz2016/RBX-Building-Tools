@@ -72,10 +72,54 @@ local function defaultCompile(source: string, chunkName: string, env: any?): (an
 	return fn, nil
 end
 
-function RemoteLoader.configure(baseUrl: string)
-	RemoteLoader.BaseUrl = baseUrl
-	if not baseUrl:match("/$") then
-		RemoteLoader.BaseUrl = baseUrl .. "/"
+local vendorPrefixes: { { prefix: string, base: string } } = {}
+
+local function normalizeBase(url: string): string
+	if not url:match("/$") then
+		return url .. "/"
+	end
+	return url
+end
+
+local function isLikelyLuaSource(body: string): boolean
+	local head = body:sub(1, 120):lower()
+	if head:match("^%s*404") or head:find("not found", 1, true) then
+		return false
+	end
+	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) then
+		return false
+	end
+	return body:find("function", 1, true) ~= nil
+		or body:find("local ", 1, true) ~= nil
+		or body:find("return ", 1, true) ~= nil
+end
+
+function RemoteLoader.resolveUrl(path: string): string
+	for _, entry in vendorPrefixes do
+		if path:sub(1, #entry.prefix) == entry.prefix then
+			return entry.base .. path:sub(#entry.prefix + 1)
+		end
+	end
+	return RemoteLoader.BaseUrl .. path
+end
+
+function RemoteLoader.configure(baseUrl: string, vendorUrls: { [string]: string }?)
+	RemoteLoader.BaseUrl = normalizeBase(baseUrl)
+	table.clear(vendorPrefixes)
+	if vendorUrls then
+		local sorted: { string } = {}
+		for prefix in vendorUrls do
+			table.insert(sorted, prefix)
+		end
+		table.sort(sorted, function(a, b)
+			return #a > #b
+		end)
+		for _, prefix in sorted do
+			table.insert(vendorPrefixes, {
+				prefix = prefix,
+				base = normalizeBase(vendorUrls[prefix]),
+			})
+		end
 	end
 	RemoteLoader.httpGet = _G.BT_HTTP_GET or defaultHttpGet
 	RemoteLoader.compile = _G.BT_LAUNCHER_COMPILE or defaultCompile
@@ -107,7 +151,7 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 		return true, sourceCache[path]
 	end
 
-	local url = RemoteLoader.BaseUrl .. path
+	local url = RemoteLoader.resolveUrl(path)
 	local lastErr: string? = nil
 
 	for attempt = 1, MAX_RETRIES do
@@ -116,19 +160,18 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 			return RemoteLoader.httpGet(url)
 		end)
 
-		if ok and type(result) == "string" and #result > 0 then
-			if not result:find("<!DOCTYPE", 1, true) and not result:find("<html", 1, true) then
-				sourceCache[path] = result
-				failedPaths[path] = nil
-				fetchCount += 1
-				if progressCallback then
-					progressCallback(path, true, nil)
-				end
-				return true, result
+		if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
+			sourceCache[path] = result
+			failedPaths[path] = nil
+			fetchCount += 1
+			if progressCallback then
+				progressCallback(path, true, nil)
 			end
-			lastErr = "404 / HTML вместо Lua"
+			return true, result
 		else
-			lastErr = if ok then "пустой ответ" else tostring(result)
+			lastErr = if ok and type(result) == "string" and #result > 0
+				then "404 / не Lua (проверь URL или submodule)"
+				else if ok then "пустой ответ" else tostring(result)
 		end
 
 		if attempt < MAX_RETRIES then

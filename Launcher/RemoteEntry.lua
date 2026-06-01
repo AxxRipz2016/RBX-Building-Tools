@@ -74,7 +74,7 @@ local ok, err = pcall(function()
 	local RemoteToolBuilder = loadFromGit("Launcher/RemoteToolBuilder.lua")
 	local manifest = loadFn(httpGet(BASE_URL .. "Launcher/manifest.lua"), "Launcher/manifest.lua")()
 
-	RemoteLoader.configure(BASE_URL)
+	RemoteLoader.configure(BASE_URL, Config.RemoteVendorUrls)
 	RemoteToolBuilder.setManifest(manifest)
 
 	local fileIndex = 0
@@ -107,7 +107,7 @@ local ok, err = pcall(function()
 		else `Готово — Tool в Backpack ({RemoteLoader.getFetchCount()} файлов)`
 	ui.setDone(doneText)
 
-	print("[BT] RemoteEntry v3 — Tool готов")
+	print("[BT] RemoteEntry v4 — Tool готов")
 end)
 
 if not ok then
