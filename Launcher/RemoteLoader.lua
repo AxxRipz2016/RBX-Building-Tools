@@ -90,19 +90,33 @@ end
 
 local function isLikelyLuaSource(body: string): boolean
 	body = normalizeBody(body)
-	local head = body:sub(1, 200):lower()
+	if #body < 8 then
+		return false
+	end
+	local head = body:sub(1, 300):lower()
 	if head:match("^%s*404") or head:match("^%s*403") or head:find("not found", 1, true) then
 		return false
 	end
 	if head:find("rate limit", 1, true) or head:find("too many requests", 1, true) then
 		return false
 	end
-	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) then
+	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) or head:find("<body", 1, true) then
 		return false
 	end
-	return body:find("function", 1, true) ~= nil
-		or body:find("local", 1, true) ~= nil
-		or body:find("return", 1, true) ~= nil
+	if head:find("github.com", 1, true) and head:find("blob", 1, true) then
+		return false
+	end
+	return true
+end
+
+local function getJsDelivrUrl(path: string): string?
+	local user, repo, branch = RemoteLoader.BaseUrl:match(
+		"raw%.githubusercontent%.com/([^/]+)/([^/]+)/refs/heads/([^/]+)/"
+	)
+	if not user then
+		return nil
+	end
+	return `https://cdn.jsdelivr.net/gh/{user}/{repo}@{branch}/{path}`
 end
 
 local function getFetchUrls(path: string): { string }
@@ -136,6 +150,10 @@ local function getFetchUrls(path: string): { string }
 		return urls
 	end
 
+	local mirror = getJsDelivrUrl(path)
+	if mirror then
+		add(mirror)
+	end
 	add(repoUrl)
 	if not isInit then
 		for _, entry in vendorPrefixes do
@@ -218,8 +236,12 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 				end
 				return true, result
 			else
+				local preview = ""
+				if ok and type(result) == "string" and #result > 0 then
+					preview = result:sub(1, 48):gsub("%s+", " ")
+				end
 				lastErr = if ok and type(result) == "string" and #result > 0
-					then `не Lua ({url})`
+					then `не Lua ({url}) [{preview}]`
 					else if ok then "пустой ответ" else tostring(result)
 			end
 
@@ -248,6 +270,7 @@ function RemoteLoader.preloadByPrefixes(paths: { string }, prefixes: { string })
 				if not ok then
 					error(`[BT] preload {path}: {err}`, 0)
 				end
+				task.wait(0.05)
 				break
 			end
 		end
