@@ -149,12 +149,10 @@ local function attachMetadata(tool: Tool)
 		and ReplicatedStorage.BT:FindFirstChild("Payload")
 		and ReplicatedStorage.BT.Payload:FindFirstChild("Interfaces")
 
-	if payloadInterfaces and #payloadInterfaces:GetChildren() > 0 then
+	if payloadInterfaces then
 		for _, child in payloadInterfaces:GetChildren() do
 			child:Clone().Parent = interfaces
 		end
-	else
-		warn("[BT] Interfaces пуст — вставь GUI в ReplicatedStorage.BT.Payload.Interfaces")
 	end
 end
 
@@ -199,10 +197,10 @@ function RemoteToolBuilder.Build(
 
 	local paths = getManifest()
 	if onMessage then
-		onMessage(`Загрузка { #paths } файлов с GitHub…`)
+		onMessage("Загрузка обязательных файлов…")
 	end
 
-	local failed = RemoteLoader.preloadAll(paths, function(index, total, path, fileOk, fileErr)
+	local failed = RemoteLoader.preloadCritical(function(index, total, path, fileOk, fileErr)
 		if onFile then
 			onFile(index, total, path, fileOk, fileErr)
 		end
@@ -211,7 +209,11 @@ function RemoteToolBuilder.Build(
 	RemoteLoader.assertCriticalLoaded()
 
 	if #failed > 0 then
-		warn(`[BT] не загружено файлов: {#failed} (некритичные могут быть пропущены)`)
+		error(`[BT] не удалось загрузить: {table.concat(failed, ", ")}`, 0)
+	end
+
+	if onMessage then
+		onMessage(`Модули по требованию (всего в манифесте: {#paths})…`)
 	end
 
 	local tool = Instance.new("Tool")

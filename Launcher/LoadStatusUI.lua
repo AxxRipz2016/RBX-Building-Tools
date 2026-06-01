@@ -90,10 +90,12 @@ function LoadStatusUI.create()
 	local api = {}
 
 	function api.setProgress(index: number, total: number, path: string, ok: boolean?)
-		local ratio = if total > 0 then index / total else 0
+		local ratio = if total > 0 then index / total else math.min(index / 120, 0.95)
 		barFill.Size = UDim2.fromScale(math.clamp(ratio, 0, 1), 1)
 		local status = if ok == false then "ОШИБКА" else "OK"
-		progress.Text = string.format("[%d / %d] %s  (%s)", index, total, path, status)
+		progress.Text = if total > 0
+			then string.format("[%d / %d] %s  (%s)", index, total, path, status)
+			else string.format("[%d] %s  (%s)", index, path, status)
 		progress.TextColor3 = if ok == false
 			then Color3.fromRGB(255, 180, 100)
 			else Color3.fromRGB(200, 200, 200)

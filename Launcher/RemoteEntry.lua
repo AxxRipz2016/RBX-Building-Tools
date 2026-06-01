@@ -2,6 +2,7 @@
 	BT_SoloPastebin → loadstring(game:HttpGet(этот файл))()
 	В executor: getgenv().loadstring для всех следующих модулей.
 ]]
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
@@ -24,6 +25,9 @@ do
 			local res = g.request({ Url = url, Method = "GET" })
 			return (type(res) == "table" and (res.Body or res.body)) or ""
 		end
+		if HttpService.HttpEnabled then
+			return HttpService:GetAsync(url)
+		end
 		return game:HttpGet(url, true)
 	end
 end
@@ -44,6 +48,18 @@ local function loadFromGit(path: string)
 	return moduleCache[path]
 end
 
+_G.BT_HTTP_GET = httpGet
+_G.BT_LAUNCHER_COMPILE = function(source: string, chunkName: string, env: any?)
+	local fn, err = loadFn(source, chunkName, "t", env)
+	if fn then
+		return fn, nil
+	end
+	fn, err = loadFn(source, chunkName)
+	if fn then
+		return fn, nil
+	end
+	return nil, err
+end
 _G.BT_LAUNCHER_LOAD = loadFromGit
 
 local LoadStatusUI = loadFn(httpGet(BASE_URL .. "Launcher/LoadStatusUI.lua"), "@LoadStatusUI")()
@@ -61,14 +77,17 @@ local ok, err = pcall(function()
 	RemoteLoader.configure(BASE_URL)
 	RemoteToolBuilder.setManifest(manifest)
 
+	local fileIndex = 0
+	RemoteLoader.setProgressCallback(function(path, fileOk, fileErr)
+		fileIndex += 1
+		ui.setProgress(fileIndex, 0, path, fileOk)
+		if fileOk == false then
+			ui.addError(path, fileErr or "неизвестная ошибка")
+		end
+	end)
+
 	local player = Players.LocalPlayer
 	local tool = RemoteToolBuilder.Build(player, {
-		onFile = function(index, total, path, fileOk, fileErr)
-			ui.setProgress(index, total, path, fileOk)
-			if fileOk == false then
-				ui.addError(path, fileErr or "неизвестная ошибка")
-			end
-		end,
 		onMessage = function(message: string)
 			ui.setProgress(0, 0, message, true)
 		end,
@@ -78,15 +97,14 @@ local ok, err = pcall(function()
 	RemoteToolBuilder.StartRuntime(tool)
 	RemoteToolBuilder.Equip(tool)
 
-	local failed = RemoteLoader.getFailed()
 	local failCount = 0
-	for _ in failed do
+	for _ in RemoteLoader.getFailed() do
 		failCount += 1
 	end
 
 	local doneText = if failCount > 0
-		then `Готово (пропущено файлов: {failCount})`
-		else "Готово — Tool в Backpack"
+		then `Готово с ошибками ({failCount} файлов)`
+		else `Готово — Tool в Backpack ({RemoteLoader.getFetchCount()} файлов)`
 	ui.setDone(doneText)
 	task.delay(3, ui.destroy)
 
