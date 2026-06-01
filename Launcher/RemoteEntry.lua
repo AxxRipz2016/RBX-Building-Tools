@@ -4,7 +4,7 @@
 ]]
 local Players = game:GetService("Players")
 
-local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/development/"
+local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 
 local loadFn
 local httpGet

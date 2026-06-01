@@ -12,7 +12,7 @@ Config.LauncherGuiName = "BT Launcher"
 Config.LoadMode = "Payload"
 
 -- https://github.com/utststs95/RBX-Building-Tools (ветка development)
-Config.RemoteBaseUrl = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/development/"
+Config.RemoteBaseUrl = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 
 -- Пример: { 123456789 } — только эти UserId
 Config.AllowedUserIds = {247402615}

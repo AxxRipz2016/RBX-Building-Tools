@@ -1,7 +1,7 @@
 --[[
 	Соло для executor: снаружи и внутри RemoteEntry — getgenv().loadstring
 ]]
-local ENTRY_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/development/Launcher/RemoteEntry.lua"
+local ENTRY_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/Launcher/RemoteEntry.lua"
 
 local g = getgenv and getgenv() or nil
 local loadFn = (g and (g.loadstring or g.load)) or loadstring

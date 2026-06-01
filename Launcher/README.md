@@ -15,7 +15,7 @@
 3. В `Launcher/Config.lua`:
    ```lua
    Config.LoadMode = "Remote"
-   Config.RemoteBaseUrl = "https://raw.githubusercontent.com/USER/REPO/main/"
+   Config.RemoteBaseUrl = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
    ```
 4. Play через `BT_SoloRemote.client.lua` (нужен только `ReplicatedStorage.BT.Launcher`, **без Payload**).
 
