@@ -237,7 +237,8 @@ end
 local function buildRequire(tool: Tool)
 	return function(target: any): any
 		if type(target) ~= "userdata" or not target:IsA("ModuleScript") then
-			error("[BT] require: ожидается ModuleScript", 2)
+			local kind = if typeof(target) == "Instance" then target.ClassName else typeof(target)
+			error(`[BT] require: ожидается ModuleScript, получен {kind} ({tostring(target)})`, 2)
 		end
 		local modulePath = registry[target] or target:GetAttribute("BTPath")
 		if not modulePath then

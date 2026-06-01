@@ -94,11 +94,17 @@ end
 local function createModuleShell(tool: Tool, path: string): ModuleScript
 	local moduleName, parentParts = parsePath(path)
 	local parent = ensureParent(tool, parentParts)
+	local isInitModule = path:sub(-#"init.lua") == "init.lua"
 
 	local existing = parent:FindFirstChild(moduleName)
 	if existing and existing:IsA("ModuleScript") then
 		RemoteLoader.registerModule(existing, path)
 		return existing
+	end
+
+	-- map.lua и т.п. могли создать Folder List/Dictionary до init.lua
+	if isInitModule and existing and existing:IsA("Folder") then
+		existing:Destroy()
 	end
 
 	local moduleScript = Instance.new("ModuleScript")
@@ -184,15 +190,39 @@ local function attachMetadata(tool: Tool)
 	end
 end
 
+local SKIPPED_TREE_PATHS = {
+	["SyncAPI.lua"] = true,
+	["Support/LocalAPIEndpoint.local.client.lua"] = true,
+	["Support/DescendantCounter.local.client.lua"] = true,
+	["Support/ReplicationListener.client.lua"] = true,
+}
+
 local function buildModuleTree(tool: Tool, paths: { string })
+	local initPaths: { string } = {}
+	local otherPaths: { string } = {}
+
 	for _, path in paths do
-		if path == "SyncAPI.lua"
-			or path == "Support/LocalAPIEndpoint.local.client.lua"
-			or path == "Support/DescendantCounter.local.client.lua"
-			or path == "Support/ReplicationListener.client.lua"
-		then
+		if SKIPPED_TREE_PATHS[path] then
 			continue
 		end
+		if path:sub(-#"init.lua") == "init.lua" then
+			table.insert(initPaths, path)
+		else
+			table.insert(otherPaths, path)
+		end
+	end
+
+	table.sort(initPaths, function(a, b)
+		return #a < #b
+	end)
+	table.sort(otherPaths, function(a, b)
+		return #a < #b
+	end)
+
+	for _, path in initPaths do
+		createModuleShell(tool, path)
+	end
+	for _, path in otherPaths do
 		createModuleShell(tool, path)
 	end
 end
