@@ -140,6 +140,59 @@ end]]
 			"(Core%.UI = UI\n)",
 			"%1\tif UIContainer then\n\t\tUI.Parent = UIContainer\n\tend\n"
 		)
+		if not source:find("Core%.History = History", 1, true) then
+			source = source:gsub(
+				"(History = require%(script%.History%)\n)",
+				"%1Core.History = History\n"
+			)
+			source = source:gsub(
+				"(Selection = require%(script%.Selection%)\n)",
+				"%1Core.Selection = Selection\n"
+			)
+			source = source:gsub(
+				"(Targeting = require%(script%.Targeting%)\n)",
+				"%1Core.Targeting = Targeting\n"
+			)
+		end
+	end
+
+	if path:find("Dock/SelectionPane.lua", 1, true) then
+		source = source:gsub(
+			"function SelectionPane:UpdateHistoryState%(%)\n    self:setState%({\n        CanUndo = %(self%.props%.Core%.History%.Index > 0%);",
+			[[function SelectionPane:UpdateHistoryState()
+    local history = self.props.Core and self.props.Core.History
+    if not history then
+        return
+    end
+    self:setState({
+        CanUndo = (history.Index > 0);]]
+		)
+		source = source:gsub(
+			"CanRedo = %(self%.props%.Core%.History%.Index ~= #self%.props%.Core%.History%.Stack%);",
+			"CanRedo = (history.Index ~= #history.Stack);"
+		)
+		source = source:gsub(
+			"self:UpdateHistoryState%(%)\n    self%.Maid%.TrackHistory = self%.props%.Core%.History%.Changed:Connect",
+			[[if self.props.Core and self.props.Core.History then
+        self:UpdateHistoryState()
+        self.Maid.TrackHistory = self.props.Core.History.Changed:Connect]]
+		)
+		source = source:gsub(
+			"self:UpdateSelectionState%(%)\n    self%.Maid%.TrackSelection = self%.props%.Core%.Selection%.Changed:Connect",
+			[[if self.props.Core and self.props.Core.Selection then
+        self:UpdateSelectionState()
+        self.Maid.TrackSelection = self.props.Core.Selection.Changed:Connect]]
+		)
+		source = source:gsub(
+			"function SelectionPane:UpdateSelectionState%(%)\n    self:setState%({\n        IsSelectionEmpty = %(#self%.props%.Core%.Selection%.Items == 0%);",
+			[[function SelectionPane:UpdateSelectionState()
+    local selection = self.props.Core and self.props.Core.Selection
+    if not selection then
+        return
+    end
+    self:setState({
+        IsSelectionEmpty = (#selection.Items == 0);]]
+		)
 	end
 
 	return source
@@ -437,29 +490,20 @@ local function rewriteForWrap(source: string): string
 	return source
 end
 
-local MODULE_RUNNER_SOURCE = [[
-return function(__bt_script, __bt_tool, __bt_require, __bt_body, __bt_chunk, __bt_compile, __bt_makeCore)
-	local Core = __bt_makeCore(__bt_script, __bt_tool, __bt_require)
-	local fn, err = __bt_compile(__bt_body, __bt_chunk, Core)
+local function runModuleWithEnv(
+	path: string,
+	raw: string,
+	tool: Tool,
+	scriptInstance: Instance,
+	btRequire: any
+): any
+	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
+	local body = rewriteForModuleEnv(raw)
+	local fn, compileError = RemoteLoader.compile(body, "@" .. path, coreEnv)
 	if not fn then
-		error("[BT] module compile: " .. tostring(err), 0)
+		error(`[BT] compile {path}: {compileError}`, 0)
 	end
 	return fn()
-end
-]]
-
-local moduleRunner: ((Instance, Tool, any, string, string, any, any) -> any)?
-
-local function getModuleRunner(): (Instance, Tool, any, string, string, any, any) -> any
-	if moduleRunner then
-		return moduleRunner
-	end
-	local compiled, err = RemoteLoader.compile(MODULE_RUNNER_SOURCE, "@BT.moduleRunner", nil)
-	if not compiled then
-		error(`[BT] moduleRunner compile: {err}`, 0)
-	end
-	moduleRunner = compiled()
-	return moduleRunner
 end
 
 local function wrapChunkSource(source: string): string
@@ -560,32 +604,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	local ok, result
 
 	if scriptInstance:IsA("ModuleScript") then
-		local body = rewriteForModuleEnv(raw)
-		local chunkName = "@" .. path
-		ok, result = pcall(function()
-			return getModuleRunner()(
-				scriptInstance,
-				tool,
-				btRequire,
-				body,
-				chunkName,
-				RemoteLoader.compile,
-				buildModuleEnv
-			)
-		end)
-		if not ok then
-			local wrapped = wrapChunkSource(raw)
-			local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path .. "#wrap", nil)
-			if not fn then
-				error(`[BT] run {path}: module={result}; wrap={compileError}`, 0)
-			end
-			ok, result = pcall(function()
-				return fn()(scriptInstance, tool, btRequire)
-			end)
-			if not ok then
-				error(`[BT] run {path}: {result}`, 0)
-			end
-		end
+		ok, result = pcall(runModuleWithEnv, path, raw, tool, scriptInstance, btRequire)
 	else
 		local wrapped = wrapChunkSource(raw)
 		local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path, nil)
