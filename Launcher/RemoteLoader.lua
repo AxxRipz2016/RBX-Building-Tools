@@ -97,13 +97,24 @@ local function isLikelyLuaSource(body: string): boolean
 		or body:find("return ", 1, true) ~= nil
 end
 
-function RemoteLoader.resolveUrl(path: string): string
-	for _, entry in vendorPrefixes do
-		if path:sub(1, #entry.prefix) == entry.prefix then
-			return entry.base .. path:sub(#entry.prefix + 1)
+local function getFetchUrls(path: string): { string }
+	local urls: { string } = {}
+	local seen: { [string]: boolean } = {}
+
+	local function add(url: string)
+		if not seen[url] then
+			seen[url] = true
+			table.insert(urls, url)
 		end
 	end
-	return RemoteLoader.BaseUrl .. path
+
+	add(RemoteLoader.BaseUrl .. path)
+	for _, entry in vendorPrefixes do
+		if path:sub(1, #entry.prefix) == entry.prefix then
+			add(entry.base .. path:sub(#entry.prefix + 1))
+		end
+	end
+	return urls
 end
 
 function RemoteLoader.configure(baseUrl: string, vendorUrls: { [string]: string }?)
@@ -154,35 +165,36 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 		return true, sourceCache[path]
 	end
 
-	local url = RemoteLoader.resolveUrl(path)
 	local lastErr: string? = nil
 
-	for attempt = 1, MAX_RETRIES do
-		throttle()
-		local ok, result = pcall(function()
-			return RemoteLoader.httpGet(url)
-		end)
+	for _, url in getFetchUrls(path) do
+		for attempt = 1, MAX_RETRIES do
+			throttle()
+			local ok, result = pcall(function()
+				return RemoteLoader.httpGet(url)
+			end)
 
-		if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
-			sourceCache[path] = result
-			failedPaths[path] = nil
-			fetchCount += 1
-			if progressCallback then
-				progressCallback(path, true, nil)
+			if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
+				sourceCache[path] = result
+				failedPaths[path] = nil
+				fetchCount += 1
+				if progressCallback then
+					progressCallback(path, true, nil)
+				end
+				return true, result
+			else
+				lastErr = if ok and type(result) == "string" and #result > 0
+					then `не Lua ({url})`
+					else if ok then "пустой ответ" else tostring(result)
 			end
-			return true, result
-		else
-			lastErr = if ok and type(result) == "string" and #result > 0
-				then `не Lua ({url})`
-				else if ok then "пустой ответ" else tostring(result)
-		end
 
-		if attempt < MAX_RETRIES then
-			task.wait(0.2 * attempt)
+			if attempt < MAX_RETRIES then
+				task.wait(0.2 * attempt)
+			end
 		end
 	end
 
-	failedPaths[path] = lastErr or `HttpGet failed ({url})`
+	failedPaths[path] = lastErr or "HttpGet failed"
 	if progressCallback then
 		progressCallback(path, false, failedPaths[path])
 	end

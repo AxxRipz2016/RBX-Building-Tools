@@ -297,8 +297,13 @@ function RemoteToolBuilder.Build(
 	RemoteLoader.run("Support/DescendantCounter.local.client.lua", tool, tool.Loaded.DescendantCount.DescendantCounter :: LocalScript)
 	RemoteLoader.run("Support/ReplicationListener.client.lua", tool, tool.Loaded.ReplicationListener :: LocalScript)
 
-	tool.Parent = player:WaitForChild("Backpack")
+	-- Tool в Backpack только после StartRuntime (см. RemoteEntry)
 	return tool
+end
+
+function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
+	player = player or Players.LocalPlayer
+	tool.Parent = player:WaitForChild("Backpack")
 end
 
 function RemoteToolBuilder.StartRuntime(tool: Tool)

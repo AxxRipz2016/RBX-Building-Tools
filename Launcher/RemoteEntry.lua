@@ -100,8 +100,16 @@ local ok, err = pcall(function()
 		end,
 	})
 
-	ui.setDone("Запуск…")
-	RemoteToolBuilder.StartRuntime(tool)
+	ui.setProgress(0, 0, "Запуск Core и инструментов…", true)
+
+	local runOk, runErr = pcall(function()
+		RemoteToolBuilder.StartRuntime(tool)
+	end)
+	if not runOk then
+		error(runErr, 0)
+	end
+
+	RemoteToolBuilder.GiveToPlayer(tool, player)
 	RemoteToolBuilder.Equip(tool)
 
 	local failCount = 0
