@@ -10,8 +10,8 @@ local moduleCache: { [string]: any } = {}
 local registry: { [ModuleScript]: string } = {}
 local failedPaths: { [string]: string } = {}
 
-local FETCH_DELAY = 0.08
-local MAX_RETRIES = 5
+local FETCH_DELAY = 0.1
+local MAX_RETRIES = 6
 local lastFetchAt = 0
 local fetchCount = 0
 
@@ -81,8 +81,16 @@ local function normalizeBase(url: string): string
 	return url
 end
 
+local function normalizeBody(body: string): string
+	if body:sub(1, 3) == string.char(0xEF, 0xBB, 0xBF) then
+		body = body:sub(4)
+	end
+	return body
+end
+
 local function isLikelyLuaSource(body: string): boolean
-	local head = body:sub(1, 120):lower()
+	body = normalizeBody(body)
+	local head = body:sub(1, 200):lower()
 	if head:match("^%s*404") or head:match("^%s*403") or head:find("not found", 1, true) then
 		return false
 	end
@@ -93,8 +101,8 @@ local function isLikelyLuaSource(body: string): boolean
 		return false
 	end
 	return body:find("function", 1, true) ~= nil
-		or body:find("local ", 1, true) ~= nil
-		or body:find("return ", 1, true) ~= nil
+		or body:find("local", 1, true) ~= nil
+		or body:find("return", 1, true) ~= nil
 end
 
 local function getFetchUrls(path: string): { string }
@@ -119,17 +127,6 @@ local function getFetchUrls(path: string): { string }
 
 		-- Vendor/Roact — submodule, в GitHub пусто → только Roblox/roact
 		if entry.prefix == "Vendor/Roact/" then
-			add(vendorUrl)
-			return urls
-		end
-
-		-- Cryo init — только репо BT (совместим с деревом); остальное — репо, потом fallback
-		if entry.prefix == "Libraries/Cryo/" then
-			if isInit then
-				add(repoUrl)
-				return urls
-			end
-			add(repoUrl)
 			add(vendorUrl)
 			return urls
 		end
@@ -199,14 +196,19 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 	end
 
 	local lastErr: string? = nil
+	local tried: { string } = {}
 
 	for _, url in getFetchUrls(path) do
+		table.insert(tried, url)
 		for attempt = 1, MAX_RETRIES do
 			throttle()
 			local ok, result = pcall(function()
 				return RemoteLoader.httpGet(url)
 			end)
 
+			if ok and type(result) == "string" and #result > 0 then
+				result = normalizeBody(result)
+			end
 			if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
 				sourceCache[path] = result
 				failedPaths[path] = nil
@@ -227,11 +229,29 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 		end
 	end
 
-	failedPaths[path] = lastErr or "HttpGet failed"
+	failedPaths[path] = lastErr or (`HttpGet failed: {table.concat(tried, " | ")}`)
 	if progressCallback then
 		progressCallback(path, false, failedPaths[path])
 	end
 	return false, failedPaths[path]
+end
+
+function RemoteLoader.preloadByPrefixes(paths: { string }, prefixes: { string })
+	table.sort(paths, function(a, b)
+		return #a < #b
+	end)
+
+	for _, path in paths do
+		for _, prefix in prefixes do
+			if path:sub(1, #prefix) == prefix then
+				local ok, err = RemoteLoader.fetchSource(path)
+				if not ok then
+					error(`[BT] preload {path}: {err}`, 0)
+				end
+				break
+			end
+		end
+	end
 end
 
 function RemoteLoader.preloadCritical(

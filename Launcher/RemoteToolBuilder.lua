@@ -303,6 +303,12 @@ function RemoteToolBuilder.Build(
 	end
 
 	buildModuleTree(tool, paths)
+
+	if onMessage then
+		onMessage("Предзагрузка Cryo и Roact…")
+	end
+	RemoteLoader.preloadByPrefixes(paths, { "Libraries/Cryo/", "Vendor/Roact/" })
+
 	attachSyncAPI(tool)
 	attachLoadedIndicator(tool)
 	attachMetadata(tool)
