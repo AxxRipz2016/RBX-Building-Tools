@@ -1,6 +1,6 @@
 local Core = getfenv(0)
 Tool = script.Parent;
-Plugin = (Tool.Parent:IsA 'Plugin') and Tool.Parent or nil
+Plugin = Tool.Parent and Tool.Parent:IsA("Plugin") and Tool.Parent or nil
 
 -- Detect mode
 Mode = Plugin and 'Plugin' or 'Tool';

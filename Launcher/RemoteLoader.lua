@@ -109,9 +109,13 @@ local function getFetchUrls(path: string): { string }
 	end
 
 	add(RemoteLoader.BaseUrl .. path)
-	for _, entry in vendorPrefixes do
-		if path:sub(1, #entry.prefix) == entry.prefix then
-			add(entry.base .. path:sub(#entry.prefix + 1))
+	-- init.lua только с основного репо (иначе Cryo/Roact init не совпадут с деревом модулей)
+	local allowVendorFallback = path:sub(-#"init.lua") ~= "init.lua"
+	if allowVendorFallback then
+		for _, entry in vendorPrefixes do
+			if path:sub(1, #entry.prefix) == entry.prefix then
+				add(entry.base .. path:sub(#entry.prefix + 1))
+			end
 		end
 	end
 	return urls
