@@ -1,14 +1,7 @@
 --[[
-	HttpGet → loadstring → кэш. Везде: game:HttpGet(url, true)
+	HttpGet → loadstring → кэш.
+	Скачивание: sourceCache[path] = game:HttpGet(url, true)
 ]]
-local function httpGet(url: string): string
-	return game:HttpGet(url, true)
-end
-
-local function httpLoad(url: string, chunkName: string): () -> (...any)
-	return loadstring(httpGet(url), chunkName) :: any
-end
-
 local RemoteLoader = {}
 
 local sourceCache: { [string]: string } = {}
@@ -34,14 +27,14 @@ function RemoteLoader.fetchSource(path: string): string
 
 	local url = RemoteLoader.BaseUrl .. path
 	local ok, result = pcall(function()
-		return httpGet(url)
+		return game:HttpGet(url, true)
 	end)
 	if not ok then
 		error(`[BT] HttpGet failed for {path}: {result}`, 0)
 	end
 
 	sourceCache[path] = result
-	return result
+	return sourceCache[path]
 end
 
 function RemoteLoader.preloadAll(paths: { string }, onProgress: ((number, number, string) -> ())?)
@@ -83,9 +76,8 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: ModuleScript
 	})
 
 	local ok, result = pcall(function()
-		local source = httpGet(url)
-		sourceCache[path] = source
-		local fn, compileError = load(source, "@" .. path, "t", env)
+		sourceCache[path] = game:HttpGet(url, true)
+		local fn, compileError = load(sourceCache[path], "@" .. path, "t", env)
 		if not fn then
 			error(compileError, 0)
 		end
