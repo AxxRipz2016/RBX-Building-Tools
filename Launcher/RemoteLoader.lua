@@ -93,23 +93,23 @@ local function isLikelyLuaSource(body: string): boolean
 	if #body < 8 then
 		return false
 	end
-	local head = body:sub(1, 300):lower()
+	local head = body:sub(1, 400):lower()
+	-- Только явные HTTP/HTML-ошибки (не слова в комментариях Lua)
 	if head:match("^%s*404") or head:match("^%s*403") then
 		return false
 	end
-	if head:find("404: not found", 1, true) or head:find("404 not found", 1, true) then
+	if head:find("<!doctype", 1, true) or head:match("^%s*<html") or head:match("^%s*<body") then
 		return false
 	end
-	if head:find("rate limit", 1, true) or head:find("too many requests", 1, true) then
+	if head:find("too many requests", 1, true) and not head:match("^%s*%-%-") then
 		return false
 	end
-	if head:find("<!doctype", 1, true) or head:find("<html", 1, true) or head:find("<body", 1, true) then
-		return false
+	-- Признаки Lua (Try.lua, find.lua и т.д.)
+	if head:match("^%s*%-%-") or head:match("^%s*local ") or head:match("^%s*return ")
+		or head:match("^%s*function ") then
+		return true
 	end
-	if head:find("github.com", 1, true) and head:find("blob", 1, true) then
-		return false
-	end
-	return true
+	return body:find("\nlocal ", 1, true) ~= nil or body:find("\nfunction ", 1, true) ~= nil
 end
 
 local function getJsDelivrUrl(path: string): string?

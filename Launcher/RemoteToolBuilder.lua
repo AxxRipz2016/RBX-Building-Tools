@@ -305,9 +305,9 @@ function RemoteToolBuilder.Build(
 	buildModuleTree(tool, paths)
 
 	if onMessage then
-		onMessage("Предзагрузка Cryo…")
+		onMessage("Предзагрузка Libraries…")
 	end
-	RemoteLoader.preloadByPrefixes(paths, { "Libraries/Cryo/" })
+	RemoteLoader.preloadByPrefixes(paths, { "Libraries/" })
 	if onMessage then
 		onMessage("Предзагрузка Roact…")
 	end
