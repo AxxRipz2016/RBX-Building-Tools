@@ -171,6 +171,16 @@ function RemoteLoader.assertCriticalLoaded()
 	end
 end
 
+local function wrapBoundSource(source: string): string
+	-- loadstring без env не даёт `script` — передаём явно
+	return "return function(__script, __tool, __require)\n"
+		.. "local script = __script\n"
+		.. "local Tool = __tool\n"
+		.. "local require = __require\n"
+		.. source
+		.. "\nend"
+end
+
 local function buildRequire(tool: Tool)
 	return function(target: any): any
 		if type(target) ~= "userdata" or not target:IsA("ModuleScript") then
@@ -195,22 +205,30 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	end
 
 	local source = sourceCache[path]
+	local btRequire = buildRequire(tool)
 
 	local env = setmetatable({
 		script = scriptInstance,
 		Tool = tool,
 		plugin = false,
-		require = buildRequire(tool),
+		require = btRequire,
 	}, {
 		__index = _G,
 	})
 
-	local fn, compileError = RemoteLoader.compile(source, "@" .. path, env)
+	local toCompile = if scriptInstance then wrapBoundSource(source) else source
+	local fn, compileError = RemoteLoader.compile(toCompile, "@" .. path, env)
 	if not fn then
 		error(`[BT] compile {path}: {compileError}`, 0)
 	end
 
-	local ok, result = pcall(fn)
+	local ok, result = pcall(function()
+		if scriptInstance then
+			local factory = fn()
+			return factory(scriptInstance, tool, btRequire)
+		end
+		return fn()
+	end)
 	if not ok then
 		error(`[BT] run {path}: {result}`, 0)
 	end
