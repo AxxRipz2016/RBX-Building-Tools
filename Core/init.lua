@@ -310,6 +310,7 @@ function InitializeUI()
 	local DockElement = Roact.createElement(DockComponent, {
 		Core = Core;
 		Tools = ToolList;
+		UIRoot = UI;
 	})
 	local DockHandle = Roact.mount(DockElement, UI, 'Dock')
 

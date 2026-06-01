@@ -108,14 +108,27 @@ function AboutPane:render()
             Image = 'rbxassetid://141911973';
 
         });
-        ManualWindowPortal = new(Roact.Portal, {
-            target = self.props.Core.UI;
-        }, {
-            ManualWindow = (self.state.IsManualOpen or nil) and new(ToolManualWindow, {
-                Text = MANUAL_CONTENT;
-                ThemeColor = Color3.fromRGB(255, 176, 0);
-            });
-        });
+        ManualWindowPortal = (function()
+            local portalTarget = self.props.UIRoot
+                or (self.props.Core and self.props.Core.UI)
+            if portalTarget == nil then
+                local player = game:GetService("Players").LocalPlayer
+                if player then
+                    portalTarget = player:FindFirstChild("PlayerGui")
+                end
+            end
+            if portalTarget == nil then
+                return nil
+            end
+            return new(Roact.Portal, {
+                target = portalTarget;
+            }, {
+                ManualWindow = (self.state.IsManualOpen or nil) and new(ToolManualWindow, {
+                    Text = MANUAL_CONTENT;
+                    ThemeColor = Color3.fromRGB(255, 176, 0);
+                });
+            })
+        end)();
     })
 end
 

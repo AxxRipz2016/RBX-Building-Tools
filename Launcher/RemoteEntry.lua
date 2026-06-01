@@ -50,11 +50,18 @@ end
 
 _G.BT_HTTP_GET = httpGet
 _G.BT_LAUNCHER_COMPILE = function(source: string, chunkName: string, env: any?)
-	local fn, err = loadFn(source, chunkName, "t", env)
-	if fn then
-		return fn, nil
+	if env ~= nil then
+		local fn, err = loadFn(source, chunkName, "t", env)
+		if fn then
+			return fn, nil
+		end
+		fn, err = loadFn(source, chunkName, env)
+		if fn then
+			return fn, nil
+		end
+		return nil, err
 	end
-	fn, err = loadFn(source, chunkName)
+	local fn, err = loadFn(source, chunkName)
 	if fn then
 		return fn, nil
 	end

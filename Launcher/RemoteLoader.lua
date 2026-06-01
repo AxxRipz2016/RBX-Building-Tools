@@ -98,6 +98,16 @@ local function normalizeBody(body: string): string
 	return body
 end
 
+local function patchVendorSource(path: string, source: string): string
+	if path:find("RobloxRenderer.lua", 1, true) then
+		source = source:gsub(
+			"return typeof%(target%) == \"Instance\"",
+			"return typeof(target) == \"Instance\" or (type(target) == \"userdata\" and target ~= nil)"
+		)
+	end
+	return source
+end
+
 local function isLikelyLuaSource(body: string): boolean
 	body = normalizeBody(body)
 	if #body < 4 then
@@ -236,6 +246,7 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 				result = normalizeBody(result)
 			end
 			if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
+				result = patchVendorSource(path, result)
 				sourceCache[path] = result
 				failedPaths[path] = nil
 				fetchCount += 1
