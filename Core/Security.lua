@@ -10,7 +10,7 @@ Support = require(Libraries:WaitForChild 'SupportLibrary')
 RegionModule = require(Libraries:WaitForChild 'Region')
 
 -- Determine whether we're in tool or plugin mode
-local ToolMode = (Tool.Parent:IsA 'Plugin') and 'Plugin' or 'Tool'
+local ToolMode = (Tool.Parent and Tool.Parent:IsA("Plugin")) and "Plugin" or "Tool"
 
 -- Initialize the security module
 Security = {};

@@ -17,9 +17,12 @@ Config.RemoteBaseUrl = "https://raw.githubusercontent.com/utststs95/RBX-Building
 -- Submodule Vendor/Roact не попадает на GitHub — качаем с upstream (версия rotriever.toml)
 Config.RemoteVendorUrls = {
 	["Vendor/Roact/"] = "https://raw.githubusercontent.com/Roblox/roact/v1.3.0/",
-	-- запасной URL; init.lua берётся с твоего репо (совместим с BT)
+	-- Cryo: только fallback для *.lua кроме init.lua (см. RemoteLoader)
 	["Libraries/Cryo/"] = "https://raw.githubusercontent.com/Roblox/cryo/master/src/",
 }
+
+-- Меняй при push лаунчера (дублирует Version.lua для Rojo)
+Config.LauncherVersion = "10"
 
 -- Пример: { 123456789 } — только эти UserId
 Config.AllowedUserIds = {247402615}

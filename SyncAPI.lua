@@ -42,7 +42,7 @@ LastParents = {};
 local streamingClonesPendingUntagging = {}
 
 -- Determine whether we're in tool or plugin mode
-ToolMode = (Tool.Parent:IsA 'Plugin') and 'Plugin' or 'Tool'
+ToolMode = (Tool.Parent and Tool.Parent:IsA("Plugin")) and "Plugin" or "Tool"
 
 local IsHttpServiceEnabled = nil
 

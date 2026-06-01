@@ -238,6 +238,8 @@ local function rewriteForRemote(source: string): string
 	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
 	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
 	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
+	-- Tool без Parent (до Backpack) — nil:IsA
+	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	return source
 end
 
@@ -249,6 +251,9 @@ local function wrapBoundSource(source: string): string
 		.. "\tif level == nil or level == 0 or level == 1 then return __bt_module end\n"
 		.. "\treturn _G\n"
 		.. "end\n"
+		.. "Tool = __bt_tool\n"
+		.. "Plugin = __bt_tool.Parent and __bt_tool.Parent:IsA(\"Plugin\") and __bt_tool.Parent or nil\n"
+		.. "Game = game\n"
 		.. body
 		.. "\nend"
 end

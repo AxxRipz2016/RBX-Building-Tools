@@ -65,6 +65,19 @@ local function parsePath(path: string): (string, { string })
 	return moduleName, segments
 end
 
+local STAGING_NAME = "BT_RemoteStaging"
+
+local function getStagingParent(): Folder
+	local folder = ReplicatedStorage:FindFirstChild(STAGING_NAME)
+	if folder and folder:IsA("Folder") then
+		return folder
+	end
+	folder = Instance.new("Folder")
+	folder.Name = STAGING_NAME
+	folder.Parent = ReplicatedStorage
+	return folder
+end
+
 local function getOrCreateFolder(parent: Instance, name: string): Folder
 	local existing = parent:FindFirstChild(name)
 	if existing and existing:IsA("Folder") then
@@ -283,6 +296,7 @@ function RemoteToolBuilder.Build(
 	tool.RequiresHandle = false
 	tool.CanBeDropped = true
 	tool:SetAttribute("BT_LocalOnly", true)
+	tool.Parent = getStagingParent()
 
 	if onMessage then
 		onMessage("Сборка дерева модулей…")
