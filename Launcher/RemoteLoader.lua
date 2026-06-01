@@ -361,35 +361,75 @@ local function __bt_tool_parent(__bt_script, __bt_tool)
 end
 ]]
 
-local function rewriteForRemote(source: string): string
+local function rewriteCommon(source: string): string
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
 	source = source:gsub("__bt_script%.Parent", "__bt_tool_parent(__bt_script, __bt_tool)")
 	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
-	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
-	source = source:gsub("getfenv%(%s*0%s*%)", "__bt_env")
 	return source
 end
 
+-- ModuleScript: окружение = таблица Core (как в Roblox), без local Core = getfenv(0)
+local function rewriteForModuleEnv(source: string): string
+	source = rewriteCommon(source)
+	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
+	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
+	return source
+end
+
+local function rewriteForWrap(source: string): string
+	source = rewriteCommon(source)
+	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
+	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
+	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
+	return source
+end
+
+local MODULE_RUNNER_SOURCE = [[
+return function(__bt_script, __bt_tool, __bt_require, __bt_body, __bt_chunk, __bt_compile, __bt_makeCore)
+	local Core = __bt_makeCore(__bt_script, __bt_tool, __bt_require)
+	local fn, err = __bt_compile(__bt_body, __bt_chunk, Core)
+	if not fn then
+		error("[BT] module compile: " .. tostring(err), 0)
+	end
+	return fn()
+end
+]]
+
+local moduleRunner: ((Instance, Tool, any, string, string, any, any) -> any)?
+
+local function getModuleRunner(): (Instance, Tool, any, string, string, any, any) -> any
+	if moduleRunner then
+		return moduleRunner
+	end
+	local compiled, err = RemoteLoader.compile(MODULE_RUNNER_SOURCE, "@BT.moduleRunner", nil)
+	if not compiled then
+		error(`[BT] moduleRunner compile: {err}`, 0)
+	end
+	moduleRunner = compiled()
+	return moduleRunner
+end
+
 local function wrapChunkSource(source: string): string
-	local body = rewriteForRemote(source)
+	local body = rewriteForWrap(source)
 	return "return function(__bt_script, __bt_tool, __bt_require)\n"
 		.. WRAP_TOOL_PARENT_PREAMBLE
 		.. "if __bt_script == nil and __bt_tool == nil then error('[BT] script и Tool nil', 0) end\n"
-		.. "local __bt_env = setmetatable({}, { __index = _G })\n"
+		.. "local Core = setmetatable({}, { __index = _G })\n"
+		.. "_G.Core = Core\n"
 		.. "local function __bt_getfenv(_level)\n"
-		.. "\treturn __bt_env\n"
+		.. "\treturn Core\n"
 		.. "end\n"
 		.. "local require = __bt_require\n"
 		.. "local script = __bt_script\n"
 		.. "local Players = game:GetService(\"Players\")\n"
 		.. "Game = game\n"
 		.. "Tool = __bt_tool\n"
-		.. "__bt_env.script = __bt_script\n"
-		.. "__bt_env.Tool = __bt_tool\n"
-		.. "__bt_env.require = __bt_require\n"
-		.. "__bt_env.Players = Players\n"
-		.. "__bt_env.Player = Players.LocalPlayer\n"
+		.. "Core.script = __bt_script\n"
+		.. "Core.Tool = __bt_tool\n"
+		.. "Core.require = __bt_require\n"
+		.. "Core.Players = Players\n"
+		.. "Core.Player = Players.LocalPlayer\n"
 		.. body
 		.. "\nend"
 end
@@ -401,6 +441,7 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 		__bt_script = scriptInstance,
 		__bt_tool = tool,
 		__bt_tool_parent = btToolParent,
+		Core = nil :: any,
 		Tool = tool,
 		require = btRequire,
 		plugin = false,
@@ -415,6 +456,7 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 		UserInputService = game:GetService("UserInputService"),
 		CollectionService = game:GetService("CollectionService"),
 	}
+	env.Core = env
 	return setmetatable(env, { __index = _G })
 end
 
@@ -452,15 +494,42 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 
 	local btRequire = buildRequire(tool)
 	local raw = sourceCache[path]
-	local wrapped = wrapChunkSource(raw)
-	local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path, nil)
-	if not fn then
-		error(`[BT] compile {path}: {compileError}`, 0)
-	end
+	local ok, result
 
-	local ok, result = pcall(function()
-		return fn()(scriptInstance, tool, btRequire)
-	end)
+	if scriptInstance:IsA("ModuleScript") then
+		local body = rewriteForModuleEnv(raw)
+		local chunkName = "@" .. path
+		ok, result = pcall(function()
+			return getModuleRunner()(
+				scriptInstance,
+				tool,
+				btRequire,
+				body,
+				chunkName,
+				RemoteLoader.compile,
+				buildModuleEnv
+			)
+		end)
+		if not ok then
+			local wrapped = wrapChunkSource(raw)
+			local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path .. "#wrap", nil)
+			if not fn then
+				error(`[BT] run {path}: module={result}; compile={compileError}`, 0)
+			end
+			ok, result = pcall(function()
+				return fn()(scriptInstance, tool, btRequire)
+			end)
+		end
+	else
+		local wrapped = wrapChunkSource(raw)
+		local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path, nil)
+		if not fn then
+			error(`[BT] compile {path}: {compileError}`, 0)
+		end
+		ok, result = pcall(function()
+			return fn()(scriptInstance, tool, btRequire)
+		end)
+	end
 
 	if not ok then
 		error(`[BT] run {path}: {result}`, 0)
