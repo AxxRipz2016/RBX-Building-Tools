@@ -98,13 +98,50 @@ local function normalizeBody(body: string): string
 	return body
 end
 
-local function patchVendorSource(path: string, source: string): string
+local function patchRemoteSource(path: string, source: string): string
 	if path:find("RobloxRenderer.lua", 1, true) then
 		source = source:gsub(
+			"function RobloxRenderer%.isHostObject%(target%)\n\treturn typeof%(target%) == \"Instance\"\nend",
+			[[function RobloxRenderer.isHostObject(target)
+	if target == nil then
+		return false
+	end
+	if typeof(target) == "Instance" then
+		return true
+	end
+	local ok = pcall(function()
+		return target.ClassName
+	end)
+	return ok
+end]]
+		)
+		source = source:gsub(
 			"return typeof%(target%) == \"Instance\"",
-			"return typeof(target) == \"Instance\" or (type(target) == \"userdata\" and target ~= nil)"
+			"return RobloxRenderer.isHostObject(target)"
 		)
 	end
+
+	if path:find("createReconciler.lua", 1, true) then
+		source = source:gsub(
+			'assert%(renderer%.isHostObject%(targetHostParent%), "Expected target to be host object"%)',
+			"if not renderer.isHostObject(targetHostParent) then return end"
+		)
+	end
+
+	if path:find("Dock/AboutPane.lua", 1, true) then
+		source = source:gsub("new%(Roact%.Portal,", "false and new(Roact.Portal,")
+	end
+
+	if path == "Core/init.lua" then
+		if not source:find("UIRoot = UI", 1, true) then
+			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
+		end
+		source = source:gsub(
+			"(Core%.UI = UI\n)",
+			"%1\tif UIContainer then\n\t\tUI.Parent = UIContainer\n\tend\n"
+		)
+	end
+
 	return source
 end
 
@@ -246,7 +283,7 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 				result = normalizeBody(result)
 			end
 			if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
-				result = patchVendorSource(path, result)
+				result = patchRemoteSource(path, result)
 				sourceCache[path] = result
 				failedPaths[path] = nil
 				fetchCount += 1
@@ -468,7 +505,18 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 		CollectionService = game:GetService("CollectionService"),
 	}
 	env.Core = env
-	return setmetatable(env, { __index = _G })
+	return setmetatable(env, {
+		__index = function(_t, k)
+			local v = rawget(env, k)
+			if v ~= nil then
+				return v
+			end
+			return _G[k]
+		end,
+		__newindex = function(_t, k, v)
+			rawset(env, k, v)
+		end,
+	})
 end
 
 local function buildRequire(tool: Tool)
@@ -522,14 +570,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 			)
 		end)
 		if not ok then
-			local wrapped = wrapChunkSource(raw)
-			local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path .. "#wrap", nil)
-			if not fn then
-				error(`[BT] run {path}: module={result}; compile={compileError}`, 0)
-			end
-			ok, result = pcall(function()
-				return fn()(scriptInstance, tool, btRequire)
-			end)
+			error(`[BT] run {path}: {result}`, 0)
 		end
 	else
 		local wrapped = wrapChunkSource(raw)
