@@ -171,8 +171,20 @@ local function buildModuleTree(tool: Tool, paths: { string })
 	end
 end
 
-function RemoteToolBuilder.Build(player: Player?, onProgress: ((string) -> ())?): Tool
+function RemoteToolBuilder.Build(
+	player: Player?,
+	callbacks: { onFile: any?, onMessage: any? } | ((string) -> ())?
+): Tool
 	player = player or Players.LocalPlayer
+
+	local onFile: ((number, number, string, boolean, string?) -> ())?
+	local onMessage: ((string) -> ())?
+	if type(callbacks) == "function" then
+		onMessage = callbacks
+	elseif type(callbacks) == "table" then
+		onFile = callbacks.onFile
+		onMessage = callbacks.onMessage
+	end
 
 	local existing = player.Backpack:FindFirstChild(Config.ToolName)
 	if existing and existing:IsA("Tool") then
@@ -186,11 +198,21 @@ function RemoteToolBuilder.Build(player: Player?, onProgress: ((string) -> ())?)
 	RemoteLoader.clear()
 
 	local paths = getManifest()
-	RemoteLoader.preloadAll(paths, function(index, total, path)
-		if onProgress then
-			onProgress(`Кэш {index}/{total}: {path}`)
+	if onMessage then
+		onMessage(`Загрузка { #paths } файлов с GitHub…`)
+	end
+
+	local failed = RemoteLoader.preloadAll(paths, function(index, total, path, fileOk, fileErr)
+		if onFile then
+			onFile(index, total, path, fileOk, fileErr)
 		end
 	end)
+
+	RemoteLoader.assertCriticalLoaded()
+
+	if #failed > 0 then
+		warn(`[BT] не загружено файлов: {#failed} (некритичные могут быть пропущены)`)
+	end
 
 	local tool = Instance.new("Tool")
 	tool.Name = Config.ToolName
@@ -198,8 +220,8 @@ function RemoteToolBuilder.Build(player: Player?, onProgress: ((string) -> ())?)
 	tool.CanBeDropped = true
 	tool:SetAttribute("BT_LocalOnly", true)
 
-	if onProgress then
-		onProgress("Сборка дерева…")
+	if onMessage then
+		onMessage("Сборка дерева модулей…")
 	end
 
 	buildModuleTree(tool, paths)

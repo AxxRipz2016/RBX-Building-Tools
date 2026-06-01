@@ -13,10 +13,13 @@ local httpGet = function(url: string)
 	return game:HttpGet(url, true)
 end
 
-local ok, err = pcall(function()
-	loadFn(httpGet(ENTRY_URL), "BT.RemoteEntry")()
-end)
+local chunk, compileErr = loadFn(httpGet(ENTRY_URL), "BT.RemoteEntry")
+if not chunk then
+	warn("[BT Solo] compile RemoteEntry:", compileErr)
+	return
+end
 
+local ok, err = pcall(chunk)
 if not ok then
 	warn("[BT Solo]", err)
 end

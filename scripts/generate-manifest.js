@@ -8,9 +8,27 @@ const path = require("path");
 const root = path.join(__dirname, "..");
 const outFile = path.join(root, "Launcher", "manifest.lua");
 
-const skipDir = /^(node_modules|\.git|Build|scripts|ServerScriptService|StarterPlayerScripts)$/;
+const skipRootDirs = new Set([
+	"node_modules",
+	".git",
+	"Build",
+	"scripts",
+	"ServerScriptService",
+	"StarterPlayerScripts",
+]);
+
+const skipDirNames = new Set([
+	"bin",
+	"examples",
+	"benchmarks",
+	"testez",
+	"lemur",
+	"spec",
+	"modules",
+]);
+
 const skipFile =
-	/(\.spec\.lua|\.bench\.lua|ToolInitializer|PluginInitializer|AutomaticUpdating|ServerAPIEndpoint|DescendantCounter\.server|LocalAPIEndpoint\.client\.lua$|Launcher\\|Launcher\/|generate-manifest)/;
+	/(\.spec\.lua$|\.bench\.lua$|\/spec\.lua$|ToolInitializer|PluginInitializer|AutomaticUpdating|ServerAPIEndpoint|DescendantCounter\.server|LocalAPIEndpoint\.client\.lua$|Launcher\/|generate-manifest)/;
 
 function walk(dir, base = "") {
 	const entries = [];
@@ -18,7 +36,8 @@ function walk(dir, base = "") {
 		const full = path.join(dir, name);
 		const rel = base ? `${base}/${name}` : name;
 		if (fs.statSync(full).isDirectory()) {
-			if (skipDir.test(name)) continue;
+			if (!base && skipRootDirs.has(name)) continue;
+			if (skipDirNames.has(name)) continue;
 			entries.push(...walk(full, rel.replace(/\\/g, "/")));
 		} else if (name.endsWith(".lua") && !skipFile.test(rel.replace(/\\/g, "/"))) {
 			entries.push(rel.replace(/\\/g, "/"));

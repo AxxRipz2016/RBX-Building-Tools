@@ -1,12 +1,22 @@
 --[[
-	HttpGet → loadstring → кэш.
-	Скачивание: sourceCache[path] = game:HttpGet(url, true)
+	HttpGet → кэш. Ошибки не роняют весь preload.
 ]]
 local RemoteLoader = {}
 
 local sourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
 local registry: { [ModuleScript]: string } = {}
+local failedPaths: { [string]: string } = {}
+
+local CRITICAL_PATHS = {
+	["Core/init.lua"] = true,
+	["Loader/init.lua"] = true,
+	["SyncAPI.lua"] = true,
+	["Support/LocalAPIEndpoint.local.client.lua"] = true,
+	["Support/DescendantCounter.local.client.lua"] = true,
+	["Support/ReplicationListener.client.lua"] = true,
+	["Support/Assets.lua"] = true,
+}
 
 function RemoteLoader.configure(baseUrl: string)
 	RemoteLoader.BaseUrl = baseUrl
@@ -15,35 +25,75 @@ function RemoteLoader.configure(baseUrl: string)
 	end
 end
 
+function RemoteLoader.hasSource(path: string): boolean
+	return sourceCache[path] ~= nil
+end
+
+function RemoteLoader.getFailed(): { [string]: string }
+	return failedPaths
+end
+
 function RemoteLoader.registerModule(moduleScript: ModuleScript, path: string)
 	registry[moduleScript] = path
 	moduleScript:SetAttribute("BTPath", path)
 end
 
-function RemoteLoader.fetchSource(path: string): string
+function RemoteLoader.fetchSource(path: string): (boolean, string?)
 	if sourceCache[path] then
-		return sourceCache[path]
+		return true, sourceCache[path]
 	end
 
 	local url = RemoteLoader.BaseUrl .. path
 	local ok, result = pcall(function()
 		return game:HttpGet(url, true)
 	end)
+
 	if not ok then
-		error(`[BT] HttpGet failed for {path}: {result}`, 0)
+		failedPaths[path] = tostring(result)
+		return false, failedPaths[path]
+	end
+
+	if type(result) ~= "string" or #result == 0 then
+		failedPaths[path] = "пустой ответ"
+		return false, failedPaths[path]
+	end
+
+	if result:find("<!DOCTYPE", 1, true) or result:find("<html", 1, true) then
+		failedPaths[path] = "404 / HTML вместо Lua"
+		return false, failedPaths[path]
 	end
 
 	sourceCache[path] = result
-	return sourceCache[path]
+	failedPaths[path] = nil
+	return true, result
 end
 
-function RemoteLoader.preloadAll(paths: { string }, onProgress: ((number, number, string) -> ())?)
+function RemoteLoader.preloadAll(
+	paths: { string },
+	onProgress: ((number, number, string, boolean, string?) -> ())?
+): { string }
 	local total = #paths
+	local hardFailures: { string } = {}
+
 	for index, path in paths do
+		local ok, err = RemoteLoader.fetchSource(path)
 		if onProgress then
-			onProgress(index, total, path)
+			onProgress(index, total, path, ok, err)
 		end
-		RemoteLoader.fetchSource(path)
+		if not ok then
+			table.insert(hardFailures, path)
+			warn(`[BT] HttpGet: {path} — {err}`)
+		end
+	end
+
+	return hardFailures
+end
+
+function RemoteLoader.assertCriticalLoaded()
+	for path in CRITICAL_PATHS do
+		if not RemoteLoader.hasSource(path) then
+			error(`[BT] не загружен обязательный файл: {path}`, 0)
+		end
 	end
 end
 
@@ -65,7 +115,11 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: ModuleScript
 		return moduleCache[path]
 	end
 
-	local url = RemoteLoader.BaseUrl .. path
+	local okSource, err = RemoteLoader.fetchSource(path)
+	if not okSource then
+		error(`[BT] run {path}: {err}`, 0)
+	end
+
 	local env = setmetatable({
 		script = scriptInstance,
 		Tool = tool,
@@ -76,7 +130,6 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: ModuleScript
 	})
 
 	local ok, result = pcall(function()
-		sourceCache[path] = game:HttpGet(url, true)
 		local fn, compileError = load(sourceCache[path], "@" .. path, "t", env)
 		if not fn then
 			error(compileError, 0)
@@ -95,6 +148,7 @@ function RemoteLoader.clear()
 	table.clear(sourceCache)
 	table.clear(moduleCache)
 	table.clear(registry)
+	table.clear(failedPaths)
 end
 
 return RemoteLoader
