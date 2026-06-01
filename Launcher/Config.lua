@@ -20,7 +20,7 @@ Config.RemoteVendorUrls = {
 }
 
 -- Меняй при push лаунчера (дублирует Version.lua для Rojo)
-Config.LauncherVersion = "18"
+Config.LauncherVersion = "19"
 
 -- Пример: { 123456789 } — только эти UserId
 Config.AllowedUserIds = {247402615}

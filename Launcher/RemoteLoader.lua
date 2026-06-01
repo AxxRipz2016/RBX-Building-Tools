@@ -303,10 +303,10 @@ function RemoteLoader.assertCriticalLoaded()
 	end
 end
 
-local function rewriteForRemote(source: string, asLocal: boolean): string
+local function rewriteForRemote(source: string, mode: "module" | "local")
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
-	if asLocal then
-		source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
+	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
+	if mode == "local" then
 		source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
 		source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
 	end
@@ -314,7 +314,7 @@ local function rewriteForRemote(source: string, asLocal: boolean): string
 end
 
 local function wrapLocalScriptSource(source: string): string
-	local body = rewriteForRemote(source, true)
+	local body = rewriteForRemote(source, "local")
 	return "return function(__bt_script, __bt_tool, __bt_require)\n"
 		.. "local __bt_module = {}\n"
 		.. "local function __bt_getfenv(_level)\n"
@@ -331,6 +331,7 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 	local Players = game:GetService("Players")
 	local env = {
 		script = scriptInstance,
+		__bt_script = scriptInstance,
 		Tool = tool,
 		require = btRequire,
 		plugin = false,
@@ -389,7 +390,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 			return fn()(scriptInstance, tool, btRequire)
 		end)
 	else
-		local source = rewriteForRemote(sourceCache[path], false)
+		local source = rewriteForRemote(sourceCache[path], "module")
 		local env = buildModuleEnv(tool, scriptInstance, btRequire)
 		local fn, compileError = RemoteLoader.compile(source, "@" .. path, env)
 		if not fn then
