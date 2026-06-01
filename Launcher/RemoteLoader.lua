@@ -409,10 +409,14 @@ local function __bt_tool_parent(__bt_script, __bt_tool)
 end
 ]]
 
+-- Без вызова __bt_tool_parent (в load-env executor часто nil) — только __bt_script/__bt_tool
+local SCRIPT_PARENT_EXPR =
+	"((function(__s,__t) if __s ~= nil then local __p = __s.Parent if __p ~= nil then return __p end if __t ~= nil then local __n = __s.Name if __n == \"LocalEndpoint\" then return __t:FindFirstChild(\"SyncAPI\") end if __n == \"DescendantCounter\" then local __ld = __t:FindFirstChild(\"Loaded\") return __ld and __ld:FindFirstChild(\"DescendantCount\") end if __n == \"ReplicationListener\" then return __t:FindFirstChild(\"Loaded\") end end end return __t end)(__bt_script,__bt_tool))"
+
 local function rewriteCommon(source: string): string
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
-	source = source:gsub("__bt_script%.Parent", "__bt_tool_parent(__bt_script, __bt_tool)")
+	source = source:gsub("__bt_script%.Parent", SCRIPT_PARENT_EXPR)
 	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
 	return source
 end
@@ -570,7 +574,17 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 			)
 		end)
 		if not ok then
-			error(`[BT] run {path}: {result}`, 0)
+			local wrapped = wrapChunkSource(raw)
+			local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path .. "#wrap", nil)
+			if not fn then
+				error(`[BT] run {path}: module={result}; wrap={compileError}`, 0)
+			end
+			ok, result = pcall(function()
+				return fn()(scriptInstance, tool, btRequire)
+			end)
+			if not ok then
+				error(`[BT] run {path}: {result}`, 0)
+			end
 		end
 	else
 		local wrapped = wrapChunkSource(raw)
