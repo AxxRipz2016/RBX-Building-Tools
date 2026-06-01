@@ -304,28 +304,29 @@ function RemoteLoader.assertCriticalLoaded()
 end
 
 local function rewriteForRemote(source: string): string
-	-- script / require / getfenv — зарезервированы; иначе идёт нативный require пустых ModuleScript
-	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
-	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
-	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
 	-- Tool без Parent (до Backpack) — nil:IsA
-	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
-	return source
+	return (source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA"))
 end
 
-local function wrapBoundSource(source: string): string
-	local body = rewriteForRemote(source)
-	return "return function(__bt_script, __bt_tool, __bt_require)\n"
-		.. "local __bt_module = {}\n"
-		.. "local function __bt_getfenv(level)\n"
-		.. "\tif level == nil or level == 0 or level == 1 then return __bt_module end\n"
-		.. "\treturn _G\n"
-		.. "end\n"
-		.. "Tool = __bt_tool\n"
-		.. "Plugin = __bt_tool.Parent and __bt_tool.Parent:IsA(\"Plugin\") and __bt_tool.Parent or nil\n"
-		.. "Game = game\n"
-		.. body
-		.. "\nend"
+local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: any): any
+	local Players = game:GetService("Players")
+	local env = {
+		script = scriptInstance,
+		Tool = tool,
+		require = btRequire,
+		plugin = false,
+		game = game,
+		Game = game,
+		Players = Players,
+		Player = Players.LocalPlayer,
+		Workspace = game:GetService("Workspace"),
+		RunService = game:GetService("RunService"),
+		HttpService = game:GetService("HttpService"),
+		ReplicatedStorage = game:GetService("ReplicatedStorage"),
+		UserInputService = game:GetService("UserInputService"),
+		CollectionService = game:GetService("CollectionService"),
+	}
+	return setmetatable(env, { __index = _G })
 end
 
 local function buildRequire(tool: Tool)
@@ -356,31 +357,16 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 		error(`[BT] run {path}: {err}`, 0)
 	end
 
-	local source = sourceCache[path]
+	local source = rewriteForRemote(sourceCache[path])
 	local btRequire = buildRequire(tool)
+	local env = buildModuleEnv(tool, scriptInstance, btRequire)
 
-	local env = setmetatable({
-		script = scriptInstance,
-		Tool = tool,
-		plugin = false,
-		require = btRequire,
-	}, {
-		__index = _G,
-	})
-
-	local toCompile = if scriptInstance then wrapBoundSource(source) else source
-	local fn, compileError = RemoteLoader.compile(toCompile, "@" .. path, env)
+	local fn, compileError = RemoteLoader.compile(source, "@" .. path, env)
 	if not fn then
 		error(`[BT] compile {path}: {compileError}`, 0)
 	end
 
-	local ok, result = pcall(function()
-		if scriptInstance then
-			local factory = fn()
-			return factory(scriptInstance, tool, btRequire) -- __bt_script, __bt_tool, __bt_require
-		end
-		return fn()
-	end)
+	local ok, result = pcall(fn)
 	if not ok then
 		error(`[BT] run {path}: {result}`, 0)
 	end
