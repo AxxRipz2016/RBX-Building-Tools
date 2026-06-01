@@ -15,9 +15,14 @@ local RemoteToolBuilder = {}
 
 local manifestModule = (script and script.Parent and script.Parent:FindFirstChild("manifest")) or nil
 local manifestOverride: { string }? = nil
+local versionInfo: { Launcher: string, Tool: string, Roact: string, Branch: string }? = nil
 
 function RemoteToolBuilder.setManifest(paths: { string })
 	manifestOverride = paths
+end
+
+function RemoteToolBuilder.setVersionInfo(info: { Launcher: string, Tool: string, Roact: string, Branch: string })
+	versionInfo = info
 end
 
 local function getManifest(): { string }
@@ -31,10 +36,21 @@ local function getManifest(): { string }
 	return {}
 end
 
+local function stripSrcFolders(segments: { string }): { string }
+	local out: { string } = {}
+	for _, name in segments do
+		if name ~= "src" then
+			table.insert(out, name)
+		end
+	end
+	return out
+end
+
 local function parsePath(path: string): (string, { string })
 	local segments = string.split(path, "/")
 	local fileName = segments[#segments]
 	table.remove(segments, #segments)
+	segments = stripSrcFolders(segments)
 
 	if fileName == "init.lua" then
 		local moduleName = segments[#segments]
@@ -42,18 +58,10 @@ local function parsePath(path: string): (string, { string })
 		for index = 1, #segments - 1 do
 			parentParts[index] = segments[index]
 		end
-		-- Rojo: Vendor/Roact/src → ModuleScript Roact (не Vendor.Roact.src)
-		if moduleName == "src" and #parentParts > 0 then
-			moduleName = parentParts[#parentParts]
-			table.remove(parentParts, #parentParts)
-		end
 		return moduleName, parentParts
 	end
 
 	local moduleName = string.gsub(fileName, "%.lua$", "")
-	if segments[#segments] == "src" then
-		table.remove(segments, #segments)
-	end
 	return moduleName, segments
 end
 
@@ -139,10 +147,22 @@ local function attachLoadedIndicator(tool: Tool)
 end
 
 local function attachMetadata(tool: Tool)
+	local toolVer = if versionInfo then versionInfo.Tool else "3.1.0"
 	local version = Instance.new("StringValue")
 	version.Name = "Version"
-	version.Value = "3.1.0"
+	version.Value = toolVer
 	version.Parent = tool
+
+	if versionInfo then
+		tool:SetAttribute("BT_LauncherVersion", versionInfo.Launcher)
+		tool:SetAttribute("BT_RoactVersion", versionInfo.Roact)
+		tool:SetAttribute("BT_LoadBranch", versionInfo.Branch)
+
+		local launcherVer = Instance.new("StringValue")
+		launcherVer.Name = "LauncherVersion"
+		launcherVer.Value = `r{versionInfo.Launcher}`
+		launcherVer.Parent = tool
+	end
 
 	local autoUpdate = Instance.new("BoolValue")
 	autoUpdate.Name = "AutoUpdate"

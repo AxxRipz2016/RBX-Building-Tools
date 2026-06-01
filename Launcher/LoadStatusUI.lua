@@ -22,7 +22,7 @@ function LoadStatusUI.create()
 	frame.Name = "Panel"
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.Position = UDim2.fromScale(0.5, 0.5)
-	frame.Size = UDim2.fromOffset(420, 188)
+	frame.Size = UDim2.fromOffset(420, 200)
 	frame.BackgroundColor3 = Color3.fromRGB(25, 25, 28)
 	frame.BorderSizePixel = 0
 	frame.Parent = gui
@@ -43,6 +43,18 @@ function LoadStatusUI.create()
 	title.Text = "Building Tools — загрузка"
 	title.Parent = frame
 
+	local versionLine = Instance.new("TextLabel")
+	versionLine.Name = "VersionLine"
+	versionLine.BackgroundTransparency = 1
+	versionLine.Position = UDim2.fromOffset(12, 30)
+	versionLine.Size = UDim2.new(1, -52, 0, 14)
+	versionLine.Font = Enum.Font.Gotham
+	versionLine.TextSize = 11
+	versionLine.TextXAlignment = Enum.TextXAlignment.Left
+	versionLine.TextColor3 = Color3.fromRGB(140, 140, 150)
+	versionLine.Text = ""
+	versionLine.Parent = frame
+
 	local closeTop = Instance.new("TextButton")
 	closeTop.Name = "CloseTop"
 	closeTop.BackgroundTransparency = 1
@@ -57,7 +69,7 @@ function LoadStatusUI.create()
 	local progress = Instance.new("TextLabel")
 	progress.Name = "Progress"
 	progress.BackgroundTransparency = 1
-	progress.Position = UDim2.fromOffset(12, 36)
+	progress.Position = UDim2.fromOffset(12, 48)
 	progress.Size = UDim2.new(1, -24, 0, 36)
 	progress.Font = Enum.Font.Gotham
 	progress.TextSize = 13
@@ -70,7 +82,7 @@ function LoadStatusUI.create()
 
 	local barBack = Instance.new("Frame")
 	barBack.Name = "BarBack"
-	barBack.Position = UDim2.fromOffset(12, 76)
+	barBack.Position = UDim2.fromOffset(12, 88)
 	barBack.Size = UDim2.new(1, -24, 0, 8)
 	barBack.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 	barBack.BorderSizePixel = 0
@@ -94,7 +106,7 @@ function LoadStatusUI.create()
 	local detail = Instance.new("TextLabel")
 	detail.Name = "Detail"
 	detail.BackgroundTransparency = 1
-	detail.Position = UDim2.fromOffset(12, 90)
+	detail.Position = UDim2.fromOffset(12, 102)
 	detail.Size = UDim2.new(1, -24, 0, 48)
 	detail.Font = Enum.Font.Gotham
 	detail.TextSize = 11
@@ -134,6 +146,10 @@ function LoadStatusUI.create()
 
 	closeTop.MouseButton1Click:Connect(close)
 	closeBtn.MouseButton1Click:Connect(close)
+
+	function api.setVersionInfo(text: string)
+		versionLine.Text = text
+	end
 
 	function api.setProgress(index: number, total: number, path: string, ok: boolean?)
 		local ratio = if total > 0 then index / total else math.min(index / 120, 0.95)

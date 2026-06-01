@@ -62,8 +62,13 @@ _G.BT_LAUNCHER_COMPILE = function(source: string, chunkName: string, env: any?)
 end
 _G.BT_LAUNCHER_LOAD = loadFromGit
 
+local Version = loadFn(httpGet(BASE_URL .. "Launcher/Version.lua"), "@Version")()
+
 local LoadStatusUI = loadFn(httpGet(BASE_URL .. "Launcher/LoadStatusUI.lua"), "@LoadStatusUI")()
 local ui = LoadStatusUI.create()
+ui.setVersionInfo(
+	`Launcher r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · {Version.Branch}`
+)
 
 local ok, err = pcall(function()
 	local Config = loadFromGit("Launcher/Config.lua")
@@ -76,6 +81,8 @@ local ok, err = pcall(function()
 
 	RemoteLoader.configure(BASE_URL, Config.RemoteVendorUrls)
 	RemoteToolBuilder.setManifest(manifest)
+	RemoteToolBuilder.setVersionInfo(Version)
+	_G.BT_LAUNCHER_VERSION = Version
 
 	local fileIndex = 0
 	RemoteLoader.setProgressCallback(function(path, fileOk, fileErr)
@@ -103,11 +110,11 @@ local ok, err = pcall(function()
 	end
 
 	local doneText = if failCount > 0
-		then `Готово с ошибками ({failCount} файлов)`
-		else `Готово — Tool в Backpack ({RemoteLoader.getFetchCount()} файлов)`
+		then `r{Version.Launcher} · ошибки: {failCount} файлов`
+		else `r{Version.Launcher} · OK · {RemoteLoader.getFetchCount()} файлов · Tool в Backpack`
 	ui.setDone(doneText)
 
-	print("[BT] RemoteEntry v4 — Tool готов")
+	print(`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} — готов`)
 end)
 
 if not ok then
