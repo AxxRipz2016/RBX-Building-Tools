@@ -490,22 +490,6 @@ local function rewriteForWrap(source: string): string
 	return source
 end
 
-local function runModuleWithEnv(
-	path: string,
-	raw: string,
-	tool: Tool,
-	scriptInstance: Instance,
-	btRequire: any
-): any
-	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
-	local body = rewriteForModuleEnv(raw)
-	local fn, compileError = RemoteLoader.compile(body, "@" .. path, coreEnv)
-	if not fn then
-		error(`[BT] compile {path}: {compileError}`, 0)
-	end
-	return fn()
-end
-
 local function wrapChunkSource(source: string): string
 	local body = rewriteForWrap(source)
 	return "return function(__bt_script, __bt_tool, __bt_require)\n"
@@ -583,6 +567,23 @@ local function buildRequire(tool: Tool)
 		end
 		return result
 	end
+end
+
+local function runModuleWithEnv(
+	path: string,
+	raw: string,
+	tool: Tool,
+	scriptInstance: Instance,
+	btRequire: any
+): any
+	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
+	local body = rewriteForModuleEnv(raw)
+	local compileFn = RemoteLoader.compile or defaultCompile
+	local fn, compileError = compileFn(body, "@" .. path, coreEnv)
+	if not fn then
+		error(`[BT] compile {path}: {compileError}`, 0)
+	end
+	return fn()
 end
 
 function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): any
