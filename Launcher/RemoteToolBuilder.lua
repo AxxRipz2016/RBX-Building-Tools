@@ -46,7 +46,19 @@ local function stripSrcFolders(segments: { string }): { string }
 	return out
 end
 
+-- Файлы не по пути папок (см. default.project.json: Assets → корень Tool)
+local MODULE_PLACEMENT: { [string]: { string } } = {
+	["Support/Assets.lua"] = {},
+}
+
 local function parsePath(path: string): (string, { string })
+	local placement = MODULE_PLACEMENT[path]
+	if placement ~= nil then
+		local fileName = string.match(path, "([^/]+)%.lua$") or path
+		local moduleName = string.gsub(fileName, "%.lua$", "")
+		return moduleName, placement
+	end
+
 	local segments = string.split(path, "/")
 	local fileName = segments[#segments]
 	table.remove(segments, #segments)
