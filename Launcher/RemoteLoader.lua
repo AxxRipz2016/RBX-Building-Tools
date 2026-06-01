@@ -303,9 +303,28 @@ function RemoteLoader.assertCriticalLoaded()
 	end
 end
 
-local function rewriteForRemote(source: string): string
-	-- Tool без Parent (до Backpack) — nil:IsA
-	return (source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA"))
+local function rewriteForRemote(source: string, asLocal: boolean): string
+	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
+	if asLocal then
+		source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
+		source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
+		source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
+	end
+	return source
+end
+
+local function wrapLocalScriptSource(source: string): string
+	local body = rewriteForRemote(source, true)
+	return "return function(__bt_script, __bt_tool, __bt_require)\n"
+		.. "local __bt_module = {}\n"
+		.. "local function __bt_getfenv(_level)\n"
+		.. "\treturn __bt_module\n"
+		.. "end\n"
+		.. "local Players = game:GetService(\"Players\")\n"
+		.. "Game = game\n"
+		.. "Tool = __bt_tool\n"
+		.. body
+		.. "\nend"
 end
 
 local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: any): any
@@ -357,16 +376,28 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 		error(`[BT] run {path}: {err}`, 0)
 	end
 
-	local source = rewriteForRemote(sourceCache[path])
 	local btRequire = buildRequire(tool)
-	local env = buildModuleEnv(tool, scriptInstance, btRequire)
+	local ok, result
 
-	local fn, compileError = RemoteLoader.compile(source, "@" .. path, env)
-	if not fn then
-		error(`[BT] compile {path}: {compileError}`, 0)
+	if scriptInstance and scriptInstance:IsA("LocalScript") then
+		local wrapped = wrapLocalScriptSource(sourceCache[path])
+		local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path, nil)
+		if not fn then
+			error(`[BT] compile {path}: {compileError}`, 0)
+		end
+		ok, result = pcall(function()
+			return fn()(scriptInstance, tool, btRequire)
+		end)
+	else
+		local source = rewriteForRemote(sourceCache[path], false)
+		local env = buildModuleEnv(tool, scriptInstance, btRequire)
+		local fn, compileError = RemoteLoader.compile(source, "@" .. path, env)
+		if not fn then
+			error(`[BT] compile {path}: {compileError}`, 0)
+		end
+		ok, result = pcall(fn)
 	end
 
-	local ok, result = pcall(fn)
 	if not ok then
 		error(`[BT] run {path}: {result}`, 0)
 	end
