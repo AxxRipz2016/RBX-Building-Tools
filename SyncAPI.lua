@@ -7,6 +7,13 @@ SyncAPI = script.Parent;
 Tool = SyncAPI.Parent;
 Player = nil;
 
+local function shouldDelegateToServer()
+	if Tool:GetAttribute("BT_LocalOnly") then
+		return false
+	end
+	return RunService:IsClient() and not RunService:IsStudio()
+end
+
 -- Libraries
 Security = require(Tool.Core.Security);
 RegionModule = require(Tool.Libraries.Region);
@@ -43,8 +50,10 @@ local IsHttpServiceEnabled = nil
 Actions = {
 
 	['RecolorHandle'] = function (NewColor)
-		-- Recolors the tool handle
-		Tool.Handle.BrickColor = NewColor;
+		local handle = Tool:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			handle.BrickColor = NewColor
+		end
 	end;
 
 	['Clone'] = function (Items, Parent)
@@ -1601,7 +1610,7 @@ Actions = {
 		-- Serializes, exports, and returns ID for importing given parts
 
 		-- Offload action to server-side if API is running locally
-		if RunService:IsClient() and not RunService:IsStudio() then
+		if shouldDelegateToServer() then
 			return SyncAPI.ServerEndpoint:InvokeServer('Export', Parts);
 		end;
 
@@ -1658,7 +1667,7 @@ Actions = {
 		-- Returns whether HttpService is enabled
 
 		-- Offload action to server-side if API is running locally
-		if RunService:IsClient() then
+		if RunService:IsClient() and shouldDelegateToServer() then
 			return SyncAPI.ServerEndpoint:InvokeServer('IsHttpServiceEnabled')
 		end
 
@@ -1686,7 +1695,7 @@ Actions = {
 		-- Returns the first found mesh in the given asset
 
 		-- Offload action to server-side if API is running locally
-		if RunService:IsClient() and not RunService:IsStudio() then
+		if shouldDelegateToServer() then
 			return SyncAPI.ServerEndpoint:InvokeServer('ExtractMeshFromAsset', AssetId);
 		end;
 
@@ -1704,7 +1713,7 @@ Actions = {
 		-- Returns the first image found in the given decal asset
 
 		-- Offload action to server-side if API is running locally
-		if RunService:IsClient() and not RunService:IsStudio() then
+		if shouldDelegateToServer() then
 			return SyncAPI.ServerEndpoint:InvokeServer('ExtractImageFromDecal', DecalAssetId);
 		end;
 
@@ -1716,14 +1725,23 @@ Actions = {
 	['SetMouseLockEnabled'] = function (Enabled)
 		-- Sets whether mouse lock is enabled for the current player
 
-		-- Offload action to server-side if API is running locally
-		if RunService:IsClient() and not RunService:IsStudio() then
+		if shouldDelegateToServer() then
 			return SyncAPI.ServerEndpoint:InvokeServer('SetMouseLockEnabled', Enabled);
 		end;
 
-		-- Set whether mouse lock is enabled
-		Player.DevEnableMouseLock = Enabled;
+		-- Локальный BT: клиент не может менять DevEnableMouseLock — заглушка
+		if Tool:GetAttribute('BT_LocalOnly') then
+			return true
+		end
 
+		if not Player then
+			return false
+		end
+
+		local ok = pcall(function()
+			Player.DevEnableMouseLock = Enabled
+		end)
+		return ok
 	end;
 
 	['SetLocked'] = function (Items, Locked)

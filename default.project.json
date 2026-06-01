@@ -1,90 +1,75 @@
 {
   "name": "RBX-Building-Tools",
-  "servePort": 8000,
+  "servePort": 8002,
   "tree": {
     "$className": "DataModel",
-    "StarterPack": {
-      "$className": "StarterPack",
-      "Building Tools": {
-        "$className": "Tool",
-        "$ignoreUnknownInstances": true,
-        "Core": {
-          "$path": "Core"
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "BT": {
+        "$className": "Folder",
+        "Launcher": {
+          "$path": "Launcher"
         },
-        "Tools": {
+        "Payload": {
           "$className": "Folder",
-          "$path": "Tools"
-        },
-        "Loader": {
-          "$path": "Loader"
-        },
-        "SyncAPI": {
-          "$className": "BindableFunction",
-          "SyncModule": {
-            "$path": "SyncAPI.lua"
+          "Core": {
+            "$path": "Core"
           },
-          "LocalEndpoint": {
-            "$path": "Support/LocalAPIEndpoint.client.lua"
+          "Tools": {
+            "$className": "Folder",
+            "$path": "Tools"
           },
-          "ServerEndpoint": {
-            "$className": "RemoteFunction",
-            "ServerEndpoint": {
-              "$path": "Support/ServerAPIEndpoint.server.lua"
+          "Loader": {
+            "$path": "Loader"
+          },
+          "SyncAPI_Scripts": {
+            "$className": "Folder",
+            "SyncModule": {
+              "$path": "SyncAPI.lua"
+            },
+            "LocalEndpoint": {
+              "$path": "Support/LocalAPIEndpoint.local.client.lua"
             }
-          }
-        },
-        "Libraries": {
-          "$path": "Libraries",
-          "Signal": {
-            "$path": "node_modules/@quenty/signal/src/Shared/GoodSignal.lua"
-          }
-        },
-        "Vendor": {
-          "$className": "Folder",
-          "$ignoreUnknownInstances": false,
-          "Roact": {
-            "$path": "Vendor/Roact/src"
-          }
-        },
-        "Assets": {
-          "$path": "Support/Assets.lua"
-        },
-        "AutoUpdate": {
-          "$className": "BoolValue",
-          "$properties": {
-            "Value": false
           },
-          "AutomaticUpdating": {
-            "$path": "AutomaticUpdating.server.lua"
-          }
-        },
-        "Loaded": {
-          "$className": "BoolValue",
-          "DescendantCount": {
-            "$className": "IntValue",
+          "Loaded_Scripts": {
+            "$className": "Folder",
             "DescendantCounter": {
-              "$path": "Support/DescendantCounter.server.lua"
+              "$path": "Support/DescendantCounter.local.client.lua"
+            },
+            "ReplicationListener": {
+              "$path": "Support/ReplicationListener.client.lua"
             }
           },
-          "ReplicationListener": {
-            "$path": "Support/ReplicationListener.client.lua"
+          "Libraries": {
+            "$path": "Libraries",
+            "Signal": {
+              "$path": "node_modules/@quenty/signal/src/Shared/GoodSignal.lua"
+            }
+          },
+          "Vendor": {
+            "$className": "Folder",
+            "Roact": {
+              "$path": "Vendor/Roact/src"
+            }
+          },
+          "Assets": {
+            "$path": "Support/Assets.lua"
+          },
+          "UI": {
+            "$path": "UI"
+          },
+          "Interfaces": {
+            "$className": "Folder",
+            "$ignoreUnknownInstances": true
           }
-        },
-        "Version": {
-          "$className": "StringValue",
-          "$properties": {
-            "Value": "3.1.0"
-          }
-        },
-        "UI": {
-          "$path": "UI"
-        },
-        "Interfaces": {
-          "$className": "Folder",
-          "$ignoreUnknownInstances": true
-        },
-        "ThumbnailCamera": {
-          "$path": "ThumbnailCamera.model.json"
+        }
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "BT_LocalLauncher": {
+          "$path": "StarterPlayerScripts/BT_LocalLauncher.client.lua"
         }
       }
     }
