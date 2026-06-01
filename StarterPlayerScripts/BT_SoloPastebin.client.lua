@@ -5,7 +5,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
-local ENTRY_URL = "https://raw.githubusercontent.com/USER/REPO/main/Launcher/RemoteEntry.lua"
+local ENTRY_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/development/Launcher/RemoteEntry.lua"
 
 local ok, err = pcall(function()
 	local source = HttpService:GetAsync(ENTRY_URL)

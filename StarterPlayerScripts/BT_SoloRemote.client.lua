@@ -11,7 +11,7 @@ local launcher = ReplicatedStorage:WaitForChild("BT"):WaitForChild("Launcher")
 local Config = require(launcher.Config)
 
 Config.LoadMode = "Remote"
--- Config.RemoteBaseUrl = "https://raw.githubusercontent.com/USER/REPO/main/"
+-- RemoteBaseUrl уже в Launcher/Config.lua
 
 local Bootstrap = require(launcher.Bootstrap)
 Bootstrap.RunUI()

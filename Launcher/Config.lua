@@ -11,11 +11,11 @@ Config.LauncherGuiName = "BT Launcher"
 -- "Remote" = HttpGet + кэш с GitHub (без Payload)
 Config.LoadMode = "Payload"
 
--- Пример: https://raw.githubusercontent.com/USER/REPO/main/
-Config.RemoteBaseUrl = ""
+-- https://github.com/utststs95/RBX-Building-Tools (ветка development)
+Config.RemoteBaseUrl = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/development/"
 
 -- Пример: { 123456789 } — только эти UserId
-Config.AllowedUserIds = {}
+Config.AllowedUserIds = {247402615}
 
 function Config.IsAllowed(player: Player): boolean
 	if #Config.AllowedUserIds == 0 then
