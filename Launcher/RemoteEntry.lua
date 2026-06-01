@@ -107,7 +107,7 @@ local ok, err = pcall(function()
 		else `Готово — Tool в Backpack ({RemoteLoader.getFetchCount()} файлов)`
 	ui.setDone(doneText)
 
-	print("[BT] RemoteEntry v2 — Tool готов")
+	print("[BT] RemoteEntry v3 — Tool готов")
 end)
 
 if not ok then

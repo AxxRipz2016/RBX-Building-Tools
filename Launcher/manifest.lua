@@ -37,6 +37,7 @@ return {
 	"UI/ExportDialog.lua",
 	"Core/BoundingBox.lua",
 	"Libraries/Region.lua",
+	"Libraries/Signal.lua",
 	"Tools/Paint/init.lua",
 	"UI/Dock/ToolList.lua",
 	"UI/Explorer/init.lua",

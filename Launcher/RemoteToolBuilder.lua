@@ -42,6 +42,11 @@ local function parsePath(path: string): (string, { string })
 		for index = 1, #segments - 1 do
 			parentParts[index] = segments[index]
 		end
+		-- Rojo: Vendor/Roact/src → ModuleScript Roact (не Vendor.Roact.src)
+		if moduleName == "src" and #parentParts > 0 then
+			moduleName = parentParts[#parentParts]
+			table.remove(parentParts, #parentParts)
+		end
 		return moduleName, parentParts
 	end
 

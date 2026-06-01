@@ -171,14 +171,24 @@ function RemoteLoader.assertCriticalLoaded()
 	end
 end
 
-local function rewriteScriptIdent(source: string): string
-	-- В Roblox `script` — зарезервированный идентификатор, local script не перекрывает его
-	return (source:gsub("(%f[%a])script(%f[%A])", "__bt_script"))
+local function rewriteForRemote(source: string): string
+	-- script / require / getfenv — зарезервированы; иначе идёт нативный require пустых ModuleScript
+	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
+	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
+	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
+	return source
 end
 
 local function wrapBoundSource(source: string): string
-	local body = rewriteScriptIdent(source)
-	return "return function(__bt_script, __bt_tool, __bt_require)\n" .. body .. "\nend"
+	local body = rewriteForRemote(source)
+	return "return function(__bt_script, __bt_tool, __bt_require)\n"
+		.. "local __bt_module = {}\n"
+		.. "local function __bt_getfenv(level)\n"
+		.. "\tif level == nil or level == 0 or level == 1 then return __bt_module end\n"
+		.. "\treturn _G\n"
+		.. "end\n"
+		.. body
+		.. "\nend"
 end
 
 local function buildRequire(tool: Tool)
@@ -190,7 +200,11 @@ local function buildRequire(tool: Tool)
 		if not modulePath then
 			error(`[BT] require: нет BTPath у {target:GetFullName()}`, 2)
 		end
-		return RemoteLoader.run(modulePath, tool, target)
+		local ok, result = pcall(RemoteLoader.run, modulePath, tool, target)
+		if not ok then
+			error(`[BT] require {modulePath} ({target:GetFullName()}): {result}`, 0)
+		end
+		return result
 	end
 end
 
