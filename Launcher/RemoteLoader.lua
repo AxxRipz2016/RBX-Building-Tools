@@ -94,7 +94,10 @@ local function isLikelyLuaSource(body: string): boolean
 		return false
 	end
 	local head = body:sub(1, 300):lower()
-	if head:match("^%s*404") or head:match("^%s*403") or head:find("not found", 1, true) then
+	if head:match("^%s*404") or head:match("^%s*403") then
+		return false
+	end
+	if head:find("404: not found", 1, true) or head:find("404 not found", 1, true) then
 		return false
 	end
 	if head:find("rate limit", 1, true) or head:find("too many requests", 1, true) then

@@ -3,6 +3,20 @@
 ]]
 local LoadStatusUI = {}
 
+local function copyToClipboard(text: string): boolean
+	if text == "" then
+		return false
+	end
+	local fn = setclipboard
+		or (getgenv and getgenv().setclipboard)
+		or (getrenv and getrenv().setclipboard)
+	if type(fn) == "function" then
+		fn(text)
+		return true
+	end
+	return false
+end
+
 function LoadStatusUI.create()
 	local player = game:GetService("Players").LocalPlayer
 	local playerGui = player:WaitForChild("PlayerGui")
@@ -22,7 +36,7 @@ function LoadStatusUI.create()
 	frame.Name = "Panel"
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.Position = UDim2.fromScale(0.5, 0.5)
-	frame.Size = UDim2.fromOffset(420, 200)
+	frame.Size = UDim2.fromOffset(420, 228)
 	frame.BackgroundColor3 = Color3.fromRGB(25, 25, 28)
 	frame.BorderSizePixel = 0
 	frame.Parent = gui
@@ -107,7 +121,7 @@ function LoadStatusUI.create()
 	detail.Name = "Detail"
 	detail.BackgroundTransparency = 1
 	detail.Position = UDim2.fromOffset(12, 102)
-	detail.Size = UDim2.new(1, -24, 0, 48)
+	detail.Size = UDim2.new(1, -24, 0, 52)
 	detail.Font = Enum.Font.Gotham
 	detail.TextSize = 11
 	detail.TextWrapped = true
@@ -117,9 +131,26 @@ function LoadStatusUI.create()
 	detail.Text = ""
 	detail.Parent = frame
 
+	local copyBtn = Instance.new("TextButton")
+	copyBtn.Name = "Copy"
+	copyBtn.Position = UDim2.new(0, 12, 1, -68)
+	copyBtn.Size = UDim2.new(1, -24, 0, 28)
+	copyBtn.BackgroundColor3 = Color3.fromRGB(45, 90, 140)
+	copyBtn.BorderSizePixel = 0
+	copyBtn.Font = Enum.Font.Gotham
+	copyBtn.TextSize = 13
+	copyBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
+	copyBtn.Text = "Копировать ошибку в буфер"
+	copyBtn.Visible = false
+	copyBtn.Parent = frame
+
+	local copyCorner = Instance.new("UICorner")
+	copyCorner.CornerRadius = UDim.new(0, 6)
+	copyCorner.Parent = copyBtn
+
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "Close"
-	closeBtn.Position = UDim2.new(0, 12, 1, -40)
+	closeBtn.Position = UDim2.new(0, 12, 1, -36)
 	closeBtn.Size = UDim2.new(1, -24, 0, 30)
 	closeBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
 	closeBtn.BorderSizePixel = 0
@@ -136,6 +167,24 @@ function LoadStatusUI.create()
 	local api = {}
 	local destroyed = false
 
+	local function getErrorText(): string
+		local parts = {}
+		if versionLine.Text ~= "" then
+			table.insert(parts, versionLine.Text)
+		end
+		if progress.Text ~= "" then
+			table.insert(parts, progress.Text)
+		end
+		if detail.Text ~= "" then
+			table.insert(parts, detail.Text)
+		end
+		return table.concat(parts, "\n")
+	end
+
+	local function refreshCopyButton()
+		copyBtn.Visible = detail.Text ~= "" or progress.TextColor3 == Color3.fromRGB(255, 100, 100)
+	end
+
 	local function close()
 		if destroyed then
 			return
@@ -146,6 +195,17 @@ function LoadStatusUI.create()
 
 	closeTop.MouseButton1Click:Connect(close)
 	closeBtn.MouseButton1Click:Connect(close)
+
+	copyBtn.MouseButton1Click:Connect(function()
+		local text = getErrorText()
+		if copyToClipboard(text) then
+			copyBtn.Text = "Скопировано — вставь в чат (Ctrl+V)"
+			copyBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 70)
+		else
+			copyBtn.Text = "setclipboard недоступен"
+			copyBtn.BackgroundColor3 = Color3.fromRGB(120, 50, 50)
+		end
+	end)
 
 	function api.setVersionInfo(text: string)
 		versionLine.Text = text
@@ -161,6 +221,7 @@ function LoadStatusUI.create()
 		progress.TextColor3 = if ok == false
 			then Color3.fromRGB(255, 180, 100)
 			else Color3.fromRGB(200, 200, 200)
+		refreshCopyButton()
 	end
 
 	function api.addError(path: string, err: string)
@@ -170,6 +231,7 @@ function LoadStatusUI.create()
 		else
 			detail.Text = detail.Text .. "\n" .. line
 		end
+		refreshCopyButton()
 	end
 
 	function api.setDone(message: string)
@@ -179,6 +241,7 @@ function LoadStatusUI.create()
 		barFill.Size = UDim2.fromScale(1, 1)
 		barFill.BackgroundColor3 = Color3.fromRGB(40, 160, 90)
 		closeBtn.Text = "Закрыть (можно запустить снова)"
+		copyBtn.Visible = false
 	end
 
 	function api.setFatal(message: string)
@@ -187,6 +250,12 @@ function LoadStatusUI.create()
 		progress.TextColor3 = Color3.fromRGB(255, 100, 100)
 		barFill.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
 		closeBtn.Text = "Закрыть"
+		refreshCopyButton()
+		copyToClipboard(getErrorText())
+	end
+
+	function api.copyError(): boolean
+		return copyToClipboard(getErrorText())
 	end
 
 	function api.destroy()
