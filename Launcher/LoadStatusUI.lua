@@ -5,17 +5,24 @@ local LoadStatusUI = {}
 
 function LoadStatusUI.create()
 	local player = game:GetService("Players").LocalPlayer
+	local playerGui = player:WaitForChild("PlayerGui")
+
+	local old = playerGui:FindFirstChild("BT Load Status")
+	if old then
+		old:Destroy()
+	end
+
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "BT Load Status"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.Parent = player:WaitForChild("PlayerGui")
+	gui.Parent = playerGui
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Panel"
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.Position = UDim2.fromScale(0.5, 0.5)
-	frame.Size = UDim2.fromOffset(420, 160)
+	frame.Size = UDim2.fromOffset(420, 188)
 	frame.BackgroundColor3 = Color3.fromRGB(25, 25, 28)
 	frame.BorderSizePixel = 0
 	frame.Parent = gui
@@ -28,7 +35,7 @@ function LoadStatusUI.create()
 	title.Name = "Title"
 	title.BackgroundTransparency = 1
 	title.Position = UDim2.fromOffset(12, 10)
-	title.Size = UDim2.new(1, -24, 0, 22)
+	title.Size = UDim2.new(1, -52, 0, 22)
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 16
 	title.TextXAlignment = Enum.TextXAlignment.Left
@@ -36,11 +43,22 @@ function LoadStatusUI.create()
 	title.Text = "Building Tools — загрузка"
 	title.Parent = frame
 
+	local closeTop = Instance.new("TextButton")
+	closeTop.Name = "CloseTop"
+	closeTop.BackgroundTransparency = 1
+	closeTop.Position = UDim2.new(1, -36, 0, 6)
+	closeTop.Size = UDim2.fromOffset(28, 28)
+	closeTop.Font = Enum.Font.GothamBold
+	closeTop.TextSize = 18
+	closeTop.TextColor3 = Color3.fromRGB(180, 180, 180)
+	closeTop.Text = "×"
+	closeTop.Parent = frame
+
 	local progress = Instance.new("TextLabel")
 	progress.Name = "Progress"
 	progress.BackgroundTransparency = 1
 	progress.Position = UDim2.fromOffset(12, 36)
-	progress.Size = UDim2.new(1, -24, 0, 40)
+	progress.Size = UDim2.new(1, -24, 0, 36)
 	progress.Font = Enum.Font.Gotham
 	progress.TextSize = 13
 	progress.TextWrapped = true
@@ -52,7 +70,7 @@ function LoadStatusUI.create()
 
 	local barBack = Instance.new("Frame")
 	barBack.Name = "BarBack"
-	barBack.Position = UDim2.fromOffset(12, 82)
+	barBack.Position = UDim2.fromOffset(12, 76)
 	barBack.Size = UDim2.new(1, -24, 0, 8)
 	barBack.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 	barBack.BorderSizePixel = 0
@@ -76,8 +94,8 @@ function LoadStatusUI.create()
 	local detail = Instance.new("TextLabel")
 	detail.Name = "Detail"
 	detail.BackgroundTransparency = 1
-	detail.Position = UDim2.fromOffset(12, 98)
-	detail.Size = UDim2.new(1, -24, 0, 52)
+	detail.Position = UDim2.fromOffset(12, 90)
+	detail.Size = UDim2.new(1, -24, 0, 48)
 	detail.Font = Enum.Font.Gotham
 	detail.TextSize = 11
 	detail.TextWrapped = true
@@ -87,7 +105,35 @@ function LoadStatusUI.create()
 	detail.Text = ""
 	detail.Parent = frame
 
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Name = "Close"
+	closeBtn.Position = UDim2.new(0, 12, 1, -40)
+	closeBtn.Size = UDim2.new(1, -24, 0, 30)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 60)
+	closeBtn.BorderSizePixel = 0
+	closeBtn.Font = Enum.Font.Gotham
+	closeBtn.TextSize = 14
+	closeBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
+	closeBtn.Text = "Закрыть"
+	closeBtn.Parent = frame
+
+	local closeCorner = Instance.new("UICorner")
+	closeCorner.CornerRadius = UDim.new(0, 6)
+	closeCorner.Parent = closeBtn
+
 	local api = {}
+	local destroyed = false
+
+	local function close()
+		if destroyed then
+			return
+		end
+		destroyed = true
+		gui:Destroy()
+	end
+
+	closeTop.MouseButton1Click:Connect(close)
+	closeBtn.MouseButton1Click:Connect(close)
 
 	function api.setProgress(index: number, total: number, path: string, ok: boolean?)
 		local ratio = if total > 0 then index / total else math.min(index / 120, 0.95)
@@ -116,6 +162,7 @@ function LoadStatusUI.create()
 		progress.TextColor3 = Color3.fromRGB(120, 220, 140)
 		barFill.Size = UDim2.fromScale(1, 1)
 		barFill.BackgroundColor3 = Color3.fromRGB(40, 160, 90)
+		closeBtn.Text = "Закрыть (можно запустить снова)"
 	end
 
 	function api.setFatal(message: string)
@@ -123,10 +170,11 @@ function LoadStatusUI.create()
 		progress.Text = message
 		progress.TextColor3 = Color3.fromRGB(255, 100, 100)
 		barFill.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+		closeBtn.Text = "Закрыть"
 	end
 
 	function api.destroy()
-		gui:Destroy()
+		close()
 	end
 
 	return api

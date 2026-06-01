@@ -186,7 +186,11 @@ function RemoteToolBuilder.Build(
 
 	local existing = player.Backpack:FindFirstChild(Config.ToolName)
 	if existing and existing:IsA("Tool") then
-		return existing
+		existing:Destroy()
+	end
+	local equipped = player.Character and player.Character:FindFirstChild(Config.ToolName)
+	if equipped and equipped:IsA("Tool") then
+		equipped:Destroy()
 	end
 
 	if not RemoteLoader.BaseUrl or RemoteLoader.BaseUrl == "" then

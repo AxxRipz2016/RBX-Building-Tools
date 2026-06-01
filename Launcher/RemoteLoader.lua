@@ -171,14 +171,14 @@ function RemoteLoader.assertCriticalLoaded()
 	end
 end
 
+local function rewriteScriptIdent(source: string): string
+	-- В Roblox `script` — зарезервированный идентификатор, local script не перекрывает его
+	return (source:gsub("(%f[%a])script(%f[%A])", "__bt_script"))
+end
+
 local function wrapBoundSource(source: string): string
-	-- loadstring без env не даёт `script` — передаём явно
-	return "return function(__script, __tool, __require)\n"
-		.. "local script = __script\n"
-		.. "local Tool = __tool\n"
-		.. "local require = __require\n"
-		.. source
-		.. "\nend"
+	local body = rewriteScriptIdent(source)
+	return "return function(__bt_script, __bt_tool, __bt_require)\n" .. body .. "\nend"
 end
 
 local function buildRequire(tool: Tool)
@@ -225,7 +225,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	local ok, result = pcall(function()
 		if scriptInstance then
 			local factory = fn()
-			return factory(scriptInstance, tool, btRequire)
+			return factory(scriptInstance, tool, btRequire) -- __bt_script, __bt_tool, __bt_require
 		end
 		return fn()
 	end)
