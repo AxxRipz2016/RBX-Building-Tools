@@ -1,40 +1,29 @@
 --[[
-	Точка входа для BT_SoloPastebin.client.lua (один HttpGet на этот файл).
-	Остальное качается с GitHub по manifest.
+	BT_SoloPastebin: loadstring(game:HttpGet(RemoteEntry))()
+	Дальше все модули так же: loadstring(game:HttpGet(url, true))()
 ]]
 local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/development/"
 
-local sourceCache: { [string]: string } = {}
-local moduleFnCache: { [string]: () -> any } = {}
+local moduleCache: { [string]: any } = {}
 
-local function fetch(path: string): string
-	if sourceCache[path] then
-		return sourceCache[path]
+local function loadFromGit(path: string)
+	if moduleCache[path] ~= nil then
+		return moduleCache[path]
 	end
 	local url = BASE_URL .. path
-	sourceCache[path] = HttpService:GetAsync(url)
-	return sourceCache[path]
+	moduleCache[path] = loadstring(game:HttpGet(url, true), "@" .. path)()
+	return moduleCache[path]
 end
 
-local function loadRepoModule(path: string)
-	if moduleFnCache[path] then
-		return moduleFnCache[path]()
-	end
-	local fn = loadstring(fetch(path), "@" .. path)
-	moduleFnCache[path] = fn
-	return fn()
-end
-
-local Config = loadRepoModule("Launcher/Config.lua")
+local Config = loadFromGit("Launcher/Config.lua")
 Config.LoadMode = "Remote"
 Config.RemoteBaseUrl = BASE_URL
 
-local RemoteLoader = loadRepoModule("Launcher/RemoteLoader.lua")
-local RemoteToolBuilder = loadRepoModule("Launcher/RemoteToolBuilder.lua")
-local manifest = loadstring(fetch("Launcher/manifest.lua"), "manifest")()
+local RemoteLoader = loadFromGit("Launcher/RemoteLoader.lua")
+local RemoteToolBuilder = loadFromGit("Launcher/RemoteToolBuilder.lua")
+local manifest = loadstring(game:HttpGet(BASE_URL .. "Launcher/manifest.lua", true), "Launcher/manifest.lua")()
 
 RemoteLoader.configure(BASE_URL)
 RemoteToolBuilder.setManifest(manifest)

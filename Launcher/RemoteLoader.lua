@@ -1,15 +1,19 @@
 --[[
-	HttpGet → loadstring/load → кэш модулей.
+	HttpGet → loadstring → кэш. Везде: game:HttpGet(url, true)
 ]]
-local HttpService = game:GetService("HttpService")
+local function httpGet(url: string): string
+	return game:HttpGet(url, true)
+end
+
+local function httpLoad(url: string, chunkName: string): () -> (...any)
+	return loadstring(httpGet(url), chunkName) :: any
+end
 
 local RemoteLoader = {}
 
 local sourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
 local registry: { [ModuleScript]: string } = {}
-
-local activeTool: Tool? = nil
 
 function RemoteLoader.configure(baseUrl: string)
 	RemoteLoader.BaseUrl = baseUrl
@@ -30,7 +34,7 @@ function RemoteLoader.fetchSource(path: string): string
 
 	local url = RemoteLoader.BaseUrl .. path
 	local ok, result = pcall(function()
-		return HttpService:GetAsync(url)
+		return httpGet(url)
 	end)
 	if not ok then
 		error(`[BT] HttpGet failed for {path}: {result}`, 0)
@@ -55,11 +59,11 @@ local function buildRequire(tool: Tool)
 		if type(target) ~= "userdata" or not target:IsA("ModuleScript") then
 			error("[BT] require: ожидается ModuleScript", 2)
 		end
-		local path = registry[target] or target:GetAttribute("BTPath")
-		if not path then
+		local modulePath = registry[target] or target:GetAttribute("BTPath")
+		if not modulePath then
 			error(`[BT] require: нет BTPath у {target:GetFullName()}`, 2)
 		end
-		return RemoteLoader.run(path, tool, target)
+		return RemoteLoader.run(modulePath, tool, target)
 	end
 end
 
@@ -68,8 +72,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: ModuleScript
 		return moduleCache[path]
 	end
 
-	activeTool = tool
-	local source = RemoteLoader.fetchSource(path)
+	local url = RemoteLoader.BaseUrl .. path
 	local env = setmetatable({
 		script = scriptInstance,
 		Tool = tool,
@@ -79,12 +82,15 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: ModuleScript
 		__index = _G,
 	})
 
-	local fn, compileError = load(source, "@" .. path, "t", env)
-	if not fn then
-		error(`[BT] compile {path}: {compileError}`, 0)
-	end
-
-	local ok, result = pcall(fn)
+	local ok, result = pcall(function()
+		local source = httpGet(url)
+		sourceCache[path] = source
+		local fn, compileError = load(source, "@" .. path, "t", env)
+		if not fn then
+			error(compileError, 0)
+		end
+		return fn()
+	end)
 	if not ok then
 		error(`[BT] run {path}: {result}`, 0)
 	end
@@ -97,7 +103,6 @@ function RemoteLoader.clear()
 	table.clear(sourceCache)
 	table.clear(moduleCache)
 	table.clear(registry)
-	activeTool = nil
 end
 
 return RemoteLoader

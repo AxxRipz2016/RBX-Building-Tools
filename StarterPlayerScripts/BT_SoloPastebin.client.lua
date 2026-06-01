@@ -1,6 +1,5 @@
 --[[
-	Соло-лаунчер: один HttpGet + loadstring.
-	URL — RemoteEntry на GitHub (ветка development).
+	Соло: loadstring(game:HttpGet(url, true))()
 ]]
 local ENTRY_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/development/Launcher/RemoteEntry.lua"
 

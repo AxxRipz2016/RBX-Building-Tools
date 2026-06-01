@@ -19,11 +19,17 @@
    ```
 4. Play через `BT_SoloRemote.client.lua` (нужен только `ReplicatedStorage.BT.Launcher`, **без Payload**).
 
-Цепочка: **HttpGet → load → кэш → дерево ModuleScript → RemoteLoader.run → Tool в Backpack**.
+Цепочка: **`loadstring(game:HttpGet(url, true))()`** → кэш → Tool в Backpack.
 
-## Один скрипт (Pastebin / один URL)
+Везде один стиль: `Launcher/HttpLoad.lua`, `RemoteLoader`, `RemoteEntry`, `BT_SoloPastebin`.
 
-`StarterPlayerScripts/BT_SoloPastebin.client.lua` — один `HttpGet` на `Launcher/RemoteEntry.lua`, дальше всё с GitHub.
+## Один скрипт
+
+`BT_SoloPastebin.client.lua`:
+
+```lua
+loadstring(game:HttpGet(ENTRY_URL, true))()
+```
 
 Поменяй `ENTRY_URL` и `BASE_URL` в `RemoteEntry.lua` на GitHub.
 
