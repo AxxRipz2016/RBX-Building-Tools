@@ -313,9 +313,62 @@ function RemoteLoader.assertCriticalLoaded()
 	end
 end
 
+local function btParent(scriptInst: Instance?, toolInst: Tool?): Instance?
+	if scriptInst == nil then
+		return nil
+	end
+	local p = scriptInst.Parent
+	if p ~= nil then
+		return p
+	end
+	if toolInst == nil then
+		return nil
+	end
+	local n = scriptInst.Name
+	if n == "LocalEndpoint" then
+		return toolInst:FindFirstChild("SyncAPI")
+	end
+	if n == "DescendantCounter" then
+		local loaded = toolInst:FindFirstChild("Loaded")
+		return if loaded then loaded:FindFirstChild("DescendantCount") else nil
+	end
+	if n == "ReplicationListener" then
+		return toolInst:FindFirstChild("Loaded")
+	end
+	return nil
+end
+
+local WRAP_PARENT_PREAMBLE = [[
+local function __bt_parent(__bt_script, __bt_tool)
+	if __bt_script == nil then
+		return nil
+	end
+	local p = __bt_script.Parent
+	if p ~= nil then
+		return p
+	end
+	if __bt_tool == nil then
+		return nil
+	end
+	local n = __bt_script.Name
+	if n == "LocalEndpoint" then
+		return __bt_tool:FindFirstChild("SyncAPI")
+	end
+	if n == "DescendantCounter" then
+		local loaded = __bt_tool:FindFirstChild("Loaded")
+		return loaded and loaded:FindFirstChild("DescendantCount")
+	end
+	if n == "ReplicationListener" then
+		return __bt_tool:FindFirstChild("Loaded")
+	end
+	return nil
+end
+]]
+
 local function rewriteForRemote(source: string): string
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
+	source = source:gsub("__bt_script%.Parent", "__bt_parent(__bt_script, __bt_tool)")
 	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
 	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
 	source = source:gsub("getfenv%(%s*0%s*%)", "__bt_env")
@@ -325,6 +378,7 @@ end
 local function wrapChunkSource(source: string): string
 	local body = rewriteForRemote(source)
 	return "return function(__bt_script, __bt_tool, __bt_require)\n"
+		.. WRAP_PARENT_PREAMBLE
 		.. "if __bt_script == nil then error('[BT] __bt_script is nil', 0) end\n"
 		.. "local __bt_env = setmetatable({}, { __index = _G })\n"
 		.. "local function __bt_getfenv(_level)\n"
@@ -349,6 +403,8 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 	local env = {
 		script = scriptInstance,
 		__bt_script = scriptInstance,
+		__bt_tool = tool,
+		__bt_parent = btParent,
 		Tool = tool,
 		require = btRequire,
 		plugin = false,
@@ -408,19 +464,33 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	end
 
 	local ok, result
-	local fn, envCompileError = RemoteLoader.compile(body, "@" .. path, env)
-	if fn then
-		ok, result = pcall(fn)
-	else
+	local fn, envCompileError
+	local useWrapOnly = scriptInstance:IsA("LocalScript")
+
+	if useWrapOnly then
 		local wrapped = wrapChunkSource(raw)
-		local wrapFn, wrapCompileError = RemoteLoader.compile(wrapped, "@" .. path .. "#wrap", nil)
-		fn = wrapFn
+		fn, envCompileError = RemoteLoader.compile(wrapped, "@" .. path .. "#wrap", nil)
 		if not fn then
-			error(`[BT] compile {path}: env={envCompileError}; wrap={wrapCompileError}`, 0)
+			error(`[BT] compile {path}: {envCompileError}`, 0)
 		end
 		ok, result = pcall(function()
 			return fn()(scriptInstance, tool, btRequire)
 		end)
+	else
+		fn, envCompileError = RemoteLoader.compile(body, "@" .. path, env)
+		if fn then
+			ok, result = pcall(fn)
+		else
+			local wrapped = wrapChunkSource(raw)
+			local wrapFn, wrapCompileError = RemoteLoader.compile(wrapped, "@" .. path .. "#wrap", nil)
+			fn = wrapFn
+			if not fn then
+				error(`[BT] compile {path}: env={envCompileError}; wrap={wrapCompileError}`, 0)
+			end
+			ok, result = pcall(function()
+				return fn()(scriptInstance, tool, btRequire)
+			end)
+		end
 	end
 
 	if not ok then
