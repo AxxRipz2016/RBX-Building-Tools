@@ -56,13 +56,23 @@ local function defaultCompile(source: string, chunkName: string, env: any?): (an
 	end
 
 	if env ~= nil then
-		local fn, err = loadFn(source, chunkName, "t", env)
-		if fn then
-			return fn, nil
+		local lastErr: string?
+		local attempts = {
+			function()
+				return loadFn(source, chunkName, "t", env)
+			end,
+			function()
+				return loadFn(source, chunkName, env)
+			end,
+		}
+		for _, attempt in attempts do
+			local fn, err = attempt()
+			if fn then
+				return fn, nil
+			end
+			lastErr = if err then tostring(err) else lastErr
 		end
-		if err and not err:find("unexpected", 1, true) then
-			return nil, tostring(err)
-		end
+		return nil, lastErr or "load с env не поддерживается"
 	end
 
 	local fn, err = loadFn(source, chunkName)
@@ -303,26 +313,33 @@ function RemoteLoader.assertCriticalLoaded()
 	end
 end
 
-local function rewriteForRemote(source: string, mode: "module" | "local")
+local function rewriteForRemote(source: string): string
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
-	if mode == "local" then
-		source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
-		source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
-	end
+	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
+	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
+	source = source:gsub("getfenv%(%s*0%s*%)", "__bt_env")
 	return source
 end
 
-local function wrapLocalScriptSource(source: string): string
-	local body = rewriteForRemote(source, "local")
+local function wrapChunkSource(source: string): string
+	local body = rewriteForRemote(source)
 	return "return function(__bt_script, __bt_tool, __bt_require)\n"
-		.. "local __bt_module = {}\n"
+		.. "if __bt_script == nil then error('[BT] __bt_script is nil', 0) end\n"
+		.. "local __bt_env = setmetatable({}, { __index = _G })\n"
 		.. "local function __bt_getfenv(_level)\n"
-		.. "\treturn __bt_module\n"
+		.. "\treturn __bt_env\n"
 		.. "end\n"
+		.. "local require = __bt_require\n"
+		.. "local script = __bt_script\n"
 		.. "local Players = game:GetService(\"Players\")\n"
 		.. "Game = game\n"
 		.. "Tool = __bt_tool\n"
+		.. "__bt_env.script = __bt_script\n"
+		.. "__bt_env.Tool = __bt_tool\n"
+		.. "__bt_env.require = __bt_require\n"
+		.. "__bt_env.Players = Players\n"
+		.. "__bt_env.Player = Players.LocalPlayer\n"
 		.. body
 		.. "\nend"
 end
@@ -377,26 +394,33 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 		error(`[BT] run {path}: {err}`, 0)
 	end
 
-	local btRequire = buildRequire(tool)
-	local ok, result
+	if scriptInstance == nil then
+		error(`[BT] run {path}: scriptInstance is nil`, 0)
+	end
 
-	if scriptInstance and scriptInstance:IsA("LocalScript") then
-		local wrapped = wrapLocalScriptSource(sourceCache[path])
-		local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path, nil)
+	local btRequire = buildRequire(tool)
+	local raw = sourceCache[path]
+	local body = rewriteForRemote(raw)
+	local env = buildModuleEnv(tool, scriptInstance, btRequire)
+	env.__bt_env = env
+	env.__bt_getfenv = function(_level: number?)
+		return env
+	end
+
+	local ok, result
+	local fn, envCompileError = RemoteLoader.compile(body, "@" .. path, env)
+	if fn then
+		ok, result = pcall(fn)
+	else
+		local wrapped = wrapChunkSource(raw)
+		local wrapFn, wrapCompileError = RemoteLoader.compile(wrapped, "@" .. path .. "#wrap", nil)
+		fn = wrapFn
 		if not fn then
-			error(`[BT] compile {path}: {compileError}`, 0)
+			error(`[BT] compile {path}: env={envCompileError}; wrap={wrapCompileError}`, 0)
 		end
 		ok, result = pcall(function()
 			return fn()(scriptInstance, tool, btRequire)
 		end)
-	else
-		local source = rewriteForRemote(sourceCache[path], "module")
-		local env = buildModuleEnv(tool, scriptInstance, btRequire)
-		local fn, compileError = RemoteLoader.compile(source, "@" .. path, env)
-		if not fn then
-			error(`[BT] compile {path}: {compileError}`, 0)
-		end
-		ok, result = pcall(fn)
 	end
 
 	if not ok then
