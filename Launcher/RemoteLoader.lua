@@ -108,10 +108,39 @@ local function getFetchUrls(path: string): { string }
 		end
 	end
 
-	add(RemoteLoader.BaseUrl .. path)
-	-- init.lua только с основного репо (иначе Cryo/Roact init не совпадут с деревом модулей)
-	local allowVendorFallback = path:sub(-#"init.lua") ~= "init.lua"
-	if allowVendorFallback then
+	local repoUrl = RemoteLoader.BaseUrl .. path
+	local isInit = path:sub(-#"init.lua") == "init.lua"
+
+	for _, entry in vendorPrefixes do
+		if path:sub(1, #entry.prefix) ~= entry.prefix then
+			continue
+		end
+		local vendorUrl = entry.base .. path:sub(#entry.prefix + 1)
+
+		-- Vendor/Roact — submodule, в GitHub пусто → только Roblox/roact
+		if entry.prefix == "Vendor/Roact/" then
+			add(vendorUrl)
+			return urls
+		end
+
+		-- Cryo init — только репо BT (совместим с деревом); остальное — репо, потом fallback
+		if entry.prefix == "Libraries/Cryo/" then
+			if isInit then
+				add(repoUrl)
+				return urls
+			end
+			add(repoUrl)
+			add(vendorUrl)
+			return urls
+		end
+
+		add(vendorUrl)
+		add(repoUrl)
+		return urls
+	end
+
+	add(repoUrl)
+	if not isInit then
 		for _, entry in vendorPrefixes do
 			if path:sub(1, #entry.prefix) == entry.prefix then
 				add(entry.base .. path:sub(#entry.prefix + 1))
