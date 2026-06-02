@@ -18,14 +18,14 @@ function SelectionPane:init()
     self.PaneSize, self.SetPaneSize = Roact.createBinding(UDim2.new())
 
     local core = self.props.Core
-    if core and core.History and core.History.Changed and core.History.Changed.Connect then
+    if core and type(core.History) == "table" and core.History.Changed and core.History.Changed.Connect then
         self:UpdateHistoryState()
         self.Maid.TrackHistory = core.History.Changed:Connect(function ()
             self:UpdateHistoryState()
         end)
     end
 
-    if core and core.Selection and core.Selection.Changed and core.Selection.Changed.Connect then
+    if core and type(core.Selection) == "table" and core.Selection.Changed and core.Selection.Changed.Connect then
         self:UpdateSelectionState()
         self.Maid.TrackSelection = core.Selection.Changed:Connect(function ()
             self:UpdateSelectionState()
@@ -42,7 +42,7 @@ end
 
 function SelectionPane:UpdateHistoryState()
     local history = self.props.Core and self.props.Core.History
-    if not history then
+    if type(history) ~= "table" or type(history.Index) ~= "number" or type(history.Stack) ~= "table" then
         return
     end
     self:setState({
@@ -53,7 +53,7 @@ end
 
 function SelectionPane:UpdateSelectionState()
     local selection = self.props.Core and self.props.Core.Selection
-    if not selection then
+    if type(selection) ~= "table" or type(selection.Items) ~= "table" then
         return
     end
     self:setState({

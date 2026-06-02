@@ -117,6 +117,30 @@ local function patchCoreSelfReference(source: string): string
 	return source
 end
 
+-- Loader/UI читают Core.Support, Core.History — дублируем явно на таблицу Core
+local CORE_MODULE_EXPORTS = {
+	"Security",
+	"History",
+	"Selection",
+	"Targeting",
+	"Region",
+	"Signal",
+	"Support",
+	"Try",
+	"Make",
+	"Assets",
+}
+
+local function patchCoreModuleExports(source: string): string
+	for _, name in CORE_MODULE_EXPORTS do
+		local needle = `Core%.{name} = {name}`
+		if not source:find(needle, 1, true) then
+			source = source:gsub(`({name} = [^\n]+\n)`, `%1Core.{name} = {name}\n`)
+		end
+	end
+	return source
+end
+
 local function patchCoreInitRequires(source: string): string
 	for _, child in CORE_INIT_CHILDREN do
 		local viaTool = `require(Tool:WaitForChild('Core'):WaitForChild('{child}'))`
@@ -165,6 +189,7 @@ end]]
 	if path == "Core/init.lua" then
 		source = patchCoreSelfReference(source)
 		source = patchCoreInitRequires(source)
+		source = patchCoreModuleExports(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
 		end
