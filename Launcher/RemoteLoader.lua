@@ -510,8 +510,8 @@ local function rewriteCommon(source: string, useBtRequire: boolean): string
 	return source
 end
 
-local MODULE_ENV_PREAMBLE = "local require = __bt_require\n"
-	.. 'local script = (typeof(script) == "Instance" and script) or __bt_script\n'
+local MODULE_ENV_PREAMBLE = "local require = (_G.__bt_require or __bt_require)\n"
+	.. "local script = (_G.__bt_script or (typeof(script) == \"Instance\" and script) or __bt_script)\n"
 
 local function ensureModulePreamble(source: string): string
 	if source:find("local require = __bt_require", 1, true) then
@@ -520,15 +520,51 @@ local function ensureModulePreamble(source: string): string
 	return MODULE_ENV_PREAMBLE .. source
 end
 
+local TOOL_BIND = "_G.__bt_tool or Tool"
+
 local function rewriteToolParentForRemote(path: string, source: string): string
 	if path == "Loader/init.lua" or path == "Core/init.lua" then
-		source = source:gsub("Tool = script%.Parent;", "Tool = Tool;")
-		source = source:gsub("local Tool = script%.Parent;", "local Tool = Tool;")
-		-- уже после rewriteCommon (на всякий случай)
-		source = source:gsub("local Tool = __bt_script%.Parent;", "local Tool = Tool;")
-		source = source:gsub("Tool = __bt_script%.Parent;", "Tool = Tool;")
+		source = source:gsub("Tool = script%.Parent;", `Tool = {TOOL_BIND};`)
+		source = source:gsub("local Tool = script%.Parent;", `local Tool = {TOOL_BIND};`)
+		source = source:gsub("local Tool = __bt_script%.Parent;", `local Tool = {TOOL_BIND};`)
+		source = source:gsub("Tool = __bt_script%.Parent;", `Tool = {TOOL_BIND};`)
+		source = source:gsub("local Tool = Tool;", `local Tool = {TOOL_BIND};`)
+		source = source:gsub("Tool = Tool;", `Tool = {TOOL_BIND};`)
 	end
 	return source
+end
+
+local function stripModulePreamble(body: string): string
+	body = body:gsub("^local require = [^\n]+\n", "", 1)
+	body = body:gsub("^local script = [^\n]+\n", "", 1)
+	return body
+end
+
+type BtGlobalSnapshot = { __bt_require: any, __bt_tool: any, __bt_script: any }
+
+local function pinBtGlobals(btRequire: any, tool: Tool, scriptInstance: Instance?): BtGlobalSnapshot
+	local snap: BtGlobalSnapshot = {
+		__bt_require = _G.__bt_require,
+		__bt_tool = _G.__bt_tool,
+		__bt_script = _G.__bt_script,
+	}
+	_G.__bt_require = btRequire
+	_G.__bt_tool = tool
+	_G.__bt_script = scriptInstance
+	return snap
+end
+
+local function unpinBtGlobals(snap: BtGlobalSnapshot)
+	_G.__bt_require = snap.__bt_require
+	_G.__bt_tool = snap.__bt_tool
+	_G.__bt_script = snap.__bt_script
+end
+
+local function runWithPinnedGlobals<T...>(fn: () -> T..., btRequire: any, tool: Tool, scriptInstance: Instance?): (boolean, T...)
+	local snap = pinBtGlobals(btRequire, tool, scriptInstance)
+	local ok, result = pcall(fn)
+	unpinBtGlobals(snap)
+	return ok, result
 end
 
 -- ModuleScript в custom env (присваивания → env / Core)
@@ -644,6 +680,32 @@ local function buildRequire(tool: Tool)
 	end
 end
 
+local function tryParamWrapperRun(
+	path: string,
+	body: string,
+	tool: Tool,
+	scriptInstance: Instance,
+	btRequire: any,
+	compileFn: (string, string, any?) -> (any?, string?)
+): (boolean, any)
+	local innerBody = stripModulePreamble(body)
+	local wrapSource = "return function(__bt_script, __bt_tool, __bt_require)\n"
+		.. "local require = __bt_require\n"
+		.. "local script = __bt_script\n"
+		.. `local Tool = __bt_tool\n`
+		.. innerBody
+		.. "\nend"
+
+	local wrapFn, compileError = compileFn(wrapSource, "@" .. path .. "#params", nil)
+	if not wrapFn then
+		return false, `params compile: {compileError}`
+	end
+
+	return pcall(function()
+		return wrapFn()(scriptInstance, tool, btRequire)
+	end)
+end
+
 local function runModuleWithEnv(
 	path: string,
 	raw: string,
@@ -654,19 +716,30 @@ local function runModuleWithEnv(
 	local compileFn = RemoteLoader.compile or defaultCompile
 
 	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
+	local body = rewriteForModuleEnv(path, raw)
 
-	local function tryCompiledBody(body: string, chunkSuffix: string): (boolean, any)
-		local fn, compileError = compileFn(body, "@" .. path .. chunkSuffix, coreEnv)
+	local function tryEnvRun(): (boolean, any)
+		local fn, compileError = compileFn(body, "@" .. path, coreEnv)
 		if not fn then
 			return false, `compile: {compileError}`
 		end
-		return pcall(fn)
+		return runWithPinnedGlobals(function()
+			return fn()
+		end, btRequire, tool, scriptInstance)
 	end
 
-	local body = rewriteForModuleEnv(path, raw)
-	local ok, result = tryCompiledBody(body, "")
+	local ok, result = tryEnvRun()
 	if ok then
 		return result
+	end
+
+	-- Core должен выполняться в env (getfenv → Core); для Loader — запасной запуск с аргументами
+	if path ~= "Core/init.lua" then
+		local wrapOk, wrapResult = tryParamWrapperRun(path, body, tool, scriptInstance, btRequire, compileFn)
+		if wrapOk then
+			return wrapResult
+		end
+		error(`{result}; {wrapResult}`, 0)
 	end
 
 	error(tostring(result), 0)
