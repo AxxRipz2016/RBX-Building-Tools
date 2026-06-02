@@ -40,7 +40,7 @@ Assets = require(Tool.Assets)
 -- Core events
 ToolChanged = Signal.new()
 
-function EquipTool(Tool)
+function EquipTool(BuildingToolModule)
 	-- Equips and switches to the given tool
 
 	-- Unequip current tool
@@ -49,26 +49,42 @@ function EquipTool(Tool)
 		CurrentTool.Equipped = false;
 	end;
 
-	-- Set `Tool` as current
-	CurrentTool = Tool;
+	-- Set building tool module as current
+	CurrentTool = BuildingToolModule;
 	CurrentTool.Equipped = true;
 
 	-- Fire relevant events
-	ToolChanged:Fire(Tool);
+	ToolChanged:Fire(BuildingToolModule);
 
 	-- Equip the tool
-	Tool:Equip();
+	BuildingToolModule:Equip();
 
 end;
 
 function RecolorHandle(Color)
-	SyncAPI:Invoke('RecolorHandle', Color);
+	-- Solo/executor: красим Handle (куб в руке), не Roblox Tool
+	local target = Color
+	if typeof(target) == "BrickColor" then
+		target = target.Color
+	end
+	if typeof(target) ~= "Color3" then
+		return
+	end
+	local rbxTool = Tool
+	local handle = rbxTool and rbxTool:FindFirstChild("Handle")
+	if handle and handle:IsA("BasePart") then
+		handle.Color = target
+	end
 end;
 
--- Theme UI to current tool
-ToolChanged:Connect(function (Tool)
-	coroutine.wrap(RecolorHandle)(Tool.Color);
-	coroutine.wrap(Selection.RecolorOutlines)(Tool.Color);
+-- Theme UI to current tool (BuildingToolModule — таблица Move/Paint, не Instance Tool)
+ToolChanged:Connect(function (BuildingToolModule)
+	if type(BuildingToolModule) ~= "table" or BuildingToolModule.Color == nil then
+		return
+	end
+	local themeColor = BuildingToolModule.Color
+	coroutine.wrap(RecolorHandle)(themeColor);
+	coroutine.wrap(Selection.RecolorOutlines)(themeColor);
 end);
 
 -- Core hotkeys

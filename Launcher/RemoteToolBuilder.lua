@@ -252,14 +252,25 @@ local function attachMetadata(tool: Tool)
 		end)
 		if not ok then
 			warn(`[BT] не удалось собрать Interfaces из lol.lua: {tostring(err)}`)
-		else
-			for _, name in requiredInterfaces do
-				if not interfaces:FindFirstChild(name) then
-					warn(`[BT] после lol.lua нет GUI: {name}`)
+		end
+		fallbackHost:Destroy()
+
+		-- Перенос GUI, если lol положил их в game.Workspace
+		for _, name in requiredInterfaces do
+			local gui = interfaces:FindFirstChild(name)
+			if not gui then
+				gui = game:GetService("Workspace"):FindFirstChild(name)
+				if gui then
+					gui.Parent = interfaces
 				end
 			end
 		end
-		fallbackHost:Destroy()
+
+		for _, name in requiredInterfaces do
+			if not interfaces:FindFirstChild(name) then
+				warn(`[BT] после lol.lua нет GUI: {name}`)
+			end
+		end
 	end
 end
 

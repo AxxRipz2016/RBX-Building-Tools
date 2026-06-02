@@ -180,17 +180,31 @@ end
 
 -- В env Tool = Roblox Tool; параметры function (Tool) перекрывают env → Tool.Color у Building Tools
 local function patchCoreToolParamShadowing(source: string): string
-	if source:find("RecolorHandle%(ActiveBuildingTool%.Color%)", 1, true)
-		and source:find("AddToolButton%(IconAssetId, HotkeyLabel, ToolModule%)", 1, true)
-	then
-		return source
+	-- ToolChanged: в executor параметр Tool = Roblox Tool; в теле coroutine.wrap(...)(Tool.Color), не RecolorHandle(Tool.Color)
+	source = source:gsub(
+		"ToolChanged:Connect%(function %(Tool%)\r?\n\tcoroutine%.wrap%(RecolorHandle%)%(Tool%.Color%);?\r?\n\tcoroutine%.wrap%(Selection%.RecolorOutlines%)%(Tool%.Color%);?\r?\nend%);",
+		[[ToolChanged:Connect(function (BuildingToolModule)
+	if type(BuildingToolModule) ~= "table" or BuildingToolModule.Color == nil then
+		return
 	end
-
-	source = source:gsub("ToolChanged:Connect%(function %(Tool%)", "ToolChanged:Connect(function (ActiveBuildingTool)")
-	source = source:gsub("RecolorHandle%(Tool%.Color%)", "RecolorHandle(ActiveBuildingTool.Color)")
+	local themeColor = BuildingToolModule.Color
+	coroutine.wrap(RecolorHandle)(themeColor)
+	coroutine.wrap(Selection.RecolorOutlines)(themeColor)
+end);]]
+	)
+	source = source:gsub("ToolChanged:Connect%(function %(Tool%)", "ToolChanged:Connect(function (BuildingToolModule)")
+	source = source:gsub(
+		"coroutine%.wrap%(RecolorHandle%)%(Tool%.Color%)",
+		"coroutine.wrap(RecolorHandle)(BuildingToolModule.Color)"
+	)
+	source = source:gsub(
+		"coroutine%.wrap%(Selection%.RecolorOutlines%)%(Tool%.Color%)",
+		"coroutine.wrap(Selection.RecolorOutlines)(BuildingToolModule.Color)"
+	)
+	source = source:gsub("RecolorHandle%(Tool%.Color%)", "RecolorHandle(BuildingToolModule.Color)")
 	source = source:gsub(
 		"Selection%.RecolorOutlines%(Tool%.Color%)",
-		"Selection.RecolorOutlines(ActiveBuildingTool.Color)"
+		"Selection.RecolorOutlines(BuildingToolModule.Color)"
 	)
 
 	source = source:gsub("function EquipTool%(Tool%)", "function EquipTool(BuildingToolModule)")
@@ -361,14 +375,10 @@ return Notifications]]
 	if typeof(target) ~= "Color3" then
 		return
 	end
-	local ok = pcall(function()
-		local handle = Tool:FindFirstChild("Handle")
-		if handle and handle:IsA("BasePart") then
-			handle.Color = target
-		end
-	end)
-	if not ok then
-		-- no-op
+	local rbxTool = (_G.__bt_tool or Tool)
+	local handle = rbxTool and rbxTool:FindFirstChild("Handle")
+	if handle and handle:IsA("BasePart") then
+		handle.Color = target
 	end
 end;]]
 		)
@@ -481,7 +491,10 @@ end
 	end
 
 	if path:find("^Tools/", 1, true) or path == "Core/Snapping.lua" then
-		source = source:gsub("Core%.Tool%.Interfaces%.", "(Core.Tool or Tool):WaitForChild('Interfaces').")
+		source = source:gsub(
+			"Core%.Tool%.Interfaces%.([%w_]+)",
+			"(Core.Tool or Tool):WaitForChild('Interfaces'):WaitForChild('%1')"
+		)
 		source = source:gsub(
 			"Core%.Tool%.Core%.([%w_]+)",
 			function(child)
@@ -490,11 +503,26 @@ end
 		)
 	end
 
+	if path == "Tools/Move/UIController.lua" then
+		source = source:gsub(
+			"self%.UI = Core%.Tool%.Interfaces%.BTMoveToolGUI:Clone%(%)",
+			"self.UI = (Core.Tool or Tool):WaitForChild('Interfaces'):WaitForChild('BTMoveToolGUI'):Clone()"
+		)
+	end
+
 	if path == "Launcher/Interfaces/lol.lua" then
-		-- Безопасно привязываем "workspace" к Tool.Interfaces в executor.
+		-- Не использовать game.Workspace: только папка Tool.Interfaces
+		source = source:gsub(
+			"local workspace = %(_G%.__bt_interfaces_root or %(script and script%.Parent%) or workspace%)",
+			"local workspace = (_G.__bt_interfaces_root or (script and script.Parent))"
+		)
 		source = source:gsub(
 			"local workspace = script%.Parent",
-			"local workspace = (_G.__bt_interfaces_root or (script and script.Parent) or workspace)"
+			"local workspace = (_G.__bt_interfaces_root or (script and script.Parent))"
+		)
+		source = source:gsub(
+			"%.Parent = workspace",
+			".Parent = _G.__bt_interfaces_root"
 		)
 	end
 
@@ -1113,7 +1141,8 @@ local function runModuleWithEnv(
 			then scriptInstance.Parent
 			else (tool:FindFirstChild("Interfaces") or tool)
 		env.__bt_interfaces_root = interfacesRoot
-		local prefix = "local workspace = __bt_interfaces_root\n"
+		_G.__bt_interfaces_root = interfacesRoot
+		local prefix = "local workspace = (_G.__bt_interfaces_root or __bt_interfaces_root)\n"
 		local marker = "\n-- Элемент:"
 		local blocks: { string } = {}
 		local searchFrom = 1
@@ -1144,6 +1173,7 @@ local function runModuleWithEnv(
 				error(`compile part {i}: {compileError}`, 0)
 			end
 			local ok, runErr = runWithPinnedGlobals(function()
+				_G.__bt_interfaces_root = interfacesRoot
 				return fn()
 			end, btRequire, tool, scriptInstance)
 			if not ok then
