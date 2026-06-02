@@ -179,24 +179,21 @@ end
 
 -- В env Tool = Roblox Tool; параметры function (Tool) перекрывают env → Tool.Color у Building Tools
 local function patchCoreToolParamShadowing(source: string): string
-	if source:find("EquipTool%(BuildingToolModule%)", 1, true) then
+	if source:find("RecolorHandle%(ActiveBuildingTool%.Color%)", 1, true) then
 		return source
 	end
 
+	source = source:gsub("ToolChanged:Connect%(function %(Tool%)", "ToolChanged:Connect(function (ActiveBuildingTool)")
+	source = source:gsub("RecolorHandle%(Tool%.Color%)", "RecolorHandle(ActiveBuildingTool.Color)")
 	source = source:gsub(
-		"ToolChanged:Connect%(function %(Tool%)\r?\n\tcoroutine%.wrap%(RecolorHandle%)%(Tool%.Color%);",
-		"ToolChanged:Connect(function (ActiveBuildingTool)\n\tcoroutine.wrap(RecolorHandle)(ActiveBuildingTool.Color);"
-	)
-	source = source:gsub(
-		"coroutine%.wrap%(Selection%.RecolorOutlines%)%(Tool%.Color%);",
-		"coroutine.wrap(Selection.RecolorOutlines)(ActiveBuildingTool.Color);",
-		1
+		"Selection%.RecolorOutlines%(Tool%.Color%)",
+		"Selection.RecolorOutlines(ActiveBuildingTool.Color)"
 	)
 
 	source = source:gsub("function EquipTool%(Tool%)", "function EquipTool(BuildingToolModule)")
 	source = source:gsub("CurrentTool = Tool;", "CurrentTool = BuildingToolModule;")
 	source = source:gsub("ToolChanged:Fire%(Tool%)", "ToolChanged:Fire(BuildingToolModule)")
-	source = source:gsub("\n\tTool:Equip%(%);", "\n\tBuildingToolModule:Equip();")
+	source = source:gsub("Tool:Equip%(%);", "BuildingToolModule:Equip();", 1)
 
 	return source
 end
