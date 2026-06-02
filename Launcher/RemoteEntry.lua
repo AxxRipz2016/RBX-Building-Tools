@@ -120,10 +120,8 @@ local ok, err = pcall(function()
 	end
 
 	RemoteToolBuilder.GiveToPlayer(tool, player)
-	if runOk then
-		RemoteToolBuilder.Equip(tool)
-	else
-		ui.addError("Tool", "в Backpack, но Core/Loader не стартовал — «Копировать ошибку»")
+	if not runOk then
+		ui.addError("Tool", "в Backpack; Core/Loader не стартовал — «Копировать ошибку»")
 	end
 
 	local failCount = 0

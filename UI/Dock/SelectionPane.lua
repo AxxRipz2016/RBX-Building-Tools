@@ -17,38 +17,53 @@ function SelectionPane:init()
     self.Maid = Maid.new()
     self.PaneSize, self.SetPaneSize = Roact.createBinding(UDim2.new())
 
-    self:UpdateHistoryState()
-    self.Maid.TrackHistory = self.props.Core.History.Changed:Connect(function ()
+    local core = self.props.Core
+    if core and core.History then
         self:UpdateHistoryState()
-    end)
+        self.Maid.TrackHistory = core.History.Changed:Connect(function ()
+            self:UpdateHistoryState()
+        end)
+    end
 
-    self:UpdateSelectionState()
-    self.Maid.TrackSelection = self.props.Core.Selection.Changed:Connect(function ()
+    if core and core.Selection then
         self:UpdateSelectionState()
-    end)
+        self.Maid.TrackSelection = core.Selection.Changed:Connect(function ()
+            self:UpdateSelectionState()
+        end)
+    end
 
-    self:UpdateExplorerState()
-    self.Maid.TrackExplorer = self.props.Core.ExplorerVisibilityChanged:Connect(function ()
+    if core and core.ExplorerVisibilityChanged then
         self:UpdateExplorerState()
-    end)
+        self.Maid.TrackExplorer = core.ExplorerVisibilityChanged:Connect(function ()
+            self:UpdateExplorerState()
+        end)
+    end
 end
 
 function SelectionPane:UpdateHistoryState()
+    local history = self.props.Core and self.props.Core.History
+    if not history then
+        return
+    end
     self:setState({
-        CanUndo = (self.props.Core.History.Index > 0);
-        CanRedo = (self.props.Core.History.Index ~= #self.props.Core.History.Stack);
+        CanUndo = (history.Index > 0);
+        CanRedo = (history.Index ~= #history.Stack);
     })
 end
 
 function SelectionPane:UpdateSelectionState()
+    local selection = self.props.Core and self.props.Core.Selection
+    if not selection then
+        return
+    end
     self:setState({
-        IsSelectionEmpty = (#self.props.Core.Selection.Items == 0);
+        IsSelectionEmpty = (#selection.Items == 0);
     })
 end
 
 function SelectionPane:UpdateExplorerState()
     self:setState({
-        IsExplorerOpen = self.props.Core.ExplorerVisible;
+        IsExplorerOpen = self.props.Core and self.props.Core.ExplorerVisible;
     })
 end
 
@@ -93,42 +108,42 @@ function SelectionPane:render()
             LayoutOrder = 0;
             IconAssetId = 'rbxassetid://141741408';
             IsActive = self.state.CanUndo;
-            OnActivated = self.props.Core.History.Undo;
+            OnActivated = self.props.Core and self.props.Core.History and self.props.Core.History.Undo;
             TooltipText = '<b>UNDO</b><br />Shift-Z';
         });
         RedoButton = new(SelectionButton, {
             LayoutOrder = 1;
             IconAssetId = 'rbxassetid://141741327';
             IsActive = self.state.CanRedo;
-            OnActivated = self.props.Core.History.Redo;
+            OnActivated = self.props.Core and self.props.Core.History and self.props.Core.History.Redo;
             TooltipText = '<b>REDO</b><br />Shift-Y';
         });
         DeleteButton = new(SelectionButton, {
             LayoutOrder = 2;
             IconAssetId = 'rbxassetid://141896298';
             IsActive = not self.state.IsSelectionEmpty;
-            OnActivated = self.props.Core.DeleteSelection;
+            OnActivated = self.props.Core and self.props.Core.DeleteSelection;
             TooltipText = '<b>DELETE</b><br />Shift-X';
         });
         ExportButton = new(SelectionButton, {
             LayoutOrder = 3;
             IconAssetId = 'rbxassetid://141741337';
             IsActive = not self.state.IsSelectionEmpty;
-            OnActivated = self.props.Core.ExportSelection;
+            OnActivated = self.props.Core and self.props.Core.ExportSelection;
             TooltipText = '<b>EXPORT</b><br />Shift-P';
         });
         CloneButton = new(SelectionButton, {
             LayoutOrder = 4;
             IconAssetId = 'rbxassetid://142073926';
             IsActive = not self.state.IsSelectionEmpty;
-            OnActivated = self.props.Core.CloneSelection;
+            OnActivated = self.props.Core and self.props.Core.CloneSelection;
             TooltipText = '<b>CLONE</b><br />Shift-C';
         });
         ExplorerButton = new(SelectionButton, {
             LayoutOrder = 5;
             IconAssetId = 'rbxassetid://2326621485';
             IsActive = self.state.IsExplorerOpen;
-            OnActivated = self.props.Core.ToggleExplorer;
+            OnActivated = self.props.Core and self.props.Core.ToggleExplorer;
             TooltipText = '<b>EXPLORER</b><br />Shift-H';
         });
     })

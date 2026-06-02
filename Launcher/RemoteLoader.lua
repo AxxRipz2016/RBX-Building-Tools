@@ -159,45 +159,6 @@ end]]
 		end
 	end
 
-	if path:find("Dock/SelectionPane.lua", 1, true) then
-		source = source:gsub(
-			"function SelectionPane:UpdateHistoryState%(%)\n    self:setState%({\n        CanUndo = %(self%.props%.Core%.History%.Index > 0%);",
-			[[function SelectionPane:UpdateHistoryState()
-    local history = self.props.Core and self.props.Core.History
-    if not history then
-        return
-    end
-    self:setState({
-        CanUndo = (history.Index > 0);]]
-		)
-		source = source:gsub(
-			"CanRedo = %(self%.props%.Core%.History%.Index ~= #self%.props%.Core%.History%.Stack%);",
-			"CanRedo = (history.Index ~= #history.Stack);"
-		)
-		source = source:gsub(
-			"self:UpdateHistoryState%(%)\n    self%.Maid%.TrackHistory = self%.props%.Core%.History%.Changed:Connect",
-			[[if self.props.Core and self.props.Core.History then
-        self:UpdateHistoryState()
-        self.Maid.TrackHistory = self.props.Core.History.Changed:Connect]]
-		)
-		source = source:gsub(
-			"self:UpdateSelectionState%(%)\n    self%.Maid%.TrackSelection = self%.props%.Core%.Selection%.Changed:Connect",
-			[[if self.props.Core and self.props.Core.Selection then
-        self:UpdateSelectionState()
-        self.Maid.TrackSelection = self.props.Core.Selection.Changed:Connect]]
-		)
-		source = source:gsub(
-			"function SelectionPane:UpdateSelectionState%(%)\n    self:setState%({\n        IsSelectionEmpty = %(#self%.props%.Core%.Selection%.Items == 0%);",
-			[[function SelectionPane:UpdateSelectionState()
-    local selection = self.props.Core and self.props.Core.Selection
-    if not selection then
-        return
-    end
-    self:setState({
-        IsSelectionEmpty = (#selection.Items == 0);]]
-		)
-	end
-
 	return source
 end
 
@@ -497,27 +458,30 @@ end
 local SCRIPT_PARENT_EXPR =
 	"((function(__s,__t) if __s ~= nil then local __p = __s.Parent if __p ~= nil then return __p end if __t ~= nil then local __n = __s.Name if __n == \"LocalEndpoint\" then return __t:FindFirstChild(\"SyncAPI\") end if __n == \"DescendantCounter\" then local __ld = __t:FindFirstChild(\"Loaded\") return __ld and __ld:FindFirstChild(\"DescendantCount\") end if __n == \"ReplicationListener\" then return __t:FindFirstChild(\"Loaded\") end end end return __t end)(__bt_script,__bt_tool))"
 
-local function rewriteCommon(source: string): string
+local function rewriteCommon(source: string, useBtRequire: boolean): string
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
 	source = source:gsub("__bt_script%.Parent", SCRIPT_PARENT_EXPR)
-	source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
+	if useBtRequire then
+		source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
+	end
 	return source
 end
 
 -- ModuleScript: окружение = таблица Core (как в Roblox), без local Core = getfenv(0)
 local function rewriteForModuleEnv(path: string, source: string): string
-	if path == "Loader/init.lua" then
+	if path == "Loader/init.lua" or path == "Core/init.lua" then
+		source = source:gsub("Tool = script%.Parent;", "Tool = Tool;")
 		source = source:gsub("local Tool = script%.Parent;", "local Tool = Tool;")
 	end
-	source = rewriteCommon(source)
+	source = rewriteCommon(source, false)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
 	return source
 end
 
 local function rewriteForWrap(source: string): string
-	source = rewriteCommon(source)
+	source = rewriteCommon(source, true)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
 	source = source:gsub("(%f[%a])getfenv(%f[%A])", "__bt_getfenv")
@@ -558,6 +522,7 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 		Core = nil :: any,
 		Tool = tool,
 		require = btRequire,
+		__bt_require = btRequire,
 		plugin = false,
 		game = game,
 		Game = game,
