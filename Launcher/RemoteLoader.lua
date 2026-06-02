@@ -109,6 +109,14 @@ end
 
 local CORE_INIT_CHILDREN = { "Security", "History", "Selection", "Targeting" }
 
+local CORE_SELF = "(_G.Core or Core)"
+
+local function patchCoreSelfReference(source: string): string
+	source = source:gsub("local Core = getfenv%(0%)", `local Core = {CORE_SELF}`)
+	source = source:gsub("Core = getfenv%(0%)", `Core = {CORE_SELF}`)
+	return source
+end
+
 local function patchCoreInitRequires(source: string): string
 	for _, child in CORE_INIT_CHILDREN do
 		local viaTool = `require(Tool:WaitForChild('Core'):WaitForChild('{child}'))`
@@ -155,6 +163,7 @@ end]]
 	end
 
 	if path == "Core/init.lua" then
+		source = patchCoreSelfReference(source)
 		source = patchCoreInitRequires(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
@@ -618,8 +627,15 @@ local function rewriteForModuleEnv(path: string, source: string): string
 		source = rewriteCoreChildRequires(source)
 	end
 	source = rewriteToolParentForRemote(path, source)
-	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
+	if path == "Core/init.lua" then
+		source = source:gsub("local Core = getfenv%(0%)\r?\n?", `local Core = {CORE_SELF}\n`)
+	else
+		source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
+	end
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
+	if path == "Core/init.lua" then
+		source = patchCoreSelfReference(source)
+	end
 	return source
 end
 
@@ -764,6 +780,9 @@ local function runModuleWithEnv(
 	local compileFn = RemoteLoader.compile or defaultCompile
 
 	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
+	if path == "Core/init.lua" then
+		_G.Core = coreEnv
+	end
 	local body = rewriteForModuleEnv(path, raw)
 
 	local function tryEnvRun(): (boolean, any)
