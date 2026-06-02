@@ -447,14 +447,36 @@ end
 
 local CORE_BT = "((_G.__bt_tool or Tool):WaitForChild('Core'))"
 
+local BT_GET_CORE_BODY = [[function GetCore()
+	if type(_G.Core) == "table" then
+		return _G.Core
+	end
+	local rbxTool = _G.__bt_tool or Tool
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	if coreInst and coreInst:IsA("ModuleScript") then
+		return require(coreInst)
+	end
+	error("[BT] GetCore: Core не инициализирован", 0)
+end]]
+
 -- executor: require(script.Parent) / require(Tool.Core) часто не тот же объект, что _G.Core
 local function patchCoreAndToolRequires(path: string, source: string): string
-	local coreViaScript = "(_G.Core or require(script.Parent))"
+	local coreViaScript = "(_G.Core or require((_G.__bt_tool or Tool):WaitForChild('Core')))"
 
 	if path:sub(1, 6) == "Core/" and path ~= "Core/init.lua" then
 		source = source:gsub("Core = require%(script%.Parent%);", "Core = " .. coreViaScript .. ";")
 		source = source:gsub("local Core = require%(script%.Parent%);", "local Core = " .. coreViaScript .. ";")
-		source = source:gsub("return require%(script%.Parent%);", "return _G.Core or require(script.Parent);")
+		source = source:gsub(
+			"function GetCore%(%)\r?\n\t%-%- Returns the core API\r?\n\treturn require%(script%.Parent%);",
+			BT_GET_CORE_BODY,
+			1
+		)
+		source = source:gsub(
+			"function GetCore%(%)\r?\n\treturn require%(script%.Parent%);",
+			BT_GET_CORE_BODY,
+			1
+		)
+		source = source:gsub("return require%(script%.Parent%);", "return (_G.Core or Core)")
 
 		for _, child in CORE_INIT_CHILDREN do
 			source = source:gsub(
@@ -1428,6 +1450,9 @@ local function rewriteForModuleEnv(path: string, source: string): string
 		source = patchCoreToolParamShadowing(source)
 		source = applyCoreEquipSafetyPatches(source)
 	end
+	if path == "Core/Targeting.lua" or path == "Core/Selection.lua" then
+		source = source:gsub("function GetCore%(%).-end;", BT_GET_CORE_BODY, 1)
+	end
 	return source
 end
 
@@ -1513,6 +1538,12 @@ end
 
 local function buildRequire(tool: Tool)
 	return function(target: any): any
+		if target == nil then
+			if type(_G.Core) == "table" then
+				return _G.Core
+			end
+			error("[BT] require: nil (ожидался ModuleScript)", 2)
+		end
 		if type(target) ~= "userdata" or not target:IsA("ModuleScript") then
 			local kind = if typeof(target) == "Instance" then target.ClassName else typeof(target)
 			error(`[BT] require: ожидается ModuleScript, получен {kind} ({tostring(target)})`, 2)

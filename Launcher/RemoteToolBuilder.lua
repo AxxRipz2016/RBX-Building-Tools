@@ -627,13 +627,11 @@ local function registerDockDirect(coreEnv: any, tool: Tool)
 		local iconId = icons[iconKey]
 		if type(iconId) ~= "string" then
 			warn(`[BT] нет иконки: {iconKey}`)
-			continue
-		end
+		else
 		local toolsFolder = tool:FindFirstChild("Tools")
 		if not toolsFolder or not toolsFolder:FindFirstChild(moduleName) then
 			warn(`[BT] нет Tools/{moduleName}`)
-			continue
-		end
+		else
 
 		local lazy = makeLazyBuildingTool(tool, moduleName, moduleName .. " Tool", Color3.fromRGB(255, 140, 60))
 		if type(coreEnv.AssignHotkey) == "function" then
@@ -645,7 +643,9 @@ local function registerDockDirect(coreEnv: any, tool: Tool)
 			end)
 		end
 		coreEnv.AddToolButton(iconId, hotkey, lazy)
-		added += 1
+		added = added + 1
+		end
+		end
 	end
 
 	coreEnv.__dockToolsRegistered = true
