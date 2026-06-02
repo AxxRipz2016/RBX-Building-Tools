@@ -242,7 +242,7 @@ end
 ]]
 
 local function patchCoreModuleExports(source: string): string
-	if source:find("Core%.Support = Support", 1, true) then
+	if source:find("Core.Support = Support", 1, true) then
 		return source
 	end
 	local inserted = source:gsub("(Assets = require%([^\n]+%)\n)", "%1" .. CORE_EXPORT_BLOCK .. "\n", 1)
@@ -253,7 +253,7 @@ local function patchCoreModuleExports(source: string): string
 end
 
 local function patchCoreUiExports(source: string): string
-	if source:find("Core%.ToolChanged = ToolChanged", 1, true) then
+	if source:find("Core.ToolChanged = ToolChanged", 1, true) then
 		return source
 	end
 	local inserted = source:gsub("(ToolChanged = Signal%.new%(%)\n)", "%1" .. CORE_UI_EXPORT_BLOCK, 1)
@@ -266,7 +266,7 @@ local function patchCoreLateExports(source: string): string
 		"AddToolButton%(Assets%[iconKey%], hotkey,",
 		"Core.AddToolButton(Assets[iconKey], hotkey,"
 	)
-	if source:find("BT_Reg%('MoveIcon'", 1, true) then
+	if source:find("BT_Reg('MoveIcon'", 1, true) or source:find("__dockToolsRegistered", 1, true) then
 		return source
 	end
 	-- убрать ранний ошибочный экспорт (r47): AssignHotkey ещё не объявлен
@@ -274,12 +274,8 @@ local function patchCoreLateExports(source: string): string
 		"(ToolChanged = Signal%.new%(%)\nCore%.ToolChanged = ToolChanged\nCore%.Mode = Mode\n)Core%.EquipTool = EquipTool\nCore%.AssignHotkey = AssignHotkey\n",
 		"%1"
 	)
-	if source:find("Core%.IsSelectable = IsSelectable", 1, true) then
-		return source:gsub(
-			"(InitializeUI%(%);)",
-			"%1\n" .. CORE_DOCK_REGISTER_BLOCK .. "\n" .. CORE_LATE_EXPORT_BLOCK .. "\n",
-			1
-		)
+	if source:find("Core.IsSelectable = IsSelectable", 1, true) then
+		return source
 	end
 	return source:gsub(
 		"(%-%- Initialize the UI\nInitializeUI%(%);)",
@@ -317,36 +313,33 @@ end);]]
 		"Selection.RecolorOutlines(BuildingToolModule.Color)"
 	)
 
-	if not source:find("function ResolveBuildingToolModule", 1, true) then
+	local coreToolPatchesNeeded = not source:find("ResolveBuildingToolModule", 1, true)
+	if coreToolPatchesNeeded then
 		source = source:gsub("(function EquipTool%()", CORE_RESOLVE_TOOL_BLOCK .. "\n\n%1", 1)
-	end
-	source = source:gsub("function EquipTool%(Tool%)", "function EquipTool(BuildingToolModule)")
-	source = source:gsub("function EquipTool%(BuildingToolModule%)\r?\n\t%-%- Equips", [[function EquipTool(BuildingToolModule)
-	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
-	-- Equips]])
-	source = source:gsub(
-		"if CurrentTool and CurrentTool%.Equipped then\r?\n\t\tCurrentTool:Unequip%(%);",
-		[[if CurrentTool then
+		source = source:gsub("function EquipTool%(Tool%)", "function EquipTool(BuildingToolModule)")
+		source = source:gsub(
+			"if CurrentTool and CurrentTool%.Equipped then\r?\n\t\tCurrentTool:Unequip%(%);\r?\n\t\tCurrentTool%.Equipped = false;\r?\n\tend;",
+			[[if CurrentTool then
 		local activeTool = ResolveBuildingToolModule(CurrentTool)
 		if activeTool.Equipped then
-			activeTool:Unequip();]]
-	)
-	source = source:gsub(
-		"activeTool:Unequip%(%);\r?\n\t\tCurrentTool%.Equipped = false;",
-		"activeTool:Unequip();\n\t\t\tactiveTool.Equipped = false;"
-	)
-	source = source:gsub(
-		"EquipTool%(CurrentTool or require%(Tool%.Tools%.Move%)%)",
-		"EquipTool(ResolveBuildingToolModule(CurrentTool) or require(Tool.Tools.Move))"
-	)
-	source = source:gsub(
-		"if CurrentTool then\r?\n\t\tCurrentTool:Unequip%(%);\r?\n\t\tCurrentTool%.Equipped = false;",
-		[[if CurrentTool then
+			activeTool:Unequip();
+			activeTool.Equipped = false;
+		end
+	end;]]
+		)
+		source = source:gsub(
+			"EquipTool%(CurrentTool or require%(Tool%.Tools%.Move%)%)",
+			"EquipTool(ResolveBuildingToolModule(CurrentTool) or require(Tool.Tools.Move))"
+		)
+		source = source:gsub(
+			"if CurrentTool then\r?\n\t\tCurrentTool:Unequip%(%);\r?\n\t\tCurrentTool%.Equipped = false;",
+			[[if CurrentTool then
 		local activeTool = ResolveBuildingToolModule(CurrentTool)
 		activeTool:Unequip();
 		activeTool.Equipped = false;]]
-	)
-	source = source:gsub("CurrentTool = Tool;", "CurrentTool = BuildingToolModule;")
+		)
+		source = source:gsub("CurrentTool = Tool;", "CurrentTool = BuildingToolModule;")
+	end
 	source = source:gsub("ToolChanged:Fire%(Tool%)", "ToolChanged:Fire(BuildingToolModule)")
 	source = source:gsub("Tool:Equip%(%);", "BuildingToolModule:Equip();", 1)
 
@@ -634,16 +627,18 @@ end;]]
 			"Tools = Cryo%.List%.join%(ToolList%);(%s*\n\t\t})",
 			"Tools = Cryo.List.join(ToolList);\n\t\t\tUIRoot = UI;%1"
 		)
-		source = source:gsub(
-			"Core%.AddToolButton = AddToolButton\n",
-			"Core.AddToolButton = AddToolButton\n\tfunction Core.RefreshToolDock()\n\t\tif DockHandle and ToolList then\n\t\t\tRoact.update(DockHandle, Roact.createElement(DockComponent, {\n\t\t\t\tCore = Core;\n\t\t\t\tTools = Cryo.List.join(ToolList);\n\t\t\t\tUIRoot = UI;\n\t\t\t}))\n\t\tend\n\tend\n"
-		)
+		if not source:find("function Core.RefreshToolDock", 1, true) then
+			source = source:gsub(
+				"Core%.AddToolButton = AddToolButton\n",
+				"Core.AddToolButton = AddToolButton\n\tfunction Core.RefreshToolDock()\n\t\tif DockHandle and ToolList then\n\t\t\tRoact.update(DockHandle, Roact.createElement(DockComponent, {\n\t\t\t\tCore = Core;\n\t\t\t\tTools = Cryo.List.join(ToolList);\n\t\t\t\tUIRoot = UI;\n\t\t\t}))\n\t\tend\n\tend\n"
+			)
+		end
 		source = patchCoreReturn(source)
 		source = source:gsub(
 			"(Core%.UI = UI\n)",
 			"%1\tUI.Parent = nil;\n\tUI.Enabled = false;\n"
 		)
-		if not source:find("Core%.Security = Security", 1, true) then
+		if not source:find("Core.Security = Security", 1, true) then
 			source = source:gsub(
 				"(Security = require%(script%.Security%)\n)",
 				"%1Core.Security = Security\n"
