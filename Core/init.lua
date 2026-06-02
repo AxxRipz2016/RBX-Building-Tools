@@ -30,6 +30,7 @@ local Cryo = require(Tool.Libraries:WaitForChild('Cryo'))
 -- References
 Support.ImportServices();
 SyncAPI = Tool.SyncAPI;
+Core.SyncAPI = SyncAPI;
 Player = Players.LocalPlayer;
 local CollectionService = game:GetService('CollectionService')
 local RunService = game:GetService('RunService')
@@ -1103,6 +1104,11 @@ function PreserveJoints(Part, Whitelist)
 	return Joints;
 
 end;
+
+Core.IsSelectable = IsSelectable
+Core.PreserveJoints = PreserveJoints
+Core.Mouse = Mouse
+Core.CurrentTool = CurrentTool
 
 -- Initialize the UI
 InitializeUI();

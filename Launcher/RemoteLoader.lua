@@ -24,6 +24,9 @@ local loadCancelled = false
 local NO_STUB_PATHS: { [string]: boolean } = {
 	["Core/init.lua"] = true,
 	["Loader/init.lua"] = true,
+	["Core/BoundingBox.lua"] = true,
+	["Core/Snapping.lua"] = true,
+	["SyncAPI.lua"] = true,
 }
 
 local CRITICAL_PATHS = {
@@ -147,6 +150,15 @@ Core.CloneSelection = CloneSelection
 Core.ExportSelection = ExportSelection
 ]]
 
+-- API, который Tools читают как Core.* (в executor без этого — nil)
+local CORE_API_EXPORT_BLOCK = [[
+Core.IsSelectable = IsSelectable
+Core.PreserveJoints = PreserveJoints
+Core.SyncAPI = SyncAPI
+Core.Mouse = Mouse
+Core.CurrentTool = CurrentTool
+]]
+
 local function patchCoreModuleExports(source: string): string
 	if source:find("Core%.Support = Support", 1, true) then
 		return source
@@ -167,7 +179,7 @@ local function patchCoreUiExports(source: string): string
 end
 
 local function patchCoreLateExports(source: string): string
-	if source:find("InitializeUI%(%);\nCore%.EquipTool = EquipTool", 1, true) then
+	if source:find("Core%.IsSelectable = IsSelectable", 1, true) then
 		return source
 	end
 	-- убрать ранний ошибочный экспорт (r47): AssignHotkey ещё не объявлен
@@ -175,7 +187,11 @@ local function patchCoreLateExports(source: string): string
 		"(ToolChanged = Signal%.new%(%)\nCore%.ToolChanged = ToolChanged\nCore%.Mode = Mode\n)Core%.EquipTool = EquipTool\nCore%.AssignHotkey = AssignHotkey\n",
 		"%1"
 	)
-	return source:gsub("(InitializeUI%(%);\n)", "%1" .. CORE_LATE_EXPORT_BLOCK .. "\n", 1)
+	return source:gsub(
+		"(%-%- Initialize the UI\nInitializeUI%(%);)",
+		CORE_API_EXPORT_BLOCK .. "\n\n%1\n" .. CORE_LATE_EXPORT_BLOCK .. "\n",
+		1
+	)
 end
 
 -- В env Tool = Roblox Tool; параметры function (Tool) перекрывают env → Tool.Color у Building Tools
@@ -261,8 +277,32 @@ local function patchCoreAndToolRequires(path: string, source: string): string
 	end
 
 	if path:find("^Tools/", 1, true) or path == "Core/ListenForManualWindowTrigger.lua" then
-		source = source:gsub("Core = require%(Tool%.Core%);", "Core = _G.Core or require(Tool.Core);")
-		source = source:gsub("local Core = require%(Tool%.Core%)", "local Core = _G.Core or require(Tool.Core)")
+		local toolCoreBootstrap = [[
+
+Core = _G.Core or Core
+if Core then
+	local sync = Tool:FindFirstChild("SyncAPI")
+	if sync then
+		Core.SyncAPI = Core.SyncAPI or sync
+	end
+	if Core.SyncAPI and type(Core.SyncAPI.Invoke) ~= "function" then
+		Core.SyncAPI = { Invoke = function() return nil end }
+	end
+end
+]]
+		source = source:gsub("Core = require%(Tool%.Core%);", "Core = _G.Core or require(Tool.Core);" .. toolCoreBootstrap)
+		source = source:gsub(
+			"local Core = require%(Tool%.Core%)",
+			"local Core = _G.Core or require(Tool.Core)" .. toolCoreBootstrap
+		)
+		source = source:gsub(
+			"BoundingBox = require%(Tool%.Core%.BoundingBox%)",
+			"BoundingBox = require(Tool:WaitForChild('Core'):WaitForChild('BoundingBox'))"
+		)
+		source = source:gsub(
+			"SnapTracking = require%(Tool%.Core%.Snapping%)",
+			"SnapTracking = require(Tool:WaitForChild('Core'):WaitForChild('Snapping'))"
+		)
 		source = source:gsub(
 			"require%(Core%.Tool%.Tools%.Move%)",
 			"require((Core.Tool or Tool).Tools.Move)"
@@ -345,6 +385,10 @@ return Notifications]]
 
 	if path == "Core/Targeting.lua" then
 		source = source:gsub(
+			"if not GetCore%(%).IsSelectable%(%{ Target %}%) then",
+			"if not (GetCore() and type(GetCore().IsSelectable) == 'function' and GetCore().IsSelectable({ Target })) then"
+		)
+		source = source:gsub(
 			"local Core = GetCore%(%);\n\tlocal Connections = Core%.Connections;",
 			"local Core = GetCore();\n\tif not Core.Connections then\n\t\tCore.Connections = {};\n\tend\n\tlocal Connections = Core.Connections;"
 		)
@@ -359,6 +403,7 @@ return Notifications]]
 	end
 
 	if path == "Core/init.lua" then
+		source = source:gsub("SyncAPI = Tool%.SyncAPI;", "SyncAPI = Tool.SyncAPI;\nCore.SyncAPI = SyncAPI;", 1)
 		source = patchCoreSelfReference(source)
 		source = patchCoreInitRequires(source)
 		source = patchCoreModuleExports(source)
@@ -457,36 +502,13 @@ end;]]
 	end
 
 	if path == "Loader/init.lua" then
-		local loaderBootstrap = [[
-Core = _G.Core or Core
-if Core then
-	if not Core.Support then
-		Core.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))
+		-- Локальный Loader/init.lua уже с _G.Core и registerTool — не переписываем
 	end
-	if not Core.Assets then
-		Core.Assets = require(Tool:WaitForChild('Assets'))
-	end
-end
-]]
-		local loaderFinish = [[
 
-if Core and type(Core.RefreshToolDock) == 'function' then
-	Core.RefreshToolDock()
-end
-]]
+	if path == "Tools/Move/FreeDragging.lua" then
 		source = source:gsub(
-			"(local Core = require%(Tool:WaitForChild 'Core'%)%)\n",
-			"%1\n" .. loaderBootstrap
-		)
-		source = source:gsub(
-			"(local Core = require%(Tool:WaitForChild%('Core'%)%)\n)",
-			"%1" .. loaderBootstrap
-		)
-		source = source:gsub("\nreturn Core%s*;?%s*$", loaderFinish .. "\nreturn Core\n")
-		-- executor: Core.Support.Call часто nil — тот же смысл, что Support.Call(EquipTool, tool)
-		source = source:gsub(
-			"Core%.AssignHotkey%('([^']+)', Core%.Support%.Call%(Core%.EquipTool, (%w+)%)%);",
-			"Core.AssignHotkey('%1', function() Core.EquipTool(%2) end);"
+			"if not Core%.IsSelectable%(%{ TargetPart %}%) and not IsSnapping then",
+			"if not (type(Core.IsSelectable) == 'function' and Core.IsSelectable({ TargetPart })) and not IsSnapping then"
 		)
 	end
 
