@@ -23,9 +23,32 @@ local function httpGet(url: string): string
 	return game:HttpGet(url, true)
 end
 
-local verSrc = httpGet(BASE .. "Launcher/Version.lua?bt=" .. tostring(tick()))
-local verTag = verSrc:match('Launcher%s*=%s*"(%d+)"') or tostring(tick())
-local entrySrc = httpGet(BASE .. "Launcher/RemoteEntry.lua?bt=" .. verTag)
+local function httpGetRetry(url: string): string
+	for attempt = 1, 6 do
+		local ok, body = pcall(function()
+			return httpGet(url)
+		end)
+		if ok and type(body) == "string" and #body > 40 then
+			local head = body:sub(1, 120):lower()
+			if not head:find("<!doctype", 1, true) and not head:find("<html", 1, true) then
+				return body
+			end
+		end
+		task.wait(0.35 * attempt)
+	end
+	return ""
+end
+
+local verSrc = httpGetRetry(BASE .. "Launcher/Version.lua?bt=" .. tostring(tick()))
+local verTag = "0"
+if verSrc ~= "" then
+	verTag = verSrc:match('Launcher%s*=%s*"(%d+)"') or verSrc:match("Launcher%s*=%s*(%d+)") or tostring(tick())
+end
+
+local entrySrc = httpGetRetry(BASE .. "Launcher/RemoteEntry.lua?bt=" .. verTag)
+if entrySrc == "" or not entrySrc:find("BT_LAUNCHER_BUSY", 1, true) then
+	error("[BT] RemoteEntry не загрузился (пусто/HTML). Повтори через минуту", 0)
+end
 
 local chunk, err = loadFn(entrySrc, "BT.RemoteEntry")
 if not chunk then

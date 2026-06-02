@@ -5,6 +5,12 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
+if _G.BT_LAUNCHER_BUSY then
+	warn("[BT] Загрузка уже идёт — дождитесь окна или перезайдите в плейс")
+	return
+end
+_G.BT_LAUNCHER_BUSY = true
+
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
 local ENTRY_REV = 4
@@ -155,14 +161,113 @@ _G.BT_LAUNCHER_COMPILE = function(source: string, chunkName: string, env: any?)
 end
 _G.BT_LAUNCHER_LOAD = loadFromGit
 
-local Version = loadFn(httpGet(gitUrl("Launcher/Version.lua")), "@Version")()
+-- Экран сразу (до HttpGet), иначе при пустом Version GUI не создаётся
+local function showInstantBootScreen()
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local old = playerGui:FindFirstChild("BT Load Status")
+	if old then
+		old:Destroy()
+	end
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "BT Load Status"
+	gui.ResetOnSpawn = false
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = 1000
+	gui.Parent = playerGui
+
+	local frame = Instance.new("Frame")
+	frame.AnchorPoint = Vector2.new(0.5, 0.5)
+	frame.Position = UDim2.fromScale(0.5, 0.5)
+	frame.Size = UDim2.fromOffset(420, 120)
+	frame.BackgroundColor3 = Color3.fromRGB(25, 25, 28)
+	frame.BorderSizePixel = 0
+	frame.Parent = gui
+	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+	local title = Instance.new("TextLabel")
+	title.BackgroundTransparency = 1
+	title.Size = UDim2.new(1, -24, 0, 28)
+	title.Position = UDim2.fromOffset(12, 12)
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = 16
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextColor3 = Color3.fromRGB(240, 240, 240)
+	title.Text = "Building Tools — подключение…"
+	title.Parent = frame
+
+	local sub = Instance.new("TextLabel")
+	sub.BackgroundTransparency = 1
+	sub.Size = UDim2.new(1, -24, 0, 40)
+	sub.Position = UDim2.fromOffset(12, 40)
+	sub.Font = Enum.Font.Gotham
+	sub.TextSize = 12
+	sub.TextWrapped = true
+	sub.TextXAlignment = Enum.TextXAlignment.Left
+	sub.TextYAlignment = Enum.TextYAlignment.Top
+	sub.TextColor3 = Color3.fromRGB(180, 180, 190)
+	sub.Text = "Загрузка с GitHub…"
+	sub.Parent = frame
+
+	return function()
+		if gui.Parent then
+			gui:Destroy()
+		end
+	end
+end
+
+local dismissInstantBoot = showInstantBootScreen()
+
+local DEFAULT_VERSION = {
+	Launcher = "0",
+	Tool = "3.1.0",
+	Roact = "1.3.0",
+	Cryo = "master",
+	Branch = "development",
+}
+
+local function loadVersionTable()
+	local src = httpGetWithRetry("Launcher/Version.lua")
+	if not isLikelyLuaSource(src) then
+		return DEFAULT_VERSION
+	end
+	local fn, compileErr = loadFn(src, "@Version")
+	if not fn then
+		warn("[BT] Version compile:", compileErr)
+		return DEFAULT_VERSION
+	end
+	local ok, result = pcall(fn)
+	if ok and type(result) == "table" and type(result.Launcher) == "string" then
+		return result
+	end
+	return DEFAULT_VERSION
+end
+
+local Version = loadVersionTable()
 cacheTag = Version.Launcher
 
-local LoadStatusUI = loadFn(httpGet(gitUrl("Launcher/LoadStatusUI.lua")), "@LoadStatusUI")()
-local ui = LoadStatusUI.create()
-ui.setVersionInfo(
-	`Launcher r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo}`
-)
+local ui
+local initOk, initErr = pcall(function()
+	local statusSrc = httpGetWithRetry("Launcher/LoadStatusUI.lua")
+	if not isLikelyLuaSource(statusSrc) then
+		error("[BT] LoadStatusUI.lua не загрузился (пустой ответ / HTML)", 0)
+	end
+	local LoadStatusUI = loadFn(statusSrc, "@LoadStatusUI")()
+	if type(LoadStatusUI) ~= "table" or type(LoadStatusUI.create) ~= "function" then
+		error("[BT] LoadStatusUI: неверный модуль", 0)
+	end
+	dismissInstantBoot()
+	ui = LoadStatusUI.create()
+	ui.setVersionInfo(
+		`Launcher r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo}`
+	)
+end)
+
+if not initOk then
+	dismissInstantBoot()
+	_G.BT_LAUNCHER_BUSY = nil
+	warn("[BT Solo]", initErr)
+	return
+end
 
 local ok, err = pcall(function()
 	local Config = loadFromGit("Launcher/Config.lua")
@@ -280,7 +385,11 @@ local ok, err = pcall(function()
 	end)
 end)
 
-if not ok then
+if not ok and ui then
 	ui.setFatal(tostring(err))
 	warn("[BT Solo]", err)
+elseif not ok then
+	warn("[BT Solo]", err)
 end
+
+_G.BT_LAUNCHER_BUSY = nil
