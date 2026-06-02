@@ -514,6 +514,9 @@ local function rewriteToolParentForRemote(path: string, source: string): string
 	if path == "Loader/init.lua" or path == "Core/init.lua" then
 		source = source:gsub("Tool = script%.Parent;", "Tool = Tool;")
 		source = source:gsub("local Tool = script%.Parent;", "local Tool = Tool;")
+		-- уже после rewriteCommon (на всякий случай)
+		source = source:gsub("local Tool = __bt_script%.Parent;", "local Tool = Tool;")
+		source = source:gsub("Tool = __bt_script%.Parent;", "Tool = Tool;")
 	end
 	return source
 end
@@ -532,6 +535,8 @@ end
 
 -- ModuleScript в env: __bt_script/__bt_require; присваивания попадают в env (не в пустой _G.Core)
 local function rewriteForEnvWrap(path: string, source: string): string
+	-- Сначала Tool = Tool, иначе rewriteCommon заменит script.Parent на SCRIPT_PARENT_EXPR и Tool станет nil
+	source = rewriteToolParentForRemote(path, source)
 	source = rewriteCommon(source, true)
 	source = rewriteToolParentForRemote(path, source)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
