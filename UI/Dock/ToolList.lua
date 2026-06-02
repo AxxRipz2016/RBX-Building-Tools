@@ -17,15 +17,19 @@ function ToolList:init()
     self.Maid = Maid.new()
     self.CanvasSize, self.SetCanvasSize = Roact.createBinding(UDim2.new())
 
-    -- Track current tool
-    self:setState({
-        CurrentTool = self.props.Core.CurrentTool;
-    })
-    self.Maid.CurrentTool = self.props.Core.ToolChanged:Connect(function (Tool)
+    local core = self.props.Core
+    if core then
         self:setState({
-            CurrentTool = Tool;
+            CurrentTool = core.CurrentTool;
         })
-    end)
+        if core.ToolChanged and core.ToolChanged.Connect then
+            self.Maid.CurrentTool = core.ToolChanged:Connect(function (Tool)
+                self:setState({
+                    CurrentTool = Tool;
+                })
+            end)
+        end
+    end
 end
 
 function ToolList:render()
@@ -76,17 +80,8 @@ function ToolList:render()
         SizeConstraint = new('UISizeConstraint', {
             MinSize = Vector2.new(70, 0);
         });
-        List = new('ScrollingFrame', {
-            BackgroundTransparency = 1;
-            BorderSizePixel = 0;
-            Size = UDim2.new(1, 0, 1, 0);
-            CanvasSize = self.CanvasSize;
-            ScrollBarThickness = 1;
-            ScrollingDirection = Enum.ScrollingDirection.Y;
-            ScrollBarImageColor3 = Color3.fromRGB(0, 0, 0);
-            [Roact.Children] = Children;
-        });
-    })
+        Layout = Children.Layout;
+    }, Children)
 end
 
 return ToolList

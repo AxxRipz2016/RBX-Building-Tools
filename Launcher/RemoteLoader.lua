@@ -19,6 +19,7 @@ local progressCallback: ((string, boolean, string?) -> ())?
 
 local continueOnError = true
 local runtimeErrors: { string } = {}
+local loadCancelled = false
 
 local CRITICAL_PATHS = {
 	"Core/init.lua",
@@ -143,7 +144,11 @@ end]]
 			"(Core%.UI = UI\n)",
 			"%1\tif UIContainer then\n\t\tUI.Parent = UIContainer\n\tend\n"
 		)
-		if not source:find("Core%.History = History", 1, true) then
+		if not source:find("Core%.Security = Security", 1, true) then
+			source = source:gsub(
+				"(Security = require%(script%.Security%)\n)",
+				"%1Core.Security = Security\n"
+			)
 			source = source:gsub(
 				"(History = require%(script%.History%)\n)",
 				"%1Core.History = History\n"
@@ -279,6 +284,14 @@ function RemoteLoader.getRuntimeErrors(): { string }
 	return runtimeErrors
 end
 
+function RemoteLoader.requestCancel()
+	loadCancelled = true
+end
+
+function RemoteLoader.isLoadCancelled(): boolean
+	return loadCancelled
+end
+
 local function recordRunError(path: string, err: string)
 	local msg = tostring(err)
 	failedPaths[path] = msg
@@ -309,6 +322,9 @@ function RemoteLoader.registerModule(moduleScript: ModuleScript, path: string)
 end
 
 function RemoteLoader.fetchSource(path: string): (boolean, string?)
+	if loadCancelled then
+		return false, "отменено"
+	end
 	if sourceCache[path] then
 		return true, sourceCache[path]
 	end
@@ -317,8 +333,14 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 	local tried: { string } = {}
 
 	for _, url in getFetchUrls(path) do
+		if loadCancelled then
+			return false, "отменено"
+		end
 		table.insert(tried, url)
 		for attempt = 1, MAX_RETRIES do
+			if loadCancelled then
+				return false, "отменено"
+			end
 			throttle()
 			local ok, result = pcall(function()
 				return RemoteLoader.httpGet(url)
@@ -365,6 +387,9 @@ function RemoteLoader.preloadByPrefixes(paths: { string }, prefixes: { string })
 	end)
 
 	for _, path in paths do
+		if loadCancelled then
+			break
+		end
 		for _, prefix in prefixes do
 			if path:sub(1, #prefix) == prefix then
 				local ok, err = RemoteLoader.fetchSource(path)
@@ -385,6 +410,9 @@ function RemoteLoader.preloadCritical(
 	local total = #CRITICAL_PATHS
 
 	for index, path in CRITICAL_PATHS do
+		if loadCancelled then
+			break
+		end
 		local ok, err = RemoteLoader.fetchSource(path)
 		if onProgress then
 			onProgress(index, total, path, ok, err)
@@ -468,13 +496,13 @@ local function rewriteCommon(source: string, useBtRequire: boolean): string
 	return source
 end
 
--- ModuleScript: окружение = таблица Core (как в Roblox), без local Core = getfenv(0)
+-- ModuleScript: env = Core; script/require НЕ трогаем (иначе script.Security ломается)
 local function rewriteForModuleEnv(path: string, source: string): string
 	if path == "Loader/init.lua" or path == "Core/init.lua" then
 		source = source:gsub("Tool = script%.Parent;", "Tool = Tool;")
 		source = source:gsub("local Tool = script%.Parent;", "local Tool = Tool;")
 	end
-	source = rewriteCommon(source, false)
+	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
 	return source
@@ -674,6 +702,7 @@ function RemoteLoader.clear()
 	table.clear(registry)
 	table.clear(failedPaths)
 	table.clear(runtimeErrors)
+	loadCancelled = false
 	fetchCount = 0
 	lastFetchAt = 0
 end

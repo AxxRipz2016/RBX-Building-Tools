@@ -94,6 +94,12 @@ local ok, err = pcall(function()
 	RemoteToolBuilder.setVersionInfo(Version)
 	_G.BT_LAUNCHER_VERSION = Version
 
+	ui.onCancel(function()
+		RemoteLoader.requestCancel()
+		ui.setCancelled()
+		ui.addError("—", "загрузка отменена пользователем")
+	end)
+
 	local fileIndex = 0
 	RemoteLoader.setProgressCallback(function(path, fileOk, fileErr)
 		fileIndex += 1
@@ -109,6 +115,11 @@ local ok, err = pcall(function()
 			ui.setProgress(0, 0, message, true)
 		end,
 	})
+
+	if RemoteLoader.isLoadCancelled() then
+		ui.setDone(`r{Version.Launcher} · загрузка отменена`)
+		return
+	end
 
 	ui.setProgress(0, 0, "Запуск Core и инструментов…", true)
 

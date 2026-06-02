@@ -36,7 +36,7 @@ function LoadStatusUI.create()
 	frame.Name = "Panel"
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.Position = UDim2.fromScale(0.5, 0.5)
-	frame.Size = UDim2.fromOffset(420, 228)
+	frame.Size = UDim2.fromOffset(420, 262)
 	frame.BackgroundColor3 = Color3.fromRGB(25, 25, 28)
 	frame.BorderSizePixel = 0
 	frame.Parent = gui
@@ -131,6 +131,22 @@ function LoadStatusUI.create()
 	detail.Text = ""
 	detail.Parent = frame
 
+	local cancelBtn = Instance.new("TextButton")
+	cancelBtn.Name = "Cancel"
+	cancelBtn.Position = UDim2.new(0, 12, 1, -104)
+	cancelBtn.Size = UDim2.new(1, -24, 0, 30)
+	cancelBtn.BackgroundColor3 = Color3.fromRGB(140, 55, 55)
+	cancelBtn.BorderSizePixel = 0
+	cancelBtn.Font = Enum.Font.Gotham
+	cancelBtn.TextSize = 14
+	cancelBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+	cancelBtn.Text = "Отмена загрузки"
+	cancelBtn.Parent = frame
+
+	local cancelCorner = Instance.new("UICorner")
+	cancelCorner.CornerRadius = UDim.new(0, 6)
+	cancelCorner.Parent = cancelBtn
+
 	local copyBtn = Instance.new("TextButton")
 	copyBtn.Name = "Copy"
 	copyBtn.Position = UDim2.new(0, 12, 1, -68)
@@ -166,6 +182,8 @@ function LoadStatusUI.create()
 
 	local api = {}
 	local destroyed = false
+	local cancelled = false
+	local onCancelCallback: (() -> ())? = nil
 
 	local function getErrorText(): string
 		local parts = {}
@@ -192,6 +210,18 @@ function LoadStatusUI.create()
 		destroyed = true
 		gui:Destroy()
 	end
+
+	cancelBtn.MouseButton1Click:Connect(function()
+		if cancelled or destroyed then
+			return
+		end
+		cancelled = true
+		cancelBtn.Text = "Отмена…"
+		cancelBtn.AutoButtonColor = false
+		if onCancelCallback then
+			onCancelCallback()
+		end
+	end)
 
 	closeTop.MouseButton1Click:Connect(close)
 	closeBtn.MouseButton1Click:Connect(close)
@@ -234,7 +264,18 @@ function LoadStatusUI.create()
 		refreshCopyButton()
 	end
 
+	function api.onCancel(callback: () -> ())
+		onCancelCallback = callback
+	end
+
+	function api.setCancelled()
+		cancelled = true
+		cancelBtn.Text = "Отменено"
+		cancelBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 95)
+	end
+
 	function api.setDone(message: string)
+		cancelBtn.Visible = false
 		title.Text = "Building Tools"
 		progress.Text = message
 		local hasErrors = detail.Text ~= ""

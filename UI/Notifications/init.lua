@@ -20,8 +20,16 @@ function Notifications:init()
         ShouldWarnAboutUpdate = false;
     })
 
+    local core = self.props.Core
+    if type(fastSpawn) ~= "function" or not core then
+        return
+    end
+
     fastSpawn(function ()
-        local IsOutdated = self.props.Core.IsVersionOutdated()
+        if not self.Active or not core.IsVersionOutdated then
+            return
+        end
+        local IsOutdated = core.IsVersionOutdated()
         if self.Active then
             self:setState({
                 ShouldWarnAboutUpdate = IsOutdated;
@@ -29,9 +37,11 @@ function Notifications:init()
         end
     end)
     fastSpawn(function ()
-        local Core = self.props.Core
-        local IsHttpServiceDisabled = (Core.Mode == 'Tool') and
-            not Core.SyncAPI:Invoke('IsHttpServiceEnabled')
+        if not self.Active or not core.SyncAPI or not core.SyncAPI.Invoke then
+            return
+        end
+        local IsHttpServiceDisabled = (core.Mode == 'Tool') and
+            not core.SyncAPI:Invoke('IsHttpServiceEnabled')
         if self.Active then
             self:setState({
                 ShouldWarnAboutHttpService = IsHttpServiceDisabled;

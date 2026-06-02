@@ -295,6 +295,10 @@ function RemoteToolBuilder.Build(
 
 	RemoteLoader.assertCriticalLoaded()
 
+	if RemoteLoader.isLoadCancelled() then
+		error("[BT] загрузка отменена", 0)
+	end
+
 	if #failed > 0 then
 		error(`[BT] не удалось загрузить: {table.concat(failed, ", ")}`, 0)
 	end
@@ -339,6 +343,13 @@ end
 
 function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 	player = player or Players.LocalPlayer
+	local character = player.Character
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid:UnequipTools()
+		end
+	end
 	tool.Parent = player:WaitForChild("Backpack")
 end
 
