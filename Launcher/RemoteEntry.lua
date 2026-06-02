@@ -7,7 +7,7 @@ local Players = game:GetService("Players")
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 3
+local ENTRY_REV = 4
 
 local loadFn
 local httpGet
@@ -70,8 +70,8 @@ local function loadFromGit(path: string)
 		if #src < 30000 then
 			error(`[BT] RemoteLoader.lua обрезан ({#src} байт, нужно ~40k+) — другой HttpGet или зеркало`, 0)
 		end
-		if not src:find("return RemoteLoader", 1, true) or not src:find("BT%-RemoteLoader%-EOF", 1, true) then
-			error("[BT] RemoteLoader.lua неполный (нет return RemoteLoader / EOF-маркера)", 0)
+		if not src:find("BT-RemoteLoader-EOF", 1, true) then
+			error("[BT] RemoteLoader.lua неполный (нет EOF-маркера, обрезан HttpGet?)", 0)
 		end
 	end
 	local chunk, compileErr = loadFn(src, "@" .. path)
