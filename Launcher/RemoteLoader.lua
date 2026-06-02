@@ -29,6 +29,7 @@ local NO_STUB_PATHS: { [string]: boolean } = {
 	["Core/BoundingBox.lua"] = true,
 	["Core/Snapping.lua"] = true,
 	["SyncAPI.lua"] = true,
+	["Tools/Move/init.lua"] = true,
 }
 
 local CRITICAL_PATHS = {
@@ -150,8 +151,30 @@ local function IsBuildingToolModule(ToolModule)
 		and type(ToolModule.Unequip) == "function"
 end
 
+local cachedDefaultMove
+
 local function DefaultBuildingToolModule()
-	return require(Tool:WaitForChild("Tools"):WaitForChild("Move"))
+	if IsBuildingToolModule(cachedDefaultMove) then
+		return cachedDefaultMove
+	end
+	if type(Core) == "table" and IsBuildingToolModule(Core.__bt_defaultMove) then
+		cachedDefaultMove = Core.__bt_defaultMove
+		return cachedDefaultMove
+	end
+	local tools = Tool:FindFirstChild("Tools")
+	local moveInst = tools and tools:FindFirstChild("Move")
+	if not moveInst or not moveInst:IsA("ModuleScript") then
+		warn("[BT] DefaultBuildingToolModule: Move ModuleScript не найден")
+		return nil
+	end
+	local ok, mod = pcall(require, moveInst)
+	if not ok or not IsBuildingToolModule(mod) then
+		warn("[BT] require Move:", mod)
+		return nil
+	end
+	cachedDefaultMove = mod
+	Core.__bt_defaultMove = mod
+	return mod
 end
 
 function ResolveBuildingToolModule(BuildingToolModule)
@@ -691,6 +714,10 @@ end;]]
 	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
 	if not IsBuildingToolModule(BuildingToolModule) then
 		BuildingToolModule = DefaultBuildingToolModule()
+	end
+	if not IsBuildingToolModule(BuildingToolModule) then
+		warn("[BT] EquipTool: не удалось загрузить Move")
+		return
 	end]]
 			)
 			source = source:gsub(
@@ -1511,11 +1538,26 @@ local function runModuleWithEnv(
 	error(tostring(result), 0)
 end
 
+local function cacheModuleResult(path: string, result: any): any
+	if result == nil then
+		if continueOnError and not NO_STUB_PATHS[path] then
+			result = makeStubModule(path)
+		else
+			error(`[BT] {path}: модуль вернул nil`, 0)
+		end
+	end
+	moduleCache[path] = result
+	return result
+end
+
 function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): any
 	local cached = moduleCache[path]
 	if cached ~= nil then
 		if cached == false then
-			return nil
+			if continueOnError and not NO_STUB_PATHS[path] then
+				return makeStubModule(path)
+			end
+			error(`[BT] повторный run {path} после ошибки`, 0)
 		end
 		return cached
 	end
@@ -1550,13 +1592,15 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 		if continueOnError and not NO_STUB_PATHS[path] then
 			recordRunError(path, tostring(result))
 			moduleCache[path] = false
-			return nil
+			return makeStubModule(path)
 		end
 		error(`[BT] run {path}: {result}`, 0)
 	end
 
-	moduleCache[path] = if result == nil then true else result
-	return moduleCache[path]
+	if path == "Core/init.lua" and (result == nil or type(result) ~= "table") then
+		result = _G.Core
+	end
+	return cacheModuleResult(path, result)
 end
 
 function RemoteLoader.clear()

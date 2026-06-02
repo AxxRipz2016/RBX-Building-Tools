@@ -522,6 +522,18 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 			_G.Core = coreEnv
 		end
 
+		step("Move…")
+		local toolsFolder = tool:FindFirstChild("Tools")
+		local moveScript = toolsFolder and toolsFolder:FindFirstChild("Move")
+		if moveScript and moveScript:IsA("ModuleScript") then
+			local okMove, moveModOrErr = pcall(RemoteLoader.run, "Tools/Move/init.lua", tool, moveScript)
+			if okMove and type(moveModOrErr) == "table" and type(coreEnv) == "table" then
+				coreEnv.__bt_defaultMove = moveModOrErr
+			elseif not okMove then
+				warn(`[BT] Move preload: {moveModOrErr}`)
+			end
+		end
+
 		if tool:GetAttribute("BT_InterfacesPending") then
 			step("Интерфейсы (lol)…")
 			ensureInterfacesFromLol(tool)
