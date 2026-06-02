@@ -43,7 +43,7 @@ local streamingClonesPendingUntagging = {}
 
 -- Determine whether we're in tool or plugin mode
 ToolMode = (Tool.Parent and Tool.Parent:IsA("Plugin")) and "Plugin" or "Tool"
-
+	
 local IsHttpServiceEnabled = nil
 
 -- List of actions that could be requested
@@ -1644,15 +1644,20 @@ Actions = {
 		-- After confirming permissions, serialize parts
 		local SerializedBuildData = Serialization.SerializeModel(Items);
 
-		-- Push serialized data to server
-		local Response = HttpService:JSONDecode(
-			HttpService:PostAsync(
-				'http://f3xteam.com/bt/export',
-				HttpService:JSONEncode { data = SerializedBuildData, version = 3, userId = (Player and Player.UserId) },
-				Enum.HttpContentType.ApplicationJson,
-				true
-			)
-		);
+		-- Push serialized data to server fake data
+		local Response = {
+			success = true,
+			id = 'NO ID. TESTING.'
+		}
+
+		--HttpService:JSONDecode(
+		--	HttpService:PostAsync(
+		--		'http://f3xteam.com/bt/export',
+		--		HttpService:JSONEncode { data = SerializedBuildData, version = 3, userId = (Player and Player.UserId) },
+		--		Enum.HttpContentType.ApplicationJson,
+		--		true
+		--	)
+		--);
 
 		-- Return creation ID on success
 		if Response.success then
