@@ -399,9 +399,8 @@ end]]
 	end
 
 	if path == "UI/Notifications/init.lua" then
-		-- Жесткий fallback для executor: убираем fastSpawn/SyncAPI вызовы,
-		-- которые периодически падают nil-value в этом окружении.
-		source = [[local Root = script:FindFirstAncestorWhichIsA('Tool')
+		-- [=[ ]=] вместо [[ ]]: иначе `return Notifications]]` рвёт парсер RemoteLoader.lua
+		source = [=[local Root = script:FindFirstAncestorWhichIsA('Tool')
 local Vendor = Root:WaitForChild('Vendor')
 local Roact = require(Vendor:WaitForChild('Roact'))
 local new = Roact.createElement
@@ -421,7 +420,7 @@ function Notifications:render()
 	}, {})
 end
 
-return Notifications]]
+return Notifications]=]
 	end
 
 	if path == "Core/Targeting.lua" then
@@ -1341,4 +1340,7 @@ function RemoteLoader.clear()
 	lastFetchAt = 0
 end
 
+_G.BT_RemoteLoader = RemoteLoader
+
 return RemoteLoader
+-- BT-RemoteLoader-EOF

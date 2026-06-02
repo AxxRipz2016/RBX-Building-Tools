@@ -34,17 +34,53 @@ end
 
 local moduleCache: { [string]: any } = {}
 
+local function isLikelyLuaSource(body: string): boolean
+	body = body:gsub("^\239\187\191", ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if #body < 4 then
+		return false
+	end
+	local head = body:sub(1, 200):lower()
+	if head:match("^%s*404") or head:match("^%s*403") then
+		return false
+	end
+	if head:find("<!doctype", 1, true) or head:match("^%s*<html") then
+		return false
+	end
+	return true
+end
+
 local function loadFromGit(path: string)
 	if moduleCache[path] ~= nil then
 		return moduleCache[path]
 	end
 	local url = BASE_URL .. path
 	local src = httpGet(url)
+	if not isLikelyLuaSource(src) then
+		error(`[BT] {path}: пустой ответ или HTML (проверь URL / лимит HttpGet)`, 0)
+	end
+	if path == "Launcher/RemoteLoader.lua" then
+		if #src < 30000 then
+			error(`[BT] RemoteLoader.lua обрезан ({#src} байт, нужно ~40k+) — другой HttpGet или зеркало`, 0)
+		end
+		if not src:find("return RemoteLoader", 1, true) or not src:find("BT%-RemoteLoader%-EOF", 1, true) then
+			error("[BT] RemoteLoader.lua неполный (нет return RemoteLoader / EOF-маркера)", 0)
+		end
+	end
 	local chunk, compileErr = loadFn(src, "@" .. path)
 	if not chunk then
 		error(`[BT] compile {path}: {compileErr}`, 0)
 	end
-	moduleCache[path] = chunk()
+	local runOk, result = pcall(chunk)
+	if not runOk then
+		error(`[BT] run {path}: {result}`, 0)
+	end
+	if result == nil then
+		result = (path == "Launcher/RemoteLoader.lua") and _G.BT_RemoteLoader or nil
+	end
+	if result == nil then
+		error(`[BT] {path}: модуль вернул nil`, 0)
+	end
+	moduleCache[path] = result
 	return moduleCache[path]
 end
 
@@ -83,6 +119,9 @@ local ok, err = pcall(function()
 	Config.RemoteBaseUrl = BASE_URL
 
 	local RemoteLoader = loadFromGit("Launcher/RemoteLoader.lua")
+	if type(RemoteLoader.configure) ~= "function" then
+		error("[BT] RemoteLoader без configure — обновите development на GitHub", 0)
+	end
 	local RemoteToolBuilder = loadFromGit("Launcher/RemoteToolBuilder.lua")
 	local manifest = loadFn(httpGet(BASE_URL .. "Launcher/manifest.lua"), "Launcher/manifest.lua")()
 
