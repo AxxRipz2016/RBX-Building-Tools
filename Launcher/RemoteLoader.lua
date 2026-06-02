@@ -17,6 +17,9 @@ local fetchCount = 0
 
 local progressCallback: ((string, boolean, string?) -> ())?
 
+local continueOnError = true
+local runtimeErrors: { string } = {}
+
 local CRITICAL_PATHS = {
 	"Core/init.lua",
 	"Loader/init.lua",
@@ -307,6 +310,34 @@ function RemoteLoader.getFailed(): { [string]: string }
 	return failedPaths
 end
 
+function RemoteLoader.setContinueOnError(value: boolean)
+	continueOnError = value
+end
+
+function RemoteLoader.getRuntimeErrors(): { string }
+	return runtimeErrors
+end
+
+local function recordRunError(path: string, err: string)
+	local msg = tostring(err)
+	failedPaths[path] = msg
+	table.insert(runtimeErrors, `run {path}: {msg}`)
+	if progressCallback then
+		progressCallback(path, false, msg)
+	end
+end
+
+local function makeStubModule(modulePath: string): any
+	return setmetatable({}, {
+		__index = function(_self, key)
+			local stub = function()
+				warn(`[BT] пропуск {modulePath}.{key} — модуль не загружен`)
+			end
+			return stub
+		end,
+	})
+end
+
 function RemoteLoader.getFetchCount(): number
 	return fetchCount
 end
@@ -475,14 +506,10 @@ local function rewriteCommon(source: string): string
 end
 
 -- ModuleScript: окружение = таблица Core (как в Roblox), без local Core = getfenv(0)
-local function prepareModuleSource(path: string, raw: string): string
+local function rewriteForModuleEnv(path: string, source: string): string
 	if path == "Loader/init.lua" then
-		raw = raw:gsub("local Tool = script%.Parent;", "local Tool = __bt_tool;")
+		source = source:gsub("local Tool = script%.Parent;", "local Tool = Tool;")
 	end
-	return rewriteForModuleEnv(raw)
-end
-
-local function rewriteForModuleEnv(source: string): string
 	source = rewriteCommon(source)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
@@ -570,7 +597,15 @@ local function buildRequire(tool: Tool)
 		end
 		local ok, result = pcall(RemoteLoader.run, modulePath, tool, target)
 		if not ok then
-			error(`[BT] require {modulePath} ({target:GetFullName()}): {result}`, 0)
+			local msg = `require {modulePath} ({target:GetFullName()}): {result}`
+			if continueOnError then
+				recordRunError(modulePath, msg)
+				return makeStubModule(modulePath)
+			end
+			error(`[BT] {msg}`, 0)
+		end
+		if result == nil and continueOnError then
+			return makeStubModule(modulePath)
 		end
 		return result
 	end
@@ -583,19 +618,50 @@ local function runModuleWithEnv(
 	scriptInstance: Instance,
 	btRequire: any
 ): any
-	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
-	local body = prepareModuleSource(path, raw)
 	local compileFn = RemoteLoader.compile or defaultCompile
-	local fn, compileError = compileFn(body, "@" .. path, coreEnv)
-	if not fn then
-		error(`[BT] compile {path}: {compileError}`, 0)
+
+	local function tryEnvRun(): (boolean, any)
+		local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
+		local body = rewriteForModuleEnv(path, raw)
+		local fn, compileError = compileFn(body, "@" .. path, coreEnv)
+		if not fn then
+			return false, `compile: {compileError}`
+		end
+		return pcall(fn)
 	end
-	return fn()
+
+	local function tryWrapRun(): (boolean, any)
+		local wrapped = wrapChunkSource(raw)
+		local fn, compileError = compileFn(wrapped, "@" .. path .. "#wrap", nil)
+		if not fn then
+			return false, `wrap compile: {compileError}`
+		end
+		return pcall(function()
+			return fn()(scriptInstance, tool, btRequire)
+		end)
+	end
+
+	local ok, result = tryEnvRun()
+	if not ok then
+		local wrapOk, wrapResult = tryWrapRun()
+		if wrapOk then
+			return wrapResult
+		end
+		result = `{result}; {wrapResult}`
+	end
+	if not ok then
+		error(result, 0)
+	end
+	return result
 end
 
 function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): any
-	if moduleCache[path] ~= nil then
-		return moduleCache[path]
+	local cached = moduleCache[path]
+	if cached ~= nil then
+		if cached == false then
+			return nil
+		end
+		return cached
 	end
 
 	local okSource, err = RemoteLoader.fetchSource(path)
@@ -625,6 +691,11 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	end
 
 	if not ok then
+		if continueOnError then
+			recordRunError(path, tostring(result))
+			moduleCache[path] = false
+			return nil
+		end
 		error(`[BT] run {path}: {result}`, 0)
 	end
 
@@ -637,6 +708,7 @@ function RemoteLoader.clear()
 	table.clear(moduleCache)
 	table.clear(registry)
 	table.clear(failedPaths)
+	table.clear(runtimeErrors)
 	fetchCount = 0
 	lastFetchAt = 0
 end

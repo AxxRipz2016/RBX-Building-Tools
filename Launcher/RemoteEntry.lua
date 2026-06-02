@@ -87,6 +87,9 @@ local ok, err = pcall(function()
 	local manifest = loadFn(httpGet(BASE_URL .. "Launcher/manifest.lua"), "Launcher/manifest.lua")()
 
 	RemoteLoader.configure(BASE_URL, Config.RemoteVendorUrls)
+	if Config.ContinueOnLoadErrors ~= false then
+		RemoteLoader.setContinueOnError(true)
+	end
 	RemoteToolBuilder.setManifest(manifest)
 	RemoteToolBuilder.setVersionInfo(Version)
 	_G.BT_LAUNCHER_VERSION = Version
@@ -113,21 +116,31 @@ local ok, err = pcall(function()
 		RemoteToolBuilder.StartRuntime(tool)
 	end)
 	if not runOk then
-		error(runErr, 0)
+		ui.addError("StartRuntime", tostring(runErr))
 	end
 
 	RemoteToolBuilder.GiveToPlayer(tool, player)
-	RemoteToolBuilder.Equip(tool)
+	if runOk then
+		RemoteToolBuilder.Equip(tool)
+	else
+		ui.addError("Tool", "в Backpack, но Core/Loader не стартовал — «Копировать ошибку»")
+	end
 
 	local failCount = 0
 	for _ in RemoteLoader.getFailed() do
 		failCount += 1
 	end
+	local runErrCount = #RemoteLoader.getRuntimeErrors()
 
-	local doneText = if failCount > 0
-		then `r{Version.Launcher} · ошибки: {failCount} файлов`
-		else `r{Version.Launcher} · OK · {RemoteLoader.getFetchCount()} файлов · Tool в Backpack`
+	local doneText = if runOk and failCount == 0 and runErrCount == 0
+		then `r{Version.Launcher} · OK · {RemoteLoader.getFetchCount()} файлов · Tool в Backpack`
+		elseif not runOk
+		then `r{Version.Launcher} · Tool в Backpack · ошибка запуска (копируй ниже)`
+		else `r{Version.Launcher} · ошибки: {failCount} файлов, run: {runErrCount}`
 	ui.setDone(doneText)
+	if failCount > 0 or runErrCount > 0 or not runOk then
+		ui.setProgress(0, 0, doneText, false)
+	end
 
 	print(`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo} — готов`)
 end)

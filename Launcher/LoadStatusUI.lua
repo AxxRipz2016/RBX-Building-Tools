@@ -237,11 +237,16 @@ function LoadStatusUI.create()
 	function api.setDone(message: string)
 		title.Text = "Building Tools"
 		progress.Text = message
-		progress.TextColor3 = Color3.fromRGB(120, 220, 140)
+		local hasErrors = detail.Text ~= ""
+		progress.TextColor3 = if hasErrors
+			then Color3.fromRGB(255, 180, 100)
+			else Color3.fromRGB(120, 220, 140)
 		barFill.Size = UDim2.fromScale(1, 1)
-		barFill.BackgroundColor3 = Color3.fromRGB(40, 160, 90)
+		barFill.BackgroundColor3 = if hasErrors
+			then Color3.fromRGB(160, 100, 40)
+			else Color3.fromRGB(40, 160, 90)
 		closeBtn.Text = "Закрыть (можно запустить снова)"
-		copyBtn.Visible = false
+		refreshCopyButton()
 	end
 
 	function api.setFatal(message: string)
