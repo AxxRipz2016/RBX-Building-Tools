@@ -60,7 +60,11 @@ function ToolButton:render()
         [Roact.Event.Activated] = function ()
             local core = self.props.Core
             if core and type(core.EquipTool) == "function" then
-                core.EquipTool(self.props.Tool)
+                local toolModule = self.props.Tool
+                if type(core.ResolveBuildingToolModule) == "function" then
+                    toolModule = core.ResolveBuildingToolModule(toolModule)
+                end
+                core.EquipTool(toolModule)
             end
         end;
     }, {

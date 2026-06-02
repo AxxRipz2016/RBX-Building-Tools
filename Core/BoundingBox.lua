@@ -13,6 +13,15 @@ local AggregatingStaticParts = false;
 local StaticPartAggregators = {};
 local PotentialPartMonitors = {};
 
+local function safeDestroyBox(box)
+	if box == nil then
+		return
+	end
+	if typeof(box) == "Instance" then
+		box:Destroy()
+	end
+end
+
 function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 	-- Creates and starts a selection bounding box
 
@@ -134,10 +143,10 @@ function BoundingBoxModule.ClearBoundingBox()
 
 	-- Delete the bounding box
 	if BoundingBox then
-		BoundingBox:Destroy();
+		safeDestroyBox(BoundingBox);
 		BoundingBox = nil;
 	elseif InactiveBoundingBox then
-		InactiveBoundingBox:Destroy();
+		safeDestroyBox(InactiveBoundingBox);
 		InactiveBoundingBox = nil;
 	end;
 

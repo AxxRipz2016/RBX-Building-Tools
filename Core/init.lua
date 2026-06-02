@@ -41,13 +41,32 @@ Assets = require(Tool.Assets)
 -- Core events
 ToolChanged = Signal.new()
 
+function ResolveBuildingToolModule(BuildingToolModule)
+	if type(BuildingToolModule) ~= "table" then
+		return BuildingToolModule
+	end
+	local moduleName = BuildingToolModule.__btModuleName
+	if type(moduleName) == "string" then
+		local toolsFolder = Tool:FindFirstChild("Tools")
+		local mod = toolsFolder and toolsFolder:FindFirstChild(moduleName)
+		if mod then
+			return require(mod)
+		end
+	end
+	return BuildingToolModule
+end
+
 function EquipTool(BuildingToolModule)
 	-- Equips and switches to the given tool
+	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
 
 	-- Unequip current tool
-	if CurrentTool and CurrentTool.Equipped then
-		CurrentTool:Unequip();
-		CurrentTool.Equipped = false;
+	if CurrentTool then
+		local activeTool = ResolveBuildingToolModule(CurrentTool)
+		if activeTool.Equipped then
+			activeTool:Unequip();
+			activeTool.Equipped = false;
+		end
 	end;
 
 	-- Set building tool module as current
@@ -246,7 +265,7 @@ function Enable(Mouse)
 	end
 
 	-- Equip current tool
-	EquipTool(CurrentTool or require(Tool.Tools.Move));
+	EquipTool(ResolveBuildingToolModule(CurrentTool) or require(Tool.Tools.Move));
 
 	-- Indicate that tool is now enabled
 	IsEnabled = true;
@@ -285,8 +304,9 @@ function Disable()
 
 	-- Unequip current tool
 	if CurrentTool then
-		CurrentTool:Unequip();
-		CurrentTool.Equipped = false;
+		local activeTool = ResolveBuildingToolModule(CurrentTool)
+		activeTool:Unequip();
+		activeTool.Equipped = false;
 	end;
 
 	-- Clear temporary connections
@@ -1128,6 +1148,7 @@ Core.CurrentTool = CurrentTool
 -- Initialize the UI
 InitializeUI();
 
+Core.ResolveBuildingToolModule = ResolveBuildingToolModule
 Core.EquipTool = EquipTool
 Core.AssignHotkey = AssignHotkey
 Core.ToggleExplorer = ToggleExplorer
@@ -1155,7 +1176,13 @@ if not Core.__dockToolsRegistered then
 						proxy.Color = loaded.Color
 					end
 				end
-				return loaded[key]
+				local value = loaded[key]
+				if type(value) == "function" then
+					return function(_, ...)
+						return value(loaded, ...)
+					end
+				end
+				return value
 			end,
 		})
 		return proxy

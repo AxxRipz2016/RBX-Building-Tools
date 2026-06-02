@@ -143,7 +143,25 @@ Core.Mode = Mode
 ]]
 
 -- AssignHotkey/EquipTool объявляются позже — не экспортировать раньше (иначе Core.AssignHotkey = nil)
+local CORE_RESOLVE_TOOL_BLOCK = [[
+function ResolveBuildingToolModule(BuildingToolModule)
+	if type(BuildingToolModule) ~= "table" then
+		return BuildingToolModule
+	end
+	local moduleName = BuildingToolModule.__btModuleName
+	if type(moduleName) == "string" then
+		local toolsFolder = Tool:FindFirstChild("Tools")
+		local mod = toolsFolder and toolsFolder:FindFirstChild(moduleName)
+		if mod then
+			return require(mod)
+		end
+	end
+	return BuildingToolModule
+end
+]]
+
 local CORE_LATE_EXPORT_BLOCK = [[
+Core.ResolveBuildingToolModule = ResolveBuildingToolModule
 Core.EquipTool = EquipTool
 Core.AssignHotkey = AssignHotkey
 Core.ToggleExplorer = ToggleExplorer
@@ -182,7 +200,13 @@ if not Core.__dockToolsRegistered then
 					if loaded.Name then proxy.Name = loaded.Name end
 					if loaded.Color then proxy.Color = loaded.Color end
 				end
-				return loaded[key]
+				local value = loaded[key]
+				if type(value) == "function" then
+					return function(_, ...)
+						return value(loaded, ...)
+					end
+				end
+				return value
 			end,
 		})
 		return proxy
@@ -293,7 +317,35 @@ end);]]
 		"Selection.RecolorOutlines(BuildingToolModule.Color)"
 	)
 
+	if not source:find("function ResolveBuildingToolModule", 1, true) then
+		source = source:gsub("(function EquipTool%()", CORE_RESOLVE_TOOL_BLOCK .. "\n\n%1", 1)
+	end
 	source = source:gsub("function EquipTool%(Tool%)", "function EquipTool(BuildingToolModule)")
+	source = source:gsub("function EquipTool%(BuildingToolModule%)\r?\n\t%-%- Equips", [[function EquipTool(BuildingToolModule)
+	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
+	-- Equips]])
+	source = source:gsub(
+		"if CurrentTool and CurrentTool%.Equipped then\r?\n\t\tCurrentTool:Unequip%(%);",
+		[[if CurrentTool then
+		local activeTool = ResolveBuildingToolModule(CurrentTool)
+		if activeTool.Equipped then
+			activeTool:Unequip();]]
+	)
+	source = source:gsub(
+		"activeTool:Unequip%(%);\r?\n\t\tCurrentTool%.Equipped = false;",
+		"activeTool:Unequip();\n\t\t\tactiveTool.Equipped = false;"
+	)
+	source = source:gsub(
+		"EquipTool%(CurrentTool or require%(Tool%.Tools%.Move%)%)",
+		"EquipTool(ResolveBuildingToolModule(CurrentTool) or require(Tool.Tools.Move))"
+	)
+	source = source:gsub(
+		"if CurrentTool then\r?\n\t\tCurrentTool:Unequip%(%);\r?\n\t\tCurrentTool%.Equipped = false;",
+		[[if CurrentTool then
+		local activeTool = ResolveBuildingToolModule(CurrentTool)
+		activeTool:Unequip();
+		activeTool.Equipped = false;]]
+	)
 	source = source:gsub("CurrentTool = Tool;", "CurrentTool = BuildingToolModule;")
 	source = source:gsub("ToolChanged:Fire%(Tool%)", "ToolChanged:Fire(BuildingToolModule)")
 	source = source:gsub("Tool:Equip%(%);", "BuildingToolModule:Equip();", 1)
@@ -465,6 +517,40 @@ function Notifications:render()
 end
 
 return Notifications]=]
+	end
+
+	if path == "Core/BoundingBox.lua" then
+		if not source:find("safeDestroyBox", 1, true) then
+			source = source:gsub(
+				"(local PotentialPartMonitors = %{%};)\n",
+				[[%1
+
+local function safeDestroyBox(box)
+	if box == nil then
+		return
+	end
+	if typeof(box) == "Instance" then
+		box:Destroy()
+	end
+end
+]]
+			)
+			source = source:gsub("BoundingBox:Destroy%(%);", "safeDestroyBox(BoundingBox);")
+			source = source:gsub("InactiveBoundingBox:Destroy%(%);", "safeDestroyBox(InactiveBoundingBox);")
+		end
+	end
+
+	if path == "UI/Dock/ToolButton.lua" then
+		if not source:find("ResolveBuildingToolModule", 1, true) then
+			source = source:gsub(
+				"core%.EquipTool%(self%.props%.Tool%)",
+				[[local toolModule = self.props.Tool
+                if type(core.ResolveBuildingToolModule) == "function" then
+                    toolModule = core.ResolveBuildingToolModule(toolModule)
+                end
+                core.EquipTool(toolModule)]]
+			)
+		end
 	end
 
 	if path == "Core/Targeting.lua" then
