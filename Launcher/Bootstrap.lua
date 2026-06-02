@@ -1,57 +1,38 @@
-local Players = game:GetService("Players")
+--[[
+	Вставьте в executor ТОЛЬКО это (не кэшируйте старый RemoteEntry в paste):
 
-local Config = require(script.Parent.Config)
-local Session = require(script.Parent.Session)
-local ToolFactory = require(script.Parent.ToolFactory)
-local ToolBuilder = require(script.Parent.ToolBuilder)
-local RemoteToolBuilder = require(script.Parent.RemoteToolBuilder)
-local BTRuntime = require(script.Parent.BTRuntime)
-local UILoader = require(script.Parent.UILoader)
+	loadstring(game:HttpGet(
+		"https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/Launcher/Bootstrap.lua"
+		.. "?bt=" .. tostring(tick()),
+		true
+	))()
+]]
+local BASE = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
+local g = getgenv and getgenv() or nil
+local loadFn = (g and (g.loadstring or g.load)) or loadstring
 
-local Bootstrap = {}
-
-local function setupTool()
-	local player = Players.LocalPlayer
-	if not Config.IsAllowed(player) then
-		return
+local function httpGet(url: string): string
+	if g and g.http_request then
+		local res = g.http_request({ Url = url, Method = "GET" })
+		return (type(res) == "table" and (res.Body or res.body)) or ""
 	end
-
-	local tool = ToolFactory.GiveTool(player, function(status)
-		UILoader.SetStatus(status)
-	end)
-	Session.Tool = tool
-
-	UILoader.SetStatus("Загрузка BT…")
-
-	if ToolFactory.WaitUntilLoaded(tool, 60) then
-		Session.Loaded = true
-		UILoader.SetStatus("Инициализация BT…")
-		Session.Core = BTRuntime.Start(tool)
-		UILoader.SetStatus("Экипировка…")
-		if Config.LoadMode == "Remote" then
-			RemoteToolBuilder.Equip(tool)
-		else
-			ToolBuilder.Equip(tool)
-		end
-		UILoader.SetStatus("Готово (локально)")
-	else
-		UILoader.SetStatus("Ошибка загрузки")
+	if g and g.request then
+		local res = g.request({ Url = url, Method = "GET" })
+		return (type(res) == "table" and (res.Body or res.body)) or ""
 	end
+	return game:HttpGet(url, true)
 end
 
-function Bootstrap.RunUI()
-	local player = Players.LocalPlayer
-	if not Config.IsAllowed(player) then
-		return
-	end
+local verSrc = httpGet(BASE .. "Launcher/Version.lua?bt=" .. tostring(tick()))
+local verTag = verSrc:match('Launcher%s*=%s*"(%d+)"') or tostring(tick())
+local entrySrc = httpGet(BASE .. "Launcher/RemoteEntry.lua?bt=" .. verTag)
 
-	UILoader.Create(function()
-		task.defer(setupTool)
-	end)
+local chunk, err = loadFn(entrySrc, "BT.RemoteEntry")
+if not chunk then
+	error("[BT] Bootstrap compile RemoteEntry: " .. tostring(err), 0)
 end
 
-function Bootstrap.RunToolSetup()
-	task.defer(setupTool)
+local ok, runErr = pcall(chunk)
+if not ok then
+	error("[BT] Bootstrap: " .. tostring(runErr), 0)
 end
-
-return Bootstrap

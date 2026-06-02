@@ -6,9 +6,12 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
+-- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
+local ENTRY_REV = 3
 
 local loadFn
 local httpGet
+local cacheTag = tostring(tick())
 
 do
 	local g = getgenv and getgenv() or nil
@@ -32,6 +35,12 @@ do
 	end
 end
 
+local function gitUrl(path: string): string
+	local url = BASE_URL .. path
+	local sep = if url:find("?", 1, true) then "&" else "?"
+	return url .. sep .. "bt=" .. cacheTag
+end
+
 local moduleCache: { [string]: any } = {}
 
 local function isLikelyLuaSource(body: string): boolean
@@ -53,8 +62,7 @@ local function loadFromGit(path: string)
 	if moduleCache[path] ~= nil then
 		return moduleCache[path]
 	end
-	local url = BASE_URL .. path
-	local src = httpGet(url)
+	local src = httpGet(gitUrl(path))
 	if not isLikelyLuaSource(src) then
 		error(`[BT] {path}: пустой ответ или HTML (проверь URL / лимит HttpGet)`, 0)
 	end
@@ -105,9 +113,14 @@ _G.BT_LAUNCHER_COMPILE = function(source: string, chunkName: string, env: any?)
 end
 _G.BT_LAUNCHER_LOAD = loadFromGit
 
-local Version = loadFn(httpGet(BASE_URL .. "Launcher/Version.lua"), "@Version")()
+local Version = loadFn(httpGet(gitUrl("Launcher/Version.lua")), "@Version")()
+cacheTag = Version.Launcher
 
-local LoadStatusUI = loadFn(httpGet(BASE_URL .. "Launcher/LoadStatusUI.lua"), "@LoadStatusUI")()
+if not httpGet(gitUrl("Launcher/RemoteEntry.lua")):find("ENTRY_REV = " .. tostring(ENTRY_REV), 1, true) then
+	warn("[BT] Кэш RemoteEntry устарел — используйте Launcher/Bootstrap.lua в paste, не старый RemoteEntry")
+end
+
+local LoadStatusUI = loadFn(httpGet(gitUrl("Launcher/LoadStatusUI.lua")), "@LoadStatusUI")()
 local ui = LoadStatusUI.create()
 ui.setVersionInfo(
 	`Launcher r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo}`
@@ -119,11 +132,19 @@ local ok, err = pcall(function()
 	Config.RemoteBaseUrl = BASE_URL
 
 	local RemoteLoader = loadFromGit("Launcher/RemoteLoader.lua")
-	if type(RemoteLoader.configure) ~= "function" then
-		error("[BT] RemoteLoader без configure — обновите development на GitHub", 0)
+	if type(RemoteLoader) ~= "table" or type(RemoteLoader.configure) ~= "function" then
+		local fallback = _G.BT_RemoteLoader
+		if type(fallback) == "table" and type(fallback.configure) == "function" then
+			RemoteLoader = fallback
+		else
+			error(
+				"[BT] RemoteLoader не загрузился (nil/configure). В paste — только Bootstrap.lua, не старый RemoteEntry",
+				0
+			)
+		end
 	end
 	local RemoteToolBuilder = loadFromGit("Launcher/RemoteToolBuilder.lua")
-	local manifest = loadFn(httpGet(BASE_URL .. "Launcher/manifest.lua"), "Launcher/manifest.lua")()
+	local manifest = loadFn(httpGet(gitUrl("Launcher/manifest.lua")), "Launcher/manifest.lua")()
 
 	RemoteLoader.configure(BASE_URL, Config.RemoteVendorUrls)
 	if Config.ContinueOnLoadErrors ~= false then

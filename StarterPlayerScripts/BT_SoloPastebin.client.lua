@@ -1,7 +1,8 @@
 --[[
-	Соло для executor: снаружи и внутри RemoteEntry — getgenv().loadstring
+	Соло для executor. Не вставляйте старый RemoteEntry в paste — только Bootstrap (сброс кэша HttpGet).
 ]]
-local ENTRY_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/Launcher/RemoteEntry.lua"
+local BOOTSTRAP_URL =
+	"https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/Launcher/Bootstrap.lua"
 
 local HttpService = game:GetService("HttpService")
 local g = getgenv and getgenv() or nil
@@ -21,9 +22,9 @@ local httpGet = function(url: string)
 	return game:HttpGet(url, true)
 end
 
-local chunk, compileErr = loadFn(httpGet(ENTRY_URL), "BT.RemoteEntry")
+local chunk, compileErr = loadFn(httpGet(BOOTSTRAP_URL .. "?bt=" .. tostring(tick())), "BT.Bootstrap")
 if not chunk then
-	warn("[BT Solo] compile RemoteEntry:", compileErr)
+	warn("[BT Solo] compile Bootstrap:", compileErr)
 	return
 end
 

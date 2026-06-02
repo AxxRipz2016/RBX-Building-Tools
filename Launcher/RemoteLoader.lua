@@ -3,7 +3,9 @@
 ]]
 local HttpService = game:GetService("HttpService")
 
-local RemoteLoader = {}
+-- Сразу в _G: старый RemoteEntry / обрезанный HttpGet иначе получают nil вместо модуля
+local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoader else {}
+_G.BT_RemoteLoader = RemoteLoader
 
 local sourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
