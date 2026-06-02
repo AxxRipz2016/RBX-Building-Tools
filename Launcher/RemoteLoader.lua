@@ -620,6 +620,51 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		if not source:find("SafeCallEquip", 1, true) then
+			source = source:gsub(
+				"function EquipTool%(BuildingToolModule%)\r?\n\t%-%- Equips[^\n]*\n",
+				[[function EquipTool(BuildingToolModule)
+	-- Equips and switches to the given tool
+	if type(BuildingToolModule) ~= "table" or type(BuildingToolModule.Equip) ~= "function" then
+		if type(_G.Core) == "table" and type(_G.Core.__bt_defaultMove) == "table" and type(_G.Core.__bt_defaultMove.Equip) == "function" then
+			BuildingToolModule = _G.Core.__bt_defaultMove
+		else
+			local rbxTool = _G.__bt_tool or Tool
+			local tools = rbxTool and rbxTool:FindFirstChild("Tools")
+			local moveInst = tools and tools:FindFirstChild("Move")
+			if moveInst and moveInst:IsA("ModuleScript") then
+				local ok, mod = pcall(require, moveInst)
+				if ok and type(mod) == "table" and type(mod.Equip) == "function" then
+					BuildingToolModule = mod
+					if type(_G.Core) == "table" then
+						_G.Core.__bt_defaultMove = mod
+					end
+				end
+			end
+		end
+	end
+	if type(BuildingToolModule) ~= "table" or type(BuildingToolModule.Equip) ~= "function" then
+		warn("[BT] EquipTool: нет валидного модуля инструмента")
+		return
+	end
+]]
+			)
+			source = source:gsub(
+				"BuildingToolModule:Equip%(%);",
+				[[local __bt_equipOk, __bt_equipErr = pcall(function()
+		BuildingToolModule:Equip()
+	end)
+	if not __bt_equipOk then
+		warn("[BT] Equip failed:", __bt_equipErr)
+	end]]
+			)
+			source = source:gsub(
+				"EquipTool%(ResolveBuildingToolModule%(CurrentTool%) or DefaultBuildingToolModule%(%)%)",
+				[[EquipTool((type(Core) == "table" and IsBuildingToolModule(Core.__bt_defaultMove) and Core.__bt_defaultMove)
+		or ResolveBuildingToolModule(CurrentTool)
+		or DefaultBuildingToolModule())]]
+			)
+		end
 		source = source:gsub("SyncAPI = Tool%.SyncAPI;", "SyncAPI = Tool.SyncAPI;\nCore.SyncAPI = SyncAPI;", 1)
 		source = patchCoreSelfReference(source)
 		source = patchCoreInitRequires(source)
@@ -1395,6 +1440,9 @@ local function buildRequire(tool: Tool)
 		if not modulePath then
 			error(`[BT] require: нет BTPath у {target:GetFullName()}`, 2)
 		end
+		if modulePath == "Core/init.lua" and type(_G.Core) == "table" then
+			return _G.Core
+		end
 		local ok, result = pcall(RemoteLoader.run, modulePath, tool, target)
 		if not ok then
 			local msg = `require {modulePath} ({target:GetFullName()}): {result}`
@@ -1522,6 +1570,9 @@ local function runModuleWithEnv(
 	if ok then
 		if path == "Core/init.lua" then
 			return coreEnv
+		end
+		if result == nil and path == "Tools/Move/init.lua" and type(_G.Core) == "table" and type(_G.Core.__bt_defaultMove) == "table" then
+			return _G.Core.__bt_defaultMove
 		end
 		return result
 	end

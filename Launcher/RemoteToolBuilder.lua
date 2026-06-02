@@ -527,10 +527,13 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		local moveScript = toolsFolder and toolsFolder:FindFirstChild("Move")
 		if moveScript and moveScript:IsA("ModuleScript") then
 			local okMove, moveModOrErr = pcall(RemoteLoader.run, "Tools/Move/init.lua", tool, moveScript)
-			if okMove and type(moveModOrErr) == "table" and type(coreEnv) == "table" then
+			if okMove and type(moveModOrErr) == "table" and type(moveModOrErr.Equip) == "function" and type(coreEnv) == "table" then
 				coreEnv.__bt_defaultMove = moveModOrErr
+				_G.Core = coreEnv
 			elseif not okMove then
 				warn(`[BT] Move preload: {moveModOrErr}`)
+			else
+				warn("[BT] Move preload: модуль без Equip/Unequip")
 			end
 		end
 

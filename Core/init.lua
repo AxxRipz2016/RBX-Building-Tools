@@ -47,6 +47,19 @@ local function IsBuildingToolModule(ToolModule)
 		and type(ToolModule.Unequip) == "function"
 end
 
+local function SafeCallEquip(ToolModule)
+	if not IsBuildingToolModule(ToolModule) then
+		return false
+	end
+	local ok, err = pcall(function()
+		ToolModule:Equip()
+	end)
+	if not ok then
+		warn("[BT] Equip failed:", err)
+	end
+	return ok
+end
+
 local cachedDefaultMove
 
 local function DefaultBuildingToolModule()
@@ -126,7 +139,9 @@ function EquipTool(BuildingToolModule)
 	ToolChanged:Fire(BuildingToolModule);
 
 	-- Equip the tool
-	BuildingToolModule:Equip();
+	if not SafeCallEquip(BuildingToolModule) then
+		warn("[BT] EquipTool: Equip() не выполнен")
+	end
 
 end;
 
@@ -314,7 +329,11 @@ function Enable(Mouse)
 	end
 
 	-- Equip current tool
-	EquipTool(ResolveBuildingToolModule(CurrentTool) or DefaultBuildingToolModule());
+	local initialTool = Core.__bt_defaultMove
+	if not IsBuildingToolModule(initialTool) then
+		initialTool = ResolveBuildingToolModule(CurrentTool) or DefaultBuildingToolModule()
+	end
+	EquipTool(initialTool);
 
 	-- Indicate that tool is now enabled
 	IsEnabled = true;
