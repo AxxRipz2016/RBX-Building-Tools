@@ -188,9 +188,10 @@ local ok, err = pcall(function()
 	ui.setProgress(0, 0, "Запуск Core и инструментов…", true)
 
 	task.spawn(function()
-		task.wait()
 		local runOk, runErr = pcall(function()
-			RemoteToolBuilder.StartRuntime(tool)
+			RemoteToolBuilder.StartRuntime(tool, function(stepText: string)
+				ui.setProgress(0, 0, stepText, true)
+			end)
 		end)
 		if not runOk then
 			ui.addError("StartRuntime", tostring(runErr))

@@ -185,6 +185,72 @@ local function attachLoadedIndicator(tool: Tool)
 	RemoteLoader.registerModule(listener, "Support/ReplicationListener.client.lua")
 end
 
+local REQUIRED_INTERFACES = {
+	"BTAnchorToolGUI",
+	"BTCollisionToolGUI",
+	"BTDecorateToolGUI",
+	"BTLightingToolGUI",
+	"BTMaterialToolGUI",
+	"BTMeshToolGUI",
+	"BTMoveToolGUI",
+	"BTNewPartToolGUI",
+	"BTPaintToolGUI",
+	"BTResizeToolGUI",
+	"BTRotateToolGUI",
+	"BTSurfaceToolGUI",
+	"BTTextureToolGUI",
+	"BTWeldToolGUI",
+}
+
+local function ensureInterfacesFromLol(tool: Tool): boolean
+	local interfaces = tool:FindFirstChild("Interfaces")
+	if not interfaces then
+		return false
+	end
+
+	local hasAll = true
+	for _, name in REQUIRED_INTERFACES do
+		if not interfaces:FindFirstChild(name) then
+			hasAll = false
+			break
+		end
+	end
+	if hasAll then
+		return true
+	end
+
+	_G.__bt_interfaces_root = interfaces
+	local fallbackHost = Instance.new("ModuleScript")
+	fallbackHost.Name = "lol_fallback"
+	fallbackHost.Parent = interfaces
+	RemoteLoader.registerModule(fallbackHost, "Launcher/Interfaces/lol.lua")
+	local ok, err = pcall(function()
+		RemoteLoader.run("Launcher/Interfaces/lol.lua", tool, fallbackHost)
+	end)
+	fallbackHost:Destroy()
+	if not ok then
+		warn(`[BT] не удалось собрать Interfaces из lol.lua: {tostring(err)}`)
+		return false
+	end
+
+	for _, name in REQUIRED_INTERFACES do
+		local gui = interfaces:FindFirstChild(name)
+		if not gui then
+			gui = game:GetService("Workspace"):FindFirstChild(name)
+			if gui then
+				gui.Parent = interfaces
+			end
+		end
+	end
+
+	for _, name in REQUIRED_INTERFACES do
+		if not interfaces:FindFirstChild(name) then
+			warn(`[BT] после lol.lua нет GUI: {name}`)
+		end
+	end
+	return true
+end
+
 local function attachMetadata(tool: Tool)
 	local toolVer = if versionInfo then versionInfo.Tool else "3.1.0"
 	local version = Instance.new("StringValue")
@@ -212,6 +278,11 @@ local function attachMetadata(tool: Tool)
 	interfaces.Name = "Interfaces"
 	interfaces.Parent = tool
 
+	if tool:GetAttribute("BT_LocalOnly") then
+		tool:SetAttribute("BT_InterfacesPending", true)
+		return
+	end
+
 	local payloadInterfaces = ReplicatedStorage:FindFirstChild("BT")
 		and ReplicatedStorage.BT:FindFirstChild("Payload")
 		and ReplicatedStorage.BT.Payload:FindFirstChild("Interfaces")
@@ -222,63 +293,16 @@ local function attachMetadata(tool: Tool)
 		end
 	end
 
-	local requiredInterfaces = {
-		"BTAnchorToolGUI",
-		"BTCollisionToolGUI",
-		"BTDecorateToolGUI",
-		"BTLightingToolGUI",
-		"BTMaterialToolGUI",
-		"BTMeshToolGUI",
-		"BTMoveToolGUI",
-		"BTNewPartToolGUI",
-		"BTPaintToolGUI",
-		"BTResizeToolGUI",
-		"BTRotateToolGUI",
-		"BTSurfaceToolGUI",
-		"BTTextureToolGUI",
-		"BTWeldToolGUI",
-	}
-
 	local hasAllInterfaces = true
-	for _, name in requiredInterfaces do
+	for _, name in REQUIRED_INTERFACES do
 		if not interfaces:FindFirstChild(name) then
 			hasAllInterfaces = false
 			break
 		end
 	end
 
-	-- Fallback: собираем Interfaces из Launcher/Interfaces/lol.lua
-	-- (нужно для solo-режима, когда Payload.Interfaces отсутствует).
 	if not hasAllInterfaces then
-		_G.__bt_interfaces_root = interfaces
-		local fallbackHost = Instance.new("ModuleScript")
-		fallbackHost.Name = "lol_fallback"
-		fallbackHost.Parent = interfaces
-		RemoteLoader.registerModule(fallbackHost, "Launcher/Interfaces/lol.lua")
-		local ok, err = pcall(function()
-			RemoteLoader.run("Launcher/Interfaces/lol.lua", tool, fallbackHost)
-		end)
-		if not ok then
-			warn(`[BT] не удалось собрать Interfaces из lol.lua: {tostring(err)}`)
-		end
-		fallbackHost:Destroy()
-
-		-- Перенос GUI, если lol положил их в game.Workspace
-		for _, name in requiredInterfaces do
-			local gui = interfaces:FindFirstChild(name)
-			if not gui then
-				gui = game:GetService("Workspace"):FindFirstChild(name)
-				if gui then
-					gui.Parent = interfaces
-				end
-			end
-		end
-
-		for _, name in requiredInterfaces do
-			if not interfaces:FindFirstChild(name) then
-				warn(`[BT] после lol.lua нет GUI: {name}`)
-			end
-		end
+		ensureInterfacesFromLol(tool)
 	end
 end
 
@@ -414,12 +438,23 @@ function RemoteToolBuilder.Build(
 	end
 	RemoteLoader.preloadByPrefixes(paths, { "Vendor/Roact/" })
 
-	if onMessage then
-		onMessage("Предзагрузка остальных модулей…")
-	end
-	local preloadFailed = RemoteLoader.preloadRemaining(paths, onFile)
-	if #preloadFailed > 0 then
-		warn(`[BT] не предзагружено: {table.concat(preloadFailed, ", ")}`)
+	if tool:GetAttribute("BT_LocalOnly") then
+		if onMessage then
+			onMessage("Предзагрузка Core / Move / UI…")
+		end
+		local warmPrefixes = { "Core/", "Tools/Move/", "UI/Dock/", "UI/Explorer/", "Support/Assets.lua" }
+		for _, prefix in warmPrefixes do
+			RemoteLoader.preloadByPrefixes(paths, { prefix })
+			task.wait()
+		end
+	else
+		if onMessage then
+			onMessage("Предзагрузка остальных модулей…")
+		end
+		local preloadFailed = RemoteLoader.preloadRemaining(paths, onFile)
+		if #preloadFailed > 0 then
+			warn(`[BT] не предзагружено: {table.concat(preloadFailed, ", ")}`)
+		end
 	end
 
 	attachSyncAPI(tool)
@@ -471,7 +506,33 @@ function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 	tool.Parent = player:WaitForChild("Backpack")
 end
 
-function RemoteToolBuilder.StartRuntime(tool: Tool)
+function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
+	local function step(msg: string)
+		if onStep then
+			onStep(msg)
+		end
+		task.wait()
+	end
+
+	if tool:GetAttribute("BT_LocalOnly") then
+		step("Core…")
+		local coreScript = tool:WaitForChild("Core") :: ModuleScript
+		local coreEnv = RemoteLoader.run("Core/init.lua", tool, coreScript)
+		if type(coreEnv) == "table" then
+			_G.Core = coreEnv
+		end
+
+		if tool:GetAttribute("BT_InterfacesPending") then
+			step("Интерфейсы (lol)…")
+			ensureInterfacesFromLol(tool)
+			tool:SetAttribute("BT_InterfacesPending", nil)
+		end
+
+		step("Готово")
+		return _G.Core
+	end
+
+	step("Loader…")
 	local loader = tool:WaitForChild("Loader") :: ModuleScript
 	local path = loader:GetAttribute("BTPath") or "Loader/init.lua"
 	return RemoteLoader.run(path, tool, loader)

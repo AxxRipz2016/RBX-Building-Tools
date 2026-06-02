@@ -28,6 +28,18 @@ function ToolButton:UpdateHotkeyTextSize(Text)
     )
 end
 
+local function isCurrentTool(currentTool, buildingTool)
+    if currentTool == buildingTool then
+        return true
+    end
+    if type(currentTool) == "table" and type(buildingTool) == "table" then
+        if currentTool.Name and buildingTool.Name and currentTool.Name == buildingTool.Name then
+            return true
+        end
+    end
+    return false
+end
+
 function ToolButton:render()
     local buildingTool = self.props.Tool
     local themeColor = Color3.new(0.85, 0.45, 0.1)
@@ -41,7 +53,7 @@ function ToolButton:render()
     end
     return new('ImageButton', {
         BackgroundColor3 = themeColor;
-        BackgroundTransparency = (self.props.CurrentTool == buildingTool) and 0 or 1;
+        BackgroundTransparency = isCurrentTool(self.props.CurrentTool, buildingTool) and 0 or 1;
         BorderSizePixel = 0;
         Image = self.props.IconAssetId;
         AutoButtonColor = false;

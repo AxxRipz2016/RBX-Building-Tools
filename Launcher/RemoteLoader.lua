@@ -163,37 +163,55 @@ Core.Mouse = Mouse
 Core.CurrentTool = CurrentTool
 ]]
 
--- Регистрация кнопок дока внутри Core (Loader в другом env часто не дополняет ToolList)
+-- Регистрация кнопок дока: require только по клику/хоткею (не блокировать старт)
 local CORE_DOCK_REGISTER_BLOCK = [[
 
 if not Core.__dockToolsRegistered then
 	Core.__dockToolsRegistered = true
-	local function BT_Reg(iconKey, hotkey, moduleName)
-		local toolModule = require(Tool:WaitForChild('Tools'):WaitForChild(moduleName))
-		AssignHotkey(hotkey, function()
-			EquipTool(toolModule)
-		end)
-		AddToolButton(Assets[iconKey], hotkey, toolModule)
+	local function LazyTool(moduleName, displayName, brickColor)
+		local loaded
+		local proxy = {
+			Name = displayName;
+			Color = brickColor;
+			__btModuleName = moduleName;
+		}
+		setmetatable(proxy, {
+			__index = function(_, key)
+				if not loaded then
+					loaded = require(Tool:WaitForChild('Tools'):WaitForChild(moduleName))
+					if loaded.Name then proxy.Name = loaded.Name end
+					if loaded.Color then proxy.Color = loaded.Color end
+				end
+				return loaded[key]
+			end,
+		})
+		return proxy
 	end
-	BT_Reg('MoveIcon', 'Z', 'Move')
-	BT_Reg('ResizeIcon', 'X', 'Resize')
-	BT_Reg('RotateIcon', 'C', 'Rotate')
-	BT_Reg('PaintIcon', 'V', 'Paint')
-	BT_Reg('SurfaceIcon', 'B', 'Surface')
-	BT_Reg('MaterialIcon', 'N', 'Material')
-	BT_Reg('AnchorIcon', 'M', 'Anchor')
-	BT_Reg('CollisionIcon', 'K', 'Collision')
-	BT_Reg('NewPartIcon', 'J', 'NewPart')
-	BT_Reg('MeshIcon', 'H', 'Mesh')
-	BT_Reg('TextureIcon', 'G', 'Texture')
-	BT_Reg('WeldIcon', 'F', 'Weld')
-	BT_Reg('LightingIcon', 'U', 'Lighting')
-	BT_Reg('DecorateIcon', 'P', 'Decorate')
+	local function BT_Reg(iconKey, hotkey, moduleName, displayName, brickColor)
+		local lazy = LazyTool(moduleName, displayName, brickColor)
+		AssignHotkey(hotkey, function()
+			EquipTool(require(Tool:WaitForChild('Tools'):WaitForChild(moduleName)))
+		end)
+		AddToolButton(Assets[iconKey], hotkey, lazy)
+	end
+	BT_Reg('MoveIcon', 'Z', 'Move', 'Move Tool', BrickColor.new('Deep orange'))
+	BT_Reg('ResizeIcon', 'X', 'Resize', 'Resize Tool', BrickColor.new('Bright blue'))
+	BT_Reg('RotateIcon', 'C', 'Rotate', 'Rotate Tool', BrickColor.new('Bright green'))
+	BT_Reg('PaintIcon', 'V', 'Paint', 'Paint Tool', BrickColor.new('Bright red'))
+	BT_Reg('SurfaceIcon', 'B', 'Surface', 'Surface Tool', BrickColor.new('Bright yellow'))
+	BT_Reg('MaterialIcon', 'N', 'Material', 'Material Tool', BrickColor.new('Medium green'))
+	BT_Reg('AnchorIcon', 'M', 'Anchor', 'Anchor Tool', BrickColor.new('Bright orange'))
+	BT_Reg('CollisionIcon', 'K', 'Collision', 'Collision Tool', BrickColor.new('Bright violet'))
+	BT_Reg('NewPartIcon', 'J', 'NewPart', 'New Part Tool', BrickColor.new('White'))
+	BT_Reg('MeshIcon', 'H', 'Mesh', 'Mesh Tool', BrickColor.new('Pink'))
+	BT_Reg('TextureIcon', 'G', 'Texture', 'Texture Tool', BrickColor.new('Magenta'))
+	BT_Reg('WeldIcon', 'F', 'Weld', 'Weld Tool', BrickColor.new('Black'))
+	BT_Reg('LightingIcon', 'U', 'Lighting', 'Lighting Tool', BrickColor.new('Bright yellow'))
+	BT_Reg('DecorateIcon', 'P', 'Decorate', 'Decorate Tool', BrickColor.new('Hot pink'))
 	if Core.RefreshToolDock then
 		Core.RefreshToolDock()
 	end
 end
-task.wait()
 ]]
 
 local function patchCoreModuleExports(source: string): string
@@ -1267,7 +1285,7 @@ local function runModuleWithEnv(
 			if not ok then
 				error(`run part {i}: {runErr}`, 0)
 			end
-			if i % 2 == 0 then
+			if i % 1 == 0 then
 				task.wait()
 			end
 		end
