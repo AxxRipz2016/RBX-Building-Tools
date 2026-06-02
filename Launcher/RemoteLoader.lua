@@ -732,6 +732,11 @@ function RemoteLoader.configure(baseUrl: string, vendorUrls: { [string]: string 
 	end
 	RemoteLoader.httpGet = _G.BT_HTTP_GET or defaultHttpGet
 	RemoteLoader.compile = _G.BT_LAUNCHER_COMPILE or defaultCompile
+	loadCancelled = false
+end
+
+function RemoteLoader.resetCancel()
+	loadCancelled = false
 end
 
 function RemoteLoader.setProgressCallback(cb: ((string, boolean, string?) -> ())?)
@@ -1389,6 +1394,7 @@ function RemoteLoader.clear()
 	loadCancelled = false
 	fetchCount = 0
 	lastFetchAt = 0
+	progressCallback = nil
 end
 
 _G.BT_RemoteLoader = RemoteLoader

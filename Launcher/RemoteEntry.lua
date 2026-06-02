@@ -10,6 +10,7 @@ if _G.BT_LAUNCHER_BUSY then
 	return
 end
 _G.BT_LAUNCHER_BUSY = true
+_G.BT_LAUNCHER_FETCH_READY = false
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
@@ -91,19 +92,43 @@ local function httpGetWithRetry(path: string): string
 	return ""
 end
 
+local function mayUseRemoteFetcher(): boolean
+	if not _G.BT_LAUNCHER_FETCH_READY then
+		return false
+	end
+	local activeLoader = _G.BT_RemoteLoader
+	if type(activeLoader) ~= "table" or type(activeLoader.fetchSource) ~= "function" then
+		return false
+	end
+	if activeLoader.BaseUrl == nil or activeLoader.BaseUrl == "" then
+		return false
+	end
+	if type(activeLoader.isLoadCancelled) == "function" and activeLoader.isLoadCancelled() then
+		return false
+	end
+	return true
+end
+
 local function loadFromGit(path: string)
 	if moduleCache[path] ~= nil then
 		return moduleCache[path]
 	end
 
 	local src: string
-	local activeLoader = _G.BT_RemoteLoader
-	if type(activeLoader) == "table" and type(activeLoader.fetchSource) == "function" and activeLoader.BaseUrl then
+	if mayUseRemoteFetcher() then
+		local activeLoader = _G.BT_RemoteLoader
 		local okFetch, fetchErr = activeLoader.fetchSource(path)
 		if not okFetch then
-			error(`[BT] {path}: {fetchErr}`, 0)
+			if fetchErr == "отменено" and type(activeLoader.resetCancel) == "function" then
+				activeLoader.resetCancel()
+			end
+			src = httpGetWithRetry(path)
+			if not isLikelyLuaSource(src) then
+				error(`[BT] {path}: {fetchErr}`, 0)
+			end
+		else
+			src = activeLoader.getSource(path) or ""
 		end
-		src = activeLoader.getSource(path) or ""
 	else
 		src = httpGetWithRetry(path)
 	end
@@ -288,7 +313,11 @@ local ok, err = pcall(function()
 		end
 	end
 	RemoteLoader.configure(BASE_URL, Config.RemoteVendorUrls)
+	if type(RemoteLoader.resetCancel) == "function" then
+		RemoteLoader.resetCancel()
+	end
 	_G.BT_RemoteLoader = RemoteLoader
+	_G.BT_LAUNCHER_FETCH_READY = true
 	if Config.ContinueOnLoadErrors ~= false then
 		RemoteLoader.setContinueOnError(true)
 	end
