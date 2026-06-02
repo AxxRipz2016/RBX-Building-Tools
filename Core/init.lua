@@ -41,9 +41,22 @@ Assets = require(Tool.Assets)
 -- Core events
 ToolChanged = Signal.new()
 
+local function IsBuildingToolModule(ToolModule)
+	return type(ToolModule) == "table"
+		and type(ToolModule.Equip) == "function"
+		and type(ToolModule.Unequip) == "function"
+end
+
+local function DefaultBuildingToolModule()
+	return require(Tool:WaitForChild("Tools"):WaitForChild("Move"))
+end
+
 function ResolveBuildingToolModule(BuildingToolModule)
+	if typeof(BuildingToolModule) == "Instance" then
+		return nil
+	end
 	if type(BuildingToolModule) ~= "table" then
-		return BuildingToolModule
+		return nil
 	end
 	local moduleName = BuildingToolModule.__btModuleName
 	if type(moduleName) == "string" then
@@ -53,17 +66,23 @@ function ResolveBuildingToolModule(BuildingToolModule)
 			return require(mod)
 		end
 	end
-	return BuildingToolModule
+	if IsBuildingToolModule(BuildingToolModule) then
+		return BuildingToolModule
+	end
+	return nil
 end
 
 function EquipTool(BuildingToolModule)
 	-- Equips and switches to the given tool
 	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
+	if not IsBuildingToolModule(BuildingToolModule) then
+		BuildingToolModule = DefaultBuildingToolModule()
+	end
 
 	-- Unequip current tool
 	if CurrentTool then
 		local activeTool = ResolveBuildingToolModule(CurrentTool)
-		if activeTool.Equipped then
+		if IsBuildingToolModule(activeTool) and activeTool.Equipped then
 			activeTool:Unequip();
 			activeTool.Equipped = false;
 		end
@@ -265,7 +284,7 @@ function Enable(Mouse)
 	end
 
 	-- Equip current tool
-	EquipTool(ResolveBuildingToolModule(CurrentTool) or require(Tool.Tools.Move));
+	EquipTool(ResolveBuildingToolModule(CurrentTool) or DefaultBuildingToolModule());
 
 	-- Indicate that tool is now enabled
 	IsEnabled = true;
@@ -305,8 +324,10 @@ function Disable()
 	-- Unequip current tool
 	if CurrentTool then
 		local activeTool = ResolveBuildingToolModule(CurrentTool)
-		activeTool:Unequip();
-		activeTool.Equipped = false;
+		if IsBuildingToolModule(activeTool) then
+			activeTool:Unequip();
+			activeTool.Equipped = false;
+		end
 	end;
 
 	-- Clear temporary connections
@@ -355,11 +376,11 @@ function InitializeUI()
 	local DockHandle = Roact.mount(DockElement, UI, 'Dock')
 
 	-- Provide API for adding tool buttons to dock
-	local function AddToolButton(IconAssetId, HotkeyLabel, Tool)
+	local function AddToolButton(IconAssetId, HotkeyLabel, ToolModule)
 		table.insert(ToolList, {
 			IconAssetId = IconAssetId;
 			HotkeyLabel = HotkeyLabel;
-			Tool = Tool;
+			Tool = ToolModule;
 		})
 
 		-- Update dock

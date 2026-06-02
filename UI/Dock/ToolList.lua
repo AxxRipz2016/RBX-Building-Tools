@@ -24,9 +24,9 @@ function ToolList:init()
         })
         local toolChanged = core.ToolChanged
         if type(toolChanged) == "table" and type(toolChanged.Connect) == "function" then
-            self.Maid.CurrentTool = toolChanged:Connect(function (Tool)
+            self.Maid.CurrentTool = toolChanged:Connect(function (BuildingToolModule)
                 self:setState({
-                    CurrentTool = Tool;
+                    CurrentTool = BuildingToolModule;
                 })
             end)
         end

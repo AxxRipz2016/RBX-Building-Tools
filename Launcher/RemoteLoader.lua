@@ -144,9 +144,22 @@ Core.Mode = Mode
 
 -- AssignHotkey/EquipTool объявляются позже — не экспортировать раньше (иначе Core.AssignHotkey = nil)
 local CORE_RESOLVE_TOOL_BLOCK = [[
+local function IsBuildingToolModule(ToolModule)
+	return type(ToolModule) == "table"
+		and type(ToolModule.Equip) == "function"
+		and type(ToolModule.Unequip) == "function"
+end
+
+local function DefaultBuildingToolModule()
+	return require(Tool:WaitForChild("Tools"):WaitForChild("Move"))
+end
+
 function ResolveBuildingToolModule(BuildingToolModule)
+	if typeof(BuildingToolModule) == "Instance" then
+		return nil
+	end
 	if type(BuildingToolModule) ~= "table" then
-		return BuildingToolModule
+		return nil
 	end
 	local moduleName = BuildingToolModule.__btModuleName
 	if type(moduleName) == "string" then
@@ -156,7 +169,10 @@ function ResolveBuildingToolModule(BuildingToolModule)
 			return require(mod)
 		end
 	end
-	return BuildingToolModule
+	if IsBuildingToolModule(BuildingToolModule) then
+		return BuildingToolModule
+	end
+	return nil
 end
 ]]
 
@@ -328,8 +344,12 @@ end);]]
 	end;]]
 		)
 		source = source:gsub(
+			"EquipTool%(ResolveBuildingToolModule%(CurrentTool%) or require%(Tool%.Tools%.Move%)%)",
+			"EquipTool(ResolveBuildingToolModule(CurrentTool) or DefaultBuildingToolModule())"
+		)
+		source = source:gsub(
 			"EquipTool%(CurrentTool or require%(Tool%.Tools%.Move%)%)",
-			"EquipTool(ResolveBuildingToolModule(CurrentTool) or require(Tool.Tools.Move))"
+			"EquipTool(ResolveBuildingToolModule(CurrentTool) or DefaultBuildingToolModule())"
 		)
 		source = source:gsub(
 			"if CurrentTool then\r?\n\t\tCurrentTool:Unequip%(%);\r?\n\t\tCurrentTool%.Equipped = false;",
@@ -533,6 +553,17 @@ end
 		end
 	end
 
+	if path == "UI/Dock/ToolList.lua" then
+		source = source:gsub(
+			"toolChanged:Connect%(function %(Tool%)",
+			"toolChanged:Connect(function (BuildingToolModule)"
+		)
+		source = source:gsub(
+			"CurrentTool = Tool;",
+			"CurrentTool = BuildingToolModule;"
+		)
+	end
+
 	if path == "UI/Dock/ToolButton.lua" then
 		if not source:find("ResolveBuildingToolModule", 1, true) then
 			source = source:gsub(
@@ -638,6 +669,46 @@ end;]]
 			"(Core%.UI = UI\n)",
 			"%1\tUI.Parent = nil;\n\tUI.Enabled = false;\n"
 		)
+		-- r82: «Tool = Tool» в AddToolButton мог стать Roblox Tool
+		source = source:gsub(
+			"local function AddToolButton%(IconAssetId, HotkeyLabel, Tool%)\r?\n\t\t?table%.insert%(ToolList, %{\r?\n\t\t\tIconAssetId = IconAssetId;\r?\n\t\t\tHotkeyLabel = HotkeyLabel;\r?\n\t\t\tTool = %(_G%.__bt_tool or Tool%);",
+			[[local function AddToolButton(IconAssetId, HotkeyLabel, ToolModule)
+		table.insert(ToolList, {
+			IconAssetId = IconAssetId;
+			HotkeyLabel = HotkeyLabel;
+			Tool = ToolModule;]]
+		)
+		if not source:find("IsBuildingToolModule", 1, true) then
+			source = source:gsub(
+				"(function ResolveBuildingToolModule%(BuildingToolModule%)\r?\n)(.-)(\r?\nend\r?\n\r?\nfunction EquipTool)",
+				CORE_RESOLVE_TOOL_BLOCK .. "\n\nfunction EquipTool",
+				1
+			)
+			source = source:gsub(
+				"function EquipTool%(BuildingToolModule%)\r?\n\t%-%- Equips[^\n]*\r?\n\tBuildingToolModule = ResolveBuildingToolModule%(BuildingToolModule%)",
+				[[function EquipTool(BuildingToolModule)
+	-- Equips and switches to the given tool
+	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
+	if not IsBuildingToolModule(BuildingToolModule) then
+		BuildingToolModule = DefaultBuildingToolModule()
+	end]]
+			)
+			source = source:gsub(
+				"if activeTool%.Equipped then",
+				"if IsBuildingToolModule(activeTool) and activeTool.Equipped then"
+			)
+			source = source:gsub(
+				"EquipTool%(ResolveBuildingToolModule%(CurrentTool%) or require%(Tool%.Tools%.Move%)%)",
+				"EquipTool(ResolveBuildingToolModule(CurrentTool) or DefaultBuildingToolModule())"
+			)
+			source = source:gsub(
+				"if CurrentTool then\r?\n\t\tlocal activeTool = ResolveBuildingToolModule%(CurrentTool%)\r?\n\t\tactiveTool:Unequip%(%);",
+				[[if CurrentTool then
+		local activeTool = ResolveBuildingToolModule(CurrentTool)
+		if IsBuildingToolModule(activeTool) then
+			activeTool:Unequip();]]
+			)
+		end
 		if not source:find("Core.Security = Security", 1, true) then
 			source = source:gsub(
 				"(Security = require%(script%.Security%)\n)",
@@ -1139,8 +1210,7 @@ local function rewriteToolParentForRemote(path: string, source: string): string
 		source = source:gsub("local Tool = script%.Parent;", `local Tool = {TOOL_BIND};`)
 		source = source:gsub("local Tool = __bt_script%.Parent;", `local Tool = {TOOL_BIND};`)
 		source = source:gsub("Tool = __bt_script%.Parent;", `Tool = {TOOL_BIND};`)
-		source = source:gsub("local Tool = Tool;", `local Tool = {TOOL_BIND};`)
-		source = source:gsub("Tool = Tool;", `Tool = {TOOL_BIND};`)
+		-- Не трогать «Tool = Tool» в AddToolButton (иначе в док попадает Roblox Tool)
 	end
 	return source
 end
