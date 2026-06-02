@@ -503,6 +503,17 @@ function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 			humanoid:UnequipTools()
 		end
 	end
+	if not tool:GetAttribute("BT_EquipDockHook") then
+		tool:SetAttribute("BT_EquipDockHook", true)
+		tool.Equipped:Connect(function()
+			task.defer(function()
+				local count = tool:GetAttribute("BT_DockButtonCount") or 0
+				if count == 0 or (type(_G.Core) == "table" and (_G.Core.__bt_dockButtonCount or 0) == 0) then
+					RemoteToolBuilder.rebuildToolDock(tool)
+				end
+			end)
+		end)
+	end
 	tool.Parent = player:WaitForChild("Backpack")
 end
 
@@ -609,32 +620,13 @@ local function makeLazyBuildingTool(tool: Tool, moduleName: string, displayName:
 	return proxy
 end
 
-local function registerDockDirect(coreEnv: any, tool: Tool)
-	if type(coreEnv) ~= "table" or type(coreEnv.AddToolButton) ~= "function" then
-		warn("[BT] registerDockDirect: нет Core.AddToolButton (InitializeUI?)")
-		return 0
+local function ensureDockHotkeys(coreEnv: any, tool: Tool, icons: { [string]: string })
+	if coreEnv.__bt_dockHotkeysDone or type(coreEnv.AssignHotkey) ~= "function" then
+		return
 	end
-
-	local icons = getDockIconTable()
-	_G.__bt_dock_icons = icons
-	coreEnv.Assets = icons
-	coreEnv.__dockToolsRegistered = false
-	coreEnv.__bt_dockButtonCount = 0
-
-	local added = 0
 	for _, row in DOCK_TOOL_ROWS do
 		local iconKey, hotkey, moduleName = row[1], row[2], row[3]
-		local iconId = icons[iconKey]
-		if type(iconId) ~= "string" then
-			warn(`[BT] нет иконки: {iconKey}`)
-		else
-		local toolsFolder = tool:FindFirstChild("Tools")
-		if not toolsFolder or not toolsFolder:FindFirstChild(moduleName) then
-			warn(`[BT] нет Tools/{moduleName}`)
-		else
-
-		local lazy = makeLazyBuildingTool(tool, moduleName, moduleName .. " Tool", Color3.fromRGB(255, 140, 60))
-		if type(coreEnv.AssignHotkey) == "function" then
+		if type(icons[iconKey]) == "string" and tool:FindFirstChild("Tools") and tool.Tools:FindFirstChild(moduleName) then
 			coreEnv.AssignHotkey(hotkey, function()
 				local mod = runBuildingToolModule(tool, moduleName)
 				if type(coreEnv.EquipTool) == "function" then
@@ -642,17 +634,88 @@ local function registerDockDirect(coreEnv: any, tool: Tool)
 				end
 			end)
 		end
-		coreEnv.AddToolButton(iconId, hotkey, lazy)
-		added = added + 1
+	end
+	coreEnv.__bt_dockHotkeysDone = true
+end
+
+local function registerDockDirect(coreEnv: any, tool: Tool): number
+	if type(coreEnv) ~= "table" then
+		return 0
+	end
+
+	local icons = getDockIconTable()
+	_G.__bt_dock_icons = icons
+	coreEnv.Assets = icons
+
+	local toolList = coreEnv.__bt_ToolList
+	local dockHandle = coreEnv.__bt_DockHandle
+	local dockComponent = coreEnv.__bt_DockComponent
+	local ui = coreEnv.__bt_UI or coreEnv.UI
+	local Roact = coreEnv.__bt_Roact
+	local Cryo = coreEnv.__bt_Cryo
+
+	if type(toolList) ~= "table" or not dockHandle or not dockComponent or not Roact or not Cryo then
+		if type(coreEnv.AddToolButton) ~= "function" then
+			warn("[BT] док: нет __bt_ToolList и AddToolButton")
+			return 0
 		end
+		coreEnv.__bt_dockButtonCount = 0
+		local added = 0
+		for _, row in DOCK_TOOL_ROWS do
+			local iconKey, hotkey, moduleName = row[1], row[2], row[3]
+			local iconId = icons[iconKey]
+			if type(iconId) == "string" and tool:FindFirstChild("Tools") and tool.Tools:FindFirstChild(moduleName) then
+				ensureDockHotkeys(coreEnv, tool, icons)
+				local lazy = makeLazyBuildingTool(tool, moduleName, moduleName .. " Tool", Color3.fromRGB(255, 140, 60))
+				coreEnv.AddToolButton(iconId, hotkey, lazy)
+				added = added + 1
+			end
+		end
+		coreEnv.__bt_dockButtonCount = added
+		if type(coreEnv.RefreshToolDock) == "function" then
+			coreEnv.RefreshToolDock()
+		end
+		return added
+	end
+
+	table.clear(toolList)
+	local added = 0
+	for _, row in DOCK_TOOL_ROWS do
+		local iconKey, hotkey, moduleName = row[1], row[2], row[3]
+		local iconId = icons[iconKey]
+		if type(iconId) ~= "string" then
+			warn(`[BT] нет иконки: {iconKey}`)
+		elseif not tool:FindFirstChild("Tools") or not tool.Tools:FindFirstChild(moduleName) then
+			warn(`[BT] нет Tools/{moduleName}`)
+		else
+			ensureDockHotkeys(coreEnv, tool, icons)
+			table.insert(toolList, {
+				IconAssetId = iconId,
+				HotkeyLabel = hotkey,
+				Tool = makeLazyBuildingTool(tool, moduleName, moduleName .. " Tool", Color3.fromRGB(255, 140, 60)),
+			})
+			added = added + 1
 		end
 	end
 
-	coreEnv.__dockToolsRegistered = true
-	if type(coreEnv.RefreshToolDock) == "function" then
-		coreEnv.RefreshToolDock()
+	local updateOk, updateErr = pcall(function()
+		Roact.update(dockHandle, Roact.createElement(dockComponent, {
+			Core = coreEnv,
+			Tools = Cryo.List.join(toolList),
+			UIRoot = ui,
+		}))
+	end)
+	if not updateOk then
+		warn(`[BT] Roact.update дока: {updateErr}`)
 	end
+
+	coreEnv.__bt_dockButtonCount = added
+	coreEnv.__dockToolsRegistered = true
 	return added
+end
+
+function RemoteToolBuilder.rebuildToolDock(tool: Tool): number
+	return registerDockDirect(_G.Core, tool)
 end
 
 local function preloadMoveModule(tool: Tool): any?
@@ -674,7 +737,7 @@ local function preloadMoveModule(tool: Tool): any?
 	return moveModOrErr
 end
 
-local function finishDockRegistration(coreEnv: any, tool: Tool)
+local function finishDockRegistration(coreEnv: any, tool: Tool): number
 	local assetsScript = tool:FindFirstChild("Assets")
 	if assetsScript and assetsScript:IsA("ModuleScript") then
 		pcall(RemoteLoader.run, "Support/Assets.lua", tool, assetsScript)
@@ -689,11 +752,7 @@ local function finishDockRegistration(coreEnv: any, tool: Tool)
 		end
 		added = coreEnv.__bt_dockButtonCount or 0
 	end
-	if added == 0 then
-		warn("[BT] док: 0 кнопок — проверь Tools/ и иконки")
-	else
-		print(`[BT] док: {added} кнопок инструментов`)
-	end
+	return added
 end
 
 function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
@@ -757,7 +816,8 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		end
 
 		step("Док…")
-		finishDockRegistration(coreEnv, tool)
+		local dockCount = finishDockRegistration(coreEnv, tool)
+		tool:SetAttribute("BT_DockButtonCount", dockCount)
 
 		if tool:GetAttribute("BT_InterfacesPending") then
 			step("Интерфейсы (lol)…")

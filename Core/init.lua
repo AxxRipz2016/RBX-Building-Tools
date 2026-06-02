@@ -26,6 +26,8 @@ Make = require(Tool.Libraries.Make)
 local Roact = require(Tool.Vendor:WaitForChild 'Roact')
 local Maid = require(Tool.Libraries:WaitForChild 'Maid')
 local Cryo = require(Tool.Libraries:WaitForChild('Cryo'))
+Core.__bt_Roact = Roact
+Core.__bt_Cryo = Cryo
 
 -- References
 Support.ImportServices();
@@ -424,6 +426,12 @@ function InitializeUI()
 		UIRoot = UI;
 	})
 	local DockHandle = Roact.mount(DockElement, UI, 'Dock')
+
+	-- Solo/remote: прямой доступ к доку из лаунчера
+	Core.__bt_ToolList = ToolList
+	Core.__bt_DockHandle = DockHandle
+	Core.__bt_DockComponent = DockComponent
+	Core.__bt_UI = UI
 
 	-- Provide API for adding tool buttons to dock
 	Core.__bt_dockButtonCount = 0

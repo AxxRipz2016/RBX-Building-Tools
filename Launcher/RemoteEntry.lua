@@ -414,7 +414,14 @@ local ok, err = pcall(function()
 			end)
 		end
 
-		print(`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo} — готов`)
+		local dockCount = tool:GetAttribute("BT_DockButtonCount") or 0
+		if dockCount == 0 and type(RemoteToolBuilder.rebuildToolDock) == "function" then
+			dockCount = RemoteToolBuilder.rebuildToolDock(tool) or 0
+			tool:SetAttribute("BT_DockButtonCount", dockCount)
+		end
+		print(
+			`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · док {dockCount} кнопок · {RemoteLoader.getFetchCount()} файлов — готов`
+		)
 	end)
 end)
 

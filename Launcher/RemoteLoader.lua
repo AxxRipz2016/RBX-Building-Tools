@@ -713,6 +713,12 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		if not source:find("Core.__bt_Roact", 1, true) then
+			source = source:gsub(
+				"(local Cryo = require%(Tool%.Libraries:WaitForChild%('Cryo'%)%)\n)",
+				"%1Core.__bt_Roact = Roact\nCore.__bt_Cryo = Cryo\n"
+			)
+		end
 		source = applyCoreEquipSafetyPatches(source)
 		if not source:find("__bt_equip_guard", 1, true) then
 			source = source:gsub(
@@ -820,6 +826,16 @@ end;]]
 			"Tools = Cryo%.List%.join%(ToolList%);(%s*\n\t\t})",
 			"Tools = Cryo.List.join(ToolList);\n\t\t\tUIRoot = UI;%1"
 		)
+		if not source:find("Core.__bt_ToolList", 1, true) then
+			source = source:gsub(
+				"local DockHandle = Roact%.mount%(DockElement, UI, 'Dock'%)",
+				[[local DockHandle = Roact.mount(DockElement, UI, 'Dock')
+	Core.__bt_ToolList = ToolList
+	Core.__bt_DockHandle = DockHandle
+	Core.__bt_DockComponent = DockComponent
+	Core.__bt_UI = UI]]
+			)
+		end
 		if not source:find("function Core.RefreshToolDock", 1, true) then
 			source = source:gsub(
 				"Core%.AddToolButton = AddToolButton\n",
