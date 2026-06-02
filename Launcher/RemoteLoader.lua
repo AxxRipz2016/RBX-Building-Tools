@@ -107,6 +107,19 @@ local function normalizeBody(body: string): string
 	return body
 end
 
+local CORE_INIT_CHILDREN = { "Security", "History", "Selection", "Targeting" }
+
+local function patchCoreInitRequires(source: string): string
+	for _, child in CORE_INIT_CHILDREN do
+		local viaTool = `require(Tool:WaitForChild('Core'):WaitForChild('{child}'))`
+		source = source:gsub(`{child} = require%(script%.{child}%)`, `{child} = {viaTool}`)
+		source = source:gsub(`{child} = require%(__bt_script%.{child}%)`, `{child} = {viaTool}`)
+		source = source:gsub(`require%(script%.{child}%)`, viaTool)
+		source = source:gsub(`require%(__bt_script%.{child}%)`, viaTool)
+	end
+	return source
+end
+
 local function patchRemoteSource(path: string, source: string): string
 	if path:find("RobloxRenderer.lua", 1, true) then
 		source = source:gsub(
@@ -142,6 +155,7 @@ end]]
 	end
 
 	if path == "Core/init.lua" then
+		source = patchCoreInitRequires(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
 		end
@@ -588,15 +602,7 @@ local function runWithPinnedGlobals<T...>(fn: () -> T..., btRequire: any, tool: 
 end
 
 local function rewriteCoreChildRequires(source: string): string
-	source = source:gsub(
-		"require%(script%.([%w_]+)%)",
-		"require(Tool:WaitForChild('Core'):WaitForChild('%1'))"
-	)
-	source = source:gsub(
-		"require%(__bt_script%.([%w_]+)%)",
-		"require(Tool:WaitForChild('Core'):WaitForChild('%1'))"
-	)
-	return source
+	return patchCoreInitRequires(source)
 end
 
 -- ModuleScript в custom env (присваивания → env / Core)
