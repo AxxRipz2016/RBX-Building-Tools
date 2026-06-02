@@ -155,7 +155,15 @@ end]]
 				"%1Core.Security = Security\n"
 			)
 			source = source:gsub(
+				"(Security = require%(Tool:WaitForChild%('Core'%):WaitForChild%('Security')%)\n)",
+				"%1Core.Security = Security\n"
+			)
+			source = source:gsub(
 				"(History = require%(script%.History%)\n)",
+				"%1Core.History = History\n"
+			)
+			source = source:gsub(
+				"(History = require%(Tool:WaitForChild%('Core'%):WaitForChild%('History')%)\n)",
 				"%1Core.History = History\n"
 			)
 			source = source:gsub(
@@ -163,7 +171,15 @@ end]]
 				"%1Core.Selection = Selection\n"
 			)
 			source = source:gsub(
+				"(Selection = require%(Tool:WaitForChild%('Core'%):WaitForChild%('Selection')%)\n)",
+				"%1Core.Selection = Selection\n"
+			)
+			source = source:gsub(
 				"(Targeting = require%(script%.Targeting%)\n)",
+				"%1Core.Targeting = Targeting\n"
+			)
+			source = source:gsub(
+				"(Targeting = require%(Tool:WaitForChild%('Core'%):WaitForChild%('Targeting')%)\n)",
 				"%1Core.Targeting = Targeting\n"
 			)
 		end
@@ -523,6 +539,10 @@ end
 local TOOL_BIND = "_G.__bt_tool or Tool"
 
 local function rewriteToolParentForRemote(path: string, source: string): string
+	if path:sub(1, 6) == "Core/" and path ~= "Core/init.lua" then
+		source = source:gsub("Tool = script%.Parent%.Parent", `Tool = {TOOL_BIND};`)
+		source = source:gsub("Tool = __bt_script%.Parent%.Parent", `Tool = {TOOL_BIND};`)
+	end
 	if path == "Loader/init.lua" or path == "Core/init.lua" then
 		source = source:gsub("Tool = script%.Parent;", `Tool = {TOOL_BIND};`)
 		source = source:gsub("local Tool = script%.Parent;", `local Tool = {TOOL_BIND};`)
@@ -567,12 +587,30 @@ local function runWithPinnedGlobals<T...>(fn: () -> T..., btRequire: any, tool: 
 	return ok, result
 end
 
+local function rewriteCoreChildRequires(source: string): string
+	source = source:gsub(
+		"require%(script%.([%w_]+)%)",
+		"require(Tool:WaitForChild('Core'):WaitForChild('%1'))"
+	)
+	source = source:gsub(
+		"require%(__bt_script%.([%w_]+)%)",
+		"require(Tool:WaitForChild('Core'):WaitForChild('%1'))"
+	)
+	return source
+end
+
 -- ModuleScript в custom env (присваивания → env / Core)
 local function rewriteForModuleEnv(path: string, source: string): string
 	source = rewriteToolParentForRemote(path, source)
 	source = ensureModulePreamble(source)
+	if path == "Core/init.lua" then
+		source = source:gsub("^local script = [^\n]+\n", "local script = Tool:WaitForChild('Core')\n", 1)
+	end
 	-- require не заменяем на __bt_require: в теле должен быть require(), local require = … в preamble
 	source = rewriteCommon(source, false)
+	if path == "Core/init.lua" then
+		source = rewriteCoreChildRequires(source)
+	end
 	source = rewriteToolParentForRemote(path, source)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
