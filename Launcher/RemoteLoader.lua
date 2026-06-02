@@ -193,6 +193,7 @@ if not Core.__dockToolsRegistered then
 		Core.RefreshToolDock()
 	end
 end
+task.wait()
 ]]
 
 local function patchCoreModuleExports(source: string): string
@@ -400,6 +401,21 @@ end]]
 		source = source:gsub("new%(Roact%.Portal,", "false and new(Roact.Portal,")
 	end
 
+	if path == "Support/ReplicationListener.client.lua" then
+		source = [[
+local Indicator = script.Parent
+Indicator.Value = true
+]]
+	end
+
+	if path == "Support/DescendantCounter.local.client.lua" then
+		source = [[
+local Count = script.Parent
+local Tool = Count.Parent.Parent
+Count.Value = #Tool:GetDescendants()
+]]
+	end
+
 	if path == "UI/Notifications/init.lua" then
 		-- [=[ ]=] вместо [[ ]]: иначе `return Notifications]]` рвёт парсер RemoteLoader.lua
 		source = [=[local Root = script:FindFirstAncestorWhichIsA('Tool')
@@ -482,6 +498,14 @@ end;]]
 		source = source:gsub(
 			"Targeting:EnableTargeting%(%)\n\tSelection%.EnableOutlines%(%);",
 			"pcall(function()\n\t\tTargeting:EnableTargeting();\n\tend)\n\tSelection.EnableOutlines();"
+		)
+		source = source:gsub(
+			"while not UI do\n\t\twait%(0%.1%);",
+			"for __bt_ui = 1, 300 do\n\t\tif UI then break end\n\t\ttask.wait(0.05);"
+		)
+		source = source:gsub(
+			"while not Indicator%.Value do\r?\n\tIndicator%.Changed:Wait%(%);\r?\nend;",
+			"if not Indicator.Value then Indicator.Value = true end"
 		)
 		source = source:gsub(
 			"Connections = {};",
@@ -1242,6 +1266,9 @@ local function runModuleWithEnv(
 			end, btRequire, tool, scriptInstance)
 			if not ok then
 				error(`run part {i}: {runErr}`, 0)
+			end
+			if i % 2 == 0 then
+				task.wait()
 			end
 		end
 		return true

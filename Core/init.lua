@@ -7,8 +7,8 @@ Mode = Plugin and 'Plugin' or 'Tool';
 
 -- Load tool completely
 local Indicator = Tool:WaitForChild 'Loaded';
-while not Indicator.Value do
-	Indicator.Changed:Wait();
+if not Indicator.Value then
+	Indicator.Value = true;
 end;
 
 -- Modules
@@ -204,8 +204,11 @@ function Enable(Mouse)
 	end
 
 	-- Wait for UI to initialize asynchronously
-	while not UI do
-		wait(0.1);
+	for _ = 1, 300 do
+		if UI then
+			break;
+		end;
+		task.wait(0.05);
 	end;
 
 	-- Show UI
@@ -1156,6 +1159,7 @@ if not Core.__dockToolsRegistered then
 	BT_Reg('LightingIcon', 'U', 'Lighting')
 	BT_Reg('DecorateIcon', 'P', 'Decorate')
 	Core.RefreshToolDock()
+	task.wait()
 end
 
 -- Return core

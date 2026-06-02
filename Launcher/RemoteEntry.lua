@@ -116,10 +116,6 @@ _G.BT_LAUNCHER_LOAD = loadFromGit
 local Version = loadFn(httpGet(gitUrl("Launcher/Version.lua")), "@Version")()
 cacheTag = Version.Launcher
 
-if not httpGet(gitUrl("Launcher/RemoteEntry.lua")):find("ENTRY_REV = " .. tostring(ENTRY_REV), 1, true) then
-	warn("[BT] Кэш RemoteEntry устарел — используйте Launcher/Bootstrap.lua в paste, не старый RemoteEntry")
-end
-
 local LoadStatusUI = loadFn(httpGet(gitUrl("Launcher/LoadStatusUI.lua")), "@LoadStatusUI")()
 local ui = LoadStatusUI.create()
 ui.setVersionInfo(
@@ -191,35 +187,44 @@ local ok, err = pcall(function()
 
 	ui.setProgress(0, 0, "Запуск Core и инструментов…", true)
 
-	local runOk, runErr = pcall(function()
-		RemoteToolBuilder.StartRuntime(tool)
+	task.spawn(function()
+		task.wait()
+		local runOk, runErr = pcall(function()
+			RemoteToolBuilder.StartRuntime(tool)
+		end)
+		if not runOk then
+			ui.addError("StartRuntime", tostring(runErr))
+		end
+
+		RemoteToolBuilder.GiveToPlayer(tool, player)
+		if not runOk then
+			ui.addError("Tool", "в Backpack; Core/Loader не стартовал — «Копировать ошибку»")
+		end
+
+		local failCount = 0
+		for _ in RemoteLoader.getFailed() do
+			failCount += 1
+		end
+		local runErrCount = #RemoteLoader.getRuntimeErrors()
+
+		local doneText = if runOk and failCount == 0 and runErrCount == 0
+			then `r{Version.Launcher} · OK · {RemoteLoader.getFetchCount()} файлов · Tool в Backpack`
+			elseif not runOk
+			then `r{Version.Launcher} · Tool в Backpack · ошибка запуска (копируй ниже)`
+			else `r{Version.Launcher} · ошибки: {failCount} файлов, run: {runErrCount}`
+		ui.setDone(doneText)
+		if failCount > 0 or runErrCount > 0 or not runOk then
+			ui.setProgress(0, 0, doneText, false)
+		else
+			task.delay(2, function()
+				if ui.destroy then
+					ui.destroy()
+				end
+			end)
+		end
+
+		print(`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo} — готов`)
 	end)
-	if not runOk then
-		ui.addError("StartRuntime", tostring(runErr))
-	end
-
-	RemoteToolBuilder.GiveToPlayer(tool, player)
-	if not runOk then
-		ui.addError("Tool", "в Backpack; Core/Loader не стартовал — «Копировать ошибку»")
-	end
-
-	local failCount = 0
-	for _ in RemoteLoader.getFailed() do
-		failCount += 1
-	end
-	local runErrCount = #RemoteLoader.getRuntimeErrors()
-
-	local doneText = if runOk and failCount == 0 and runErrCount == 0
-		then `r{Version.Launcher} · OK · {RemoteLoader.getFetchCount()} файлов · Tool в Backpack`
-		elseif not runOk
-		then `r{Version.Launcher} · Tool в Backpack · ошибка запуска (копируй ниже)`
-		else `r{Version.Launcher} · ошибки: {failCount} файлов, run: {runErrCount}`
-	ui.setDone(doneText)
-	if failCount > 0 or runErrCount > 0 or not runOk then
-		ui.setProgress(0, 0, doneText, false)
-	end
-
-	print(`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · Roact {Version.Roact} · Cryo {Version.Cryo} — готов`)
 end)
 
 if not ok then

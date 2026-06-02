@@ -158,13 +158,21 @@ end
 local function attachLoadedIndicator(tool: Tool)
 	local loaded = Instance.new("BoolValue")
 	loaded.Name = "Loaded"
-	loaded.Value = false
 	loaded.Parent = tool
 
 	local descendantCount = Instance.new("IntValue")
 	descendantCount.Name = "DescendantCount"
-	descendantCount.Value = 0
 	descendantCount.Parent = loaded
+
+	-- Solo/executor: ReplicationListener ждёт #потомков и может крутить while без отдачи кадра → белый экран
+	if tool:GetAttribute("BT_LocalOnly") then
+		descendantCount.Value = math.max(1, #tool:GetDescendants())
+		loaded.Value = true
+		return
+	end
+
+	loaded.Value = false
+	descendantCount.Value = 0
 
 	local counter = Instance.new("LocalScript")
 	counter.Name = "DescendantCounter"
@@ -415,14 +423,24 @@ function RemoteToolBuilder.Build(
 	end
 
 	attachSyncAPI(tool)
-	attachLoadedIndicator(tool)
 	attachMetadata(tool)
+	attachLoadedIndicator(tool)
 
 	RemoteLoader.run("Support/LocalAPIEndpoint.local.client.lua", tool, tool.SyncAPI.LocalEndpoint :: LocalScript)
-	RemoteLoader.run("Support/DescendantCounter.local.client.lua", tool, tool.Loaded.DescendantCount.DescendantCounter :: LocalScript)
-	RemoteLoader.run("Support/ReplicationListener.client.lua", tool, tool.Loaded.ReplicationListener :: LocalScript)
 
-	-- Соло/executor: ReplicationListener может не успеть — Loader ждёт Loaded.Value
+	if not tool:GetAttribute("BT_LocalOnly") then
+		RemoteLoader.run(
+			"Support/DescendantCounter.local.client.lua",
+			tool,
+			tool.Loaded.DescendantCount.DescendantCounter :: LocalScript
+		)
+		RemoteLoader.run(
+			"Support/ReplicationListener.client.lua",
+			tool,
+			tool.Loaded.ReplicationListener :: LocalScript
+		)
+	end
+
 	local loaded = tool:FindFirstChild("Loaded")
 	if loaded and loaded:IsA("BoolValue") and not loaded.Value then
 		local count = loaded:FindFirstChild("DescendantCount")
@@ -430,6 +448,11 @@ function RemoteToolBuilder.Build(
 			count.Value = #tool:GetDescendants()
 		end
 		loaded.Value = true
+	elseif loaded and loaded:IsA("BoolValue") and tool:GetAttribute("BT_LocalOnly") then
+		local count = loaded:FindFirstChild("DescendantCount")
+		if count and count:IsA("IntValue") then
+			count.Value = math.max(count.Value, #tool:GetDescendants())
+		end
 	end
 
 	-- Tool в Backpack только после StartRuntime (см. RemoteEntry)
