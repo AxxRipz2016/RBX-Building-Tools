@@ -21,6 +21,11 @@ local continueOnError = true
 local runtimeErrors: { string } = {}
 local loadCancelled = false
 
+local NO_STUB_PATHS: { [string]: boolean } = {
+	["Core/init.lua"] = true,
+	["Loader/init.lua"] = true,
+}
+
 local CRITICAL_PATHS = {
 	"Core/init.lua",
 	"Loader/init.lua",
@@ -486,9 +491,18 @@ end
 local SCRIPT_PARENT_EXPR =
 	"((function(__s,__t) if __s ~= nil then local __p = __s.Parent if __p ~= nil then return __p end if __t ~= nil then local __n = __s.Name if __n == \"LocalEndpoint\" then return __t:FindFirstChild(\"SyncAPI\") end if __n == \"DescendantCounter\" then local __ld = __t:FindFirstChild(\"Loaded\") return __ld and __ld:FindFirstChild(\"DescendantCount\") end if __n == \"ReplicationListener\" then return __t:FindFirstChild(\"Loaded\") end end end return __t end)(__bt_script,__bt_tool))"
 
+-- Заменяем только идентификатор script, не поля вроде Core.script
+local function rewriteScriptIdentifier(source: string, replacement: string): string
+	source = source:gsub("([^%.%w_])script([%.:%(])", "%1" .. replacement .. "%2")
+	source = source:gsub("^script([%.:%(])", replacement .. "%1")
+	source = source:gsub("([^%.%w_])script(%f[%A])", "%1" .. replacement .. "%2")
+	source = source:gsub("^script(%f[%A])", replacement .. "%1")
+	return source
+end
+
 local function rewriteCommon(source: string, useBtRequire: boolean): string
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
-	source = source:gsub("(%f[%a])script(%f[%A])", "__bt_script")
+	source = rewriteScriptIdentifier(source, "__bt_script")
 	source = source:gsub("__bt_script%.Parent", SCRIPT_PARENT_EXPR)
 	if useBtRequire then
 		source = source:gsub("(%f[%a])require(%f[%A])", "__bt_require")
@@ -496,8 +510,11 @@ local function rewriteCommon(source: string, useBtRequire: boolean): string
 	return source
 end
 
--- ModuleScript: env = Core; script/require НЕ трогаем (иначе script.Security ломается)
+-- ModuleScript: env = Core; require не трогаем; script → Core.script (глобальный script в executor часто nil)
 local function rewriteForModuleEnv(path: string, source: string): string
+	if not source:find("local script = Core%.script", 1, true) then
+		source = "local script = Core.script\n" .. source
+	end
 	if path == "Loader/init.lua" or path == "Core/init.lua" then
 		source = source:gsub("Tool = script%.Parent;", "Tool = Tool;")
 		source = source:gsub("local Tool = script%.Parent;", "local Tool = Tool;")
@@ -591,13 +608,13 @@ local function buildRequire(tool: Tool)
 		local ok, result = pcall(RemoteLoader.run, modulePath, tool, target)
 		if not ok then
 			local msg = `require {modulePath} ({target:GetFullName()}): {result}`
-			if continueOnError then
+			if continueOnError and not NO_STUB_PATHS[modulePath] then
 				recordRunError(modulePath, msg)
 				return makeStubModule(modulePath)
 			end
 			error(`[BT] {msg}`, 0)
 		end
-		if result == nil and continueOnError then
+		if result == nil and continueOnError and not NO_STUB_PATHS[modulePath] then
 			return makeStubModule(modulePath)
 		end
 		return result
@@ -634,16 +651,13 @@ local function runModuleWithEnv(
 		end)
 	end
 
-	local ok, result = tryEnvRun()
+	local ok, result = tryWrapRun()
 	if not ok then
-		local wrapOk, wrapResult = tryWrapRun()
-		if wrapOk then
-			return wrapResult
+		local envOk, envResult = tryEnvRun()
+		if envOk then
+			return envResult
 		end
-		result = `{result}; {wrapResult}`
-	end
-	if not ok then
-		error(result, 0)
+		error(`{result}; {envResult}`, 0)
 	end
 	return result
 end
@@ -684,7 +698,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	end
 
 	if not ok then
-		if continueOnError then
+		if continueOnError and not NO_STUB_PATHS[path] then
 			recordRunError(path, tostring(result))
 			moduleCache[path] = false
 			return nil

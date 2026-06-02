@@ -18,21 +18,21 @@ function SelectionPane:init()
     self.PaneSize, self.SetPaneSize = Roact.createBinding(UDim2.new())
 
     local core = self.props.Core
-    if core and core.History then
+    if core and core.History and core.History.Changed and core.History.Changed.Connect then
         self:UpdateHistoryState()
         self.Maid.TrackHistory = core.History.Changed:Connect(function ()
             self:UpdateHistoryState()
         end)
     end
 
-    if core and core.Selection then
+    if core and core.Selection and core.Selection.Changed and core.Selection.Changed.Connect then
         self:UpdateSelectionState()
         self.Maid.TrackSelection = core.Selection.Changed:Connect(function ()
             self:UpdateSelectionState()
         end)
     end
 
-    if core and core.ExplorerVisibilityChanged then
+    if core and core.ExplorerVisibilityChanged and core.ExplorerVisibilityChanged.Connect then
         self:UpdateExplorerState()
         self.Maid.TrackExplorer = core.ExplorerVisibilityChanged:Connect(function ()
             self:UpdateExplorerState()

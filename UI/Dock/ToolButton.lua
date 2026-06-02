@@ -36,7 +36,10 @@ function ToolButton:render()
         Image = self.props.IconAssetId;
         AutoButtonColor = false;
         [Roact.Event.Activated] = function ()
-            self.props.Core.EquipTool(self.props.Tool)
+            local core = self.props.Core
+            if core and type(core.EquipTool) == "function" then
+                core.EquipTool(self.props.Tool)
+            end
         end;
     }, {
         Corners = new('UICorner', {
