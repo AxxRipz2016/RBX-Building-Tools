@@ -260,19 +260,29 @@ end]]
 	end
 
 	if path == "UI/Notifications/init.lua" then
-		-- Executor иногда теряет часть полей core внутри fastSpawn.
-		source = source:gsub(
-			"local core = self%.props%.Core",
-			"local core = self.props and self.props.Core"
-		)
-		source = source:gsub(
-			"local ok, IsOutdated = pcall%(isVersionOutdated%)",
-			"local ok, IsOutdated = pcall(function() return isVersionOutdated(core) end)"
-		)
-		source = source:gsub(
-			"if not self%.Active or not syncApi or type%(syncApi%.Invoke%) ~= \"function\" then",
-			"if not self.Active or not syncApi or type(syncApi.Invoke) ~= \"function\" or type(syncApi.Invoke) ~= \"function\" then"
-		)
+		-- Жесткий fallback для executor: убираем fastSpawn/SyncAPI вызовы,
+		-- которые периодически падают nil-value в этом окружении.
+		source = [[local Root = script:FindFirstAncestorWhichIsA('Tool')
+local Vendor = Root:WaitForChild('Vendor')
+local Roact = require(Vendor:WaitForChild('Roact'))
+local new = Roact.createElement
+
+local Notifications = Roact.PureComponent:extend(script.Name)
+
+function Notifications:init()
+	self:setState({
+		ShouldWarnAboutHttpService = false;
+		ShouldWarnAboutUpdate = false;
+	})
+end
+
+function Notifications:render()
+	return new('ScreenGui', {
+		Enabled = true;
+	}, {})
+end
+
+return Notifications]]
 	end
 
 	if path == "Core/Targeting.lua" then
