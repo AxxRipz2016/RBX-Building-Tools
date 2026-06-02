@@ -510,22 +510,36 @@ local function rewriteCommon(source: string, useBtRequire: boolean): string
 	return source
 end
 
--- ModuleScript: env = Core; require не трогаем; script → Core.script (глобальный script в executor часто nil)
-local function rewriteForModuleEnv(path: string, source: string): string
-	if not source:find("local script = Core%.script", 1, true) then
-		source = "local script = Core.script\n" .. source
-	end
+local function rewriteToolParentForRemote(path: string, source: string): string
 	if path == "Loader/init.lua" or path == "Core/init.lua" then
 		source = source:gsub("Tool = script%.Parent;", "Tool = Tool;")
 		source = source:gsub("local Tool = script%.Parent;", "local Tool = Tool;")
 	end
+	return source
+end
+
+-- ModuleScript в custom env: require нативный; script из env (глобальный script в executor часто nil)
+local function rewriteForModuleEnv(path: string, source: string): string
+	if not source:find("local script = %(typeof%(script%)", 1, true) then
+		source = 'local script = (typeof(script) == "Instance" and script) or __bt_script\n' .. source
+	end
+	source = rewriteToolParentForRemote(path, source)
 	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
 	return source
 end
 
-local function rewriteForWrap(source: string): string
+-- ModuleScript в env: __bt_script/__bt_require; присваивания попадают в env (не в пустой _G.Core)
+local function rewriteForEnvWrap(path: string, source: string): string
+	source = rewriteCommon(source, true)
+	source = rewriteToolParentForRemote(path, source)
+	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
+	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
+	return source
+end
+
+local function rewriteForLocalWrap(source: string): string
 	source = rewriteCommon(source, true)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
@@ -534,7 +548,7 @@ local function rewriteForWrap(source: string): string
 end
 
 local function wrapChunkSource(source: string): string
-	local body = rewriteForWrap(source)
+	local body = rewriteForLocalWrap(source)
 	return "return function(__bt_script, __bt_tool, __bt_require)\n"
 		.. WRAP_TOOL_PARENT_PREAMBLE
 		.. "if __bt_script == nil and __bt_tool == nil then error('[BT] script и Tool nil', 0) end\n"
@@ -581,6 +595,7 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 		CollectionService = game:GetService("CollectionService"),
 	}
 	env.Core = env
+	env.Core.script = scriptInstance
 	return setmetatable(env, {
 		__index = function(_t, k)
 			local v = rawget(env, k)
@@ -630,36 +645,27 @@ local function runModuleWithEnv(
 ): any
 	local compileFn = RemoteLoader.compile or defaultCompile
 
-	local function tryEnvRun(): (boolean, any)
-		local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
-		local body = rewriteForModuleEnv(path, raw)
-		local fn, compileError = compileFn(body, "@" .. path, coreEnv)
+	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
+
+	local function tryCompiledBody(body: string, chunkSuffix: string): (boolean, any)
+		local fn, compileError = compileFn(body, "@" .. path .. chunkSuffix, coreEnv)
 		if not fn then
 			return false, `compile: {compileError}`
 		end
 		return pcall(fn)
 	end
 
-	local function tryWrapRun(): (boolean, any)
-		local wrapped = wrapChunkSource(raw)
-		local fn, compileError = compileFn(wrapped, "@" .. path .. "#wrap", nil)
-		if not fn then
-			return false, `wrap compile: {compileError}`
-		end
-		return pcall(function()
-			return fn()(scriptInstance, tool, btRequire)
-		end)
+	local ok, result = tryCompiledBody(rewriteForEnvWrap(path, raw), "")
+	if ok then
+		return result
 	end
 
-	local ok, result = tryWrapRun()
-	if not ok then
-		local envOk, envResult = tryEnvRun()
-		if envOk then
-			return envResult
-		end
-		error(`{result}; {envResult}`, 0)
+	local envOk, envResult = tryCompiledBody(rewriteForModuleEnv(path, raw), "#env")
+	if envOk then
+		return envResult
 	end
-	return result
+
+	error(`{result}; {envResult}`, 0)
 end
 
 function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): any
