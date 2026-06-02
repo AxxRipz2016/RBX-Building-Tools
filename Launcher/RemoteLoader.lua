@@ -134,8 +134,16 @@ Core.Assets = Assets
 local CORE_UI_EXPORT_BLOCK = [[
 Core.ToolChanged = ToolChanged
 Core.Mode = Mode
+]]
+
+-- AssignHotkey/EquipTool объявляются позже — не экспортировать раньше (иначе Core.AssignHotkey = nil)
+local CORE_LATE_EXPORT_BLOCK = [[
 Core.EquipTool = EquipTool
 Core.AssignHotkey = AssignHotkey
+Core.ToggleExplorer = ToggleExplorer
+Core.DeleteSelection = DeleteSelection
+Core.CloneSelection = CloneSelection
+Core.ExportSelection = ExportSelection
 ]]
 
 local function patchCoreModuleExports(source: string): string
@@ -155,6 +163,18 @@ local function patchCoreUiExports(source: string): string
 	end
 	local inserted = source:gsub("(ToolChanged = Signal%.new%(%)\n)", "%1" .. CORE_UI_EXPORT_BLOCK, 1)
 	return inserted
+end
+
+local function patchCoreLateExports(source: string): string
+	if source:find("InitializeUI%(%);\nCore%.EquipTool = EquipTool", 1, true) then
+		return source
+	end
+	-- убрать ранний ошибочный экспорт (r47): AssignHotkey ещё не объявлен
+	source = source:gsub(
+		"(ToolChanged = Signal%.new%(%)\nCore%.ToolChanged = ToolChanged\nCore%.Mode = Mode\n)Core%.EquipTool = EquipTool\nCore%.AssignHotkey = AssignHotkey\n",
+		"%1"
+	)
+	return source:gsub("(InitializeUI%(%);\n)", "%1" .. CORE_LATE_EXPORT_BLOCK .. "\n", 1)
 end
 
 local function patchCoreReturn(source: string): string
@@ -211,6 +231,7 @@ end]]
 		source = patchCoreInitRequires(source)
 		source = patchCoreModuleExports(source)
 		source = patchCoreUiExports(source)
+		source = patchCoreLateExports(source)
 		source = patchCoreReturn(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
