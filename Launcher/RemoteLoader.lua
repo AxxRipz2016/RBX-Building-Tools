@@ -335,7 +335,7 @@ return Notifications]]
 			"local Core = GetCore();\n\tif not Core.Connections then\n\t\tCore.Connections = {};\n\tend\n\tlocal Connections = Core.Connections;"
 		)
 		source = source:gsub(
-			"if not Core%.IsSelectable%(%{ NewTarget %}%) then",
+			"if not Core%.IsSelectable%({ NewTarget }%) then",
 			"if (not Core) or type(Core.IsSelectable) ~= 'function' or not Core.IsSelectable({ NewTarget }) then"
 		)
 		source = source:gsub(
@@ -396,9 +396,10 @@ end;]]
 			"Tools = ToolList;\n\t\tUIRoot = UI;",
 			1
 		)
+		-- В паттерне gsub нельзя %}: иначе "invalid pattern capture"
 		source = source:gsub(
-			"Roact%.update%(DockHandle, Roact%.createElement%(DockComponent, {\n\t\t\tCore = Core;\n\t\t\tTools = Cryo%.List%.join%(ToolList%);\n\t\t}%)\)",
-			"Roact.update(DockHandle, Roact.createElement(DockComponent, {\n\t\t\tCore = Core;\n\t\t\tTools = Cryo.List.join(ToolList);\n\t\t\tUIRoot = UI;\n\t\t}))"
+			"Tools = Cryo%.List%.join%(ToolList%);(%s*\n\t\t})",
+			"Tools = Cryo.List.join(ToolList);\n\t\t\tUIRoot = UI;%1"
 		)
 		source = source:gsub(
 			"Core%.AddToolButton = AddToolButton\n",
