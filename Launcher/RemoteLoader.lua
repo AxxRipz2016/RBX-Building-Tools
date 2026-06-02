@@ -259,6 +259,33 @@ end]]
 		source = source:gsub("new%(Roact%.Portal,", "false and new(Roact.Portal,")
 	end
 
+	if path == "UI/Notifications/init.lua" then
+		-- Executor иногда теряет часть полей core внутри fastSpawn.
+		source = source:gsub(
+			"local core = self%.props%.Core",
+			"local core = self.props and self.props.Core"
+		)
+		source = source:gsub(
+			"local ok, IsOutdated = pcall%(isVersionOutdated%)",
+			"local ok, IsOutdated = pcall(function() return isVersionOutdated(core) end)"
+		)
+		source = source:gsub(
+			"if not self%.Active or not syncApi or type%(syncApi%.Invoke%) ~= \"function\" then",
+			"if not self.Active or not syncApi or type(syncApi.Invoke) ~= \"function\" or type(syncApi.Invoke) ~= \"function\" then"
+		)
+	end
+
+	if path == "Core/Targeting.lua" then
+		source = source:gsub(
+			"if not Core%.IsSelectable%(%{ NewTarget %}%) then",
+			"if (not Core) or type(Core.IsSelectable) ~= 'function' or not Core.IsSelectable({ NewTarget }) then"
+		)
+		source = source:gsub(
+			"if not Core%.Selection%.IsSelected%(NewScopeTarget%) then",
+			"if Core.Selection and type(Core.Selection.IsSelected) == 'function' and not Core.Selection.IsSelected(NewScopeTarget) then"
+		)
+	end
+
 	if path == "Core/init.lua" then
 		source = patchCoreSelfReference(source)
 		source = patchCoreInitRequires(source)
@@ -287,6 +314,12 @@ end]]
 	end
 end;]]
 		)
+		-- UI должна показываться только когда Tool действительно в руках персонажа.
+		source = source:gsub(
+			"UI%.Parent = UIContainer;",
+			"if Mode ~= 'Tool' or (Player.Character and Tool.Parent == Player.Character) then\n\t\tUI.Parent = UIContainer;\n\tend;"
+		)
+		source = source:gsub("UI%.Parent = script;", "UI.Parent = nil;")
 		source = patchCoreReturn(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
