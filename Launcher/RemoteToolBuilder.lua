@@ -309,10 +309,27 @@ function RemoteToolBuilder.Build(
 
 	local tool = Instance.new("Tool")
 	tool.Name = Config.ToolName
-	tool.RequiresHandle = false
+	tool.RequiresHandle = true
 	tool.CanBeDropped = true
 	tool:SetAttribute("BT_LocalOnly", true)
 	tool.Parent = getStagingParent()
+
+	-- Handle, чтобы Tool можно было держать в руках (куб).
+	do
+		local handle = Instance.new("Part")
+		handle.Name = "Handle"
+		handle.Size = Vector3.new(1, 1, 1)
+		handle.Color = Color3.fromRGB(255, 140, 60)
+		handle.Material = Enum.Material.SmoothPlastic
+		handle.Anchored = false
+		handle.CanCollide = false
+		handle.CanTouch = false
+		handle.CanQuery = false
+		handle.Massless = true
+		handle.TopSurface = Enum.SurfaceType.Smooth
+		handle.BottomSurface = Enum.SurfaceType.Smooth
+		handle.Parent = tool
+	end
 
 	if onMessage then
 		onMessage("Сборка дерева модулей…")
