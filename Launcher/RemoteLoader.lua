@@ -168,11 +168,11 @@ local CORE_DOCK_REGISTER_BLOCK = [[
 
 if not Core.__dockToolsRegistered then
 	Core.__dockToolsRegistered = true
-	local function LazyTool(moduleName, displayName, brickColor)
+	local function LazyTool(moduleName, displayName, themeColor)
 		local loaded
 		local proxy = {
 			Name = displayName;
-			Color = brickColor;
+			Color = themeColor;
 			__btModuleName = moduleName;
 		}
 		setmetatable(proxy, {
@@ -187,27 +187,27 @@ if not Core.__dockToolsRegistered then
 		})
 		return proxy
 	end
-	local function BT_Reg(iconKey, hotkey, moduleName, displayName, brickColor)
-		local lazy = LazyTool(moduleName, displayName, brickColor)
+	local function BT_Reg(iconKey, hotkey, moduleName, displayName, themeColor)
+		local lazy = LazyTool(moduleName, displayName, themeColor)
 		AssignHotkey(hotkey, function()
 			EquipTool(require(Tool:WaitForChild('Tools'):WaitForChild(moduleName)))
 		end)
 		AddToolButton(Assets[iconKey], hotkey, lazy)
 	end
-	BT_Reg('MoveIcon', 'Z', 'Move', 'Move Tool', BrickColor.new('Deep orange'))
-	BT_Reg('ResizeIcon', 'X', 'Resize', 'Resize Tool', BrickColor.new('Bright blue'))
-	BT_Reg('RotateIcon', 'C', 'Rotate', 'Rotate Tool', BrickColor.new('Bright green'))
-	BT_Reg('PaintIcon', 'V', 'Paint', 'Paint Tool', BrickColor.new('Bright red'))
-	BT_Reg('SurfaceIcon', 'B', 'Surface', 'Surface Tool', BrickColor.new('Bright yellow'))
-	BT_Reg('MaterialIcon', 'N', 'Material', 'Material Tool', BrickColor.new('Medium green'))
-	BT_Reg('AnchorIcon', 'M', 'Anchor', 'Anchor Tool', BrickColor.new('Bright orange'))
-	BT_Reg('CollisionIcon', 'K', 'Collision', 'Collision Tool', BrickColor.new('Bright violet'))
-	BT_Reg('NewPartIcon', 'J', 'NewPart', 'New Part Tool', BrickColor.new('White'))
-	BT_Reg('MeshIcon', 'H', 'Mesh', 'Mesh Tool', BrickColor.new('Pink'))
-	BT_Reg('TextureIcon', 'G', 'Texture', 'Texture Tool', BrickColor.new('Magenta'))
-	BT_Reg('WeldIcon', 'F', 'Weld', 'Weld Tool', BrickColor.new('Black'))
-	BT_Reg('LightingIcon', 'U', 'Lighting', 'Lighting Tool', BrickColor.new('Bright yellow'))
-	BT_Reg('DecorateIcon', 'P', 'Decorate', 'Decorate Tool', BrickColor.new('Hot pink'))
+	BT_Reg('MoveIcon', 'Z', 'Move', 'Move Tool', Color3.fromRGB(255, 140, 60))
+	BT_Reg('ResizeIcon', 'X', 'Resize', 'Resize Tool', Color3.fromRGB(0, 120, 255))
+	BT_Reg('RotateIcon', 'C', 'Rotate', 'Rotate Tool', Color3.fromRGB(80, 200, 80))
+	BT_Reg('PaintIcon', 'V', 'Paint', 'Paint Tool', Color3.fromRGB(255, 80, 80))
+	BT_Reg('SurfaceIcon', 'B', 'Surface', 'Surface Tool', Color3.fromRGB(255, 220, 80))
+	BT_Reg('MaterialIcon', 'N', 'Material', 'Material Tool', Color3.fromRGB(60, 160, 80))
+	BT_Reg('AnchorIcon', 'M', 'Anchor', 'Anchor Tool', Color3.fromRGB(255, 160, 60))
+	BT_Reg('CollisionIcon', 'K', 'Collision', 'Collision Tool', Color3.fromRGB(160, 80, 255))
+	BT_Reg('NewPartIcon', 'J', 'NewPart', 'New Part Tool', Color3.fromRGB(240, 240, 240))
+	BT_Reg('MeshIcon', 'H', 'Mesh', 'Mesh Tool', Color3.fromRGB(255, 150, 200))
+	BT_Reg('TextureIcon', 'G', 'Texture', 'Texture Tool', Color3.fromRGB(220, 80, 220))
+	BT_Reg('WeldIcon', 'F', 'Weld', 'Weld Tool', Color3.fromRGB(30, 30, 30))
+	BT_Reg('LightingIcon', 'U', 'Lighting', 'Lighting Tool', Color3.fromRGB(255, 230, 100))
+	BT_Reg('DecorateIcon', 'P', 'Decorate', 'Decorate Tool', Color3.fromRGB(255, 100, 180))
 	if Core.RefreshToolDock then
 		Core.RefreshToolDock()
 	end
