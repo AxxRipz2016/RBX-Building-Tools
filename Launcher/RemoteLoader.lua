@@ -256,13 +256,28 @@ end]]
 	end
 
 	if path == "Loader/init.lua" then
+		local loaderBootstrap = [[
+if Core then
+	if not Core.Support then
+		Core.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))
+	end
+	if type(Core.AddToolButton) ~= 'function' then
+		Core.AddToolButton = function() end
+	end
+end
+]]
 		source = source:gsub(
 			"(local Core = require%(Tool:WaitForChild 'Core'%)%)\n",
-			"%1\nif Core and not Core.Support then\n\tCore.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))\nend\n"
+			"%1\n" .. loaderBootstrap
 		)
 		source = source:gsub(
 			"(local Core = require%(Tool:WaitForChild%('Core'%)%)\n)",
-			"%1if Core and not Core.Support then\n\tCore.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))\nend\n"
+			"%1" .. loaderBootstrap
+		)
+		-- executor: Core.Support.Call часто nil — тот же смысл, что Support.Call(EquipTool, tool)
+		source = source:gsub(
+			"Core%.AssignHotkey%('([^']+)', Core%.Support%.Call%(Core%.EquipTool, (%w+)%)%);",
+			"Core.AssignHotkey('%1', function() Core.EquipTool(%2) end);"
 		)
 	end
 
