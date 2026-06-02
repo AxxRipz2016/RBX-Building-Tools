@@ -1265,7 +1265,13 @@ function RegisterDockTools()
 	end
 
 	local function BT_Reg(iconKey, hotkey, moduleName, displayName, themeColor)
-		local iconId = Assets[iconKey]
+		local iconId = rawget(Assets, iconKey)
+		if type(iconId) ~= "string" then
+			local fb = _G.__bt_dock_icons
+			if type(fb) == "table" then
+				iconId = fb[iconKey]
+			end
+		end
 		if type(iconId) ~= "string" then
 			warn("[BT] нет иконки:", iconKey)
 			return

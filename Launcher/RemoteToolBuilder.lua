@@ -506,6 +506,48 @@ function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 	tool.Parent = player:WaitForChild("Backpack")
 end
 
+local function preloadMoveModule(tool: Tool): any?
+	local toolsFolder = tool:FindFirstChild("Tools")
+	local moveScript = toolsFolder and toolsFolder:FindFirstChild("Move")
+	if not moveScript or not moveScript:IsA("ModuleScript") then
+		warn("[BT] Move ModuleScript не найден")
+		return nil
+	end
+	local okMove, moveModOrErr = pcall(RemoteLoader.run, "Tools/Move/init.lua", tool, moveScript)
+	if not okMove then
+		warn(`[BT] Move preload: {moveModOrErr}`)
+		return nil
+	end
+	if type(moveModOrErr) ~= "table" or type(moveModOrErr.Equip) ~= "function" then
+		warn("[BT] Move preload: модуль без Equip/Unequip")
+		return nil
+	end
+	return moveModOrErr
+end
+
+local function finishDockRegistration(coreEnv: any, tool: Tool)
+	if type(coreEnv) ~= "table" or type(coreEnv.RegisterDockTools) ~= "function" then
+		return
+	end
+	_G.__bt_dock_icons = req("BT_DockIcons")
+	local assetsScript = tool:FindFirstChild("Assets")
+	if assetsScript and assetsScript:IsA("ModuleScript") then
+		pcall(RemoteLoader.run, "Support/Assets.lua", tool, assetsScript)
+	end
+	coreEnv.__dockToolsRegistered = false
+	coreEnv.__bt_dockButtonCount = 0
+	local ok, err = pcall(coreEnv.RegisterDockTools)
+	if not ok then
+		warn(`[BT] RegisterDockTools: {err}`)
+	end
+	local count = coreEnv.__bt_dockButtonCount or 0
+	if count == 0 then
+		warn("[BT] док: 0 кнопок инструментов — проверь Assets и BT_DockIcons")
+	else
+		print(`[BT] док: {count} кнопок инструментов`)
+	end
+end
+
 function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 	local function step(msg: string)
 		if onStep then
@@ -515,49 +557,59 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 	end
 
 	if tool:GetAttribute("BT_LocalOnly") then
-		step("Core…")
-		local coreScript = tool:WaitForChild("Core") :: ModuleScript
+		_G.__bt_tool = tool
+
+		step("Assets…")
 		local assetsScript = tool:FindFirstChild("Assets")
 		if assetsScript and assetsScript:IsA("ModuleScript") then
 			pcall(RemoteLoader.run, "Support/Assets.lua", tool, assetsScript)
 		end
+		_G.__bt_dock_icons = req("BT_DockIcons")
 
+		step("Move…")
+		local moveMod = preloadMoveModule(tool)
+
+		step("Core…")
+		local coreScript = tool:WaitForChild("Core") :: ModuleScript
 		local coreEnv = RemoteLoader.run("Core/init.lua", tool, coreScript)
 		if type(coreEnv) == "table" then
 			_G.Core = coreEnv
+			if moveMod then
+				coreEnv.__bt_defaultMove = moveMod
+			end
 			local rawEquip = coreEnv.EquipTool
 			if type(rawEquip) == "function" then
 				coreEnv.EquipTool = function(toolModule: any)
-					local move = coreEnv.__bt_defaultMove
-					if type(toolModule) ~= "table" or type(toolModule.Equip) ~= "function" then
-						toolModule = move
+					local resolved = moveMod
+					if type(toolModule) == "table" and type(toolModule.Equip) == "function" then
+						resolved = toolModule
+					elseif type(coreEnv.ResolveBuildingToolModule) == "function" then
+						local fromResolve = coreEnv.ResolveBuildingToolModule(toolModule)
+						if type(fromResolve) == "table" and type(fromResolve.Equip) == "function" then
+							resolved = fromResolve
+						end
 					end
-					if type(toolModule) ~= "table" or type(toolModule.Equip) ~= "function" then
+					if type(resolved) ~= "table" or type(resolved.Equip) ~= "function" then
+						resolved = coreEnv.__bt_defaultMove or moveMod
+					end
+					if type(resolved) ~= "table" or type(resolved.Equip) ~= "function" then
 						warn("[BT] EquipTool: модуль инструмента недоступен")
 						return
 					end
-					return rawEquip(toolModule)
+					return rawEquip(resolved)
 				end
-			end
-			if type(coreEnv.RegisterDockTools) == "function" then
-				pcall(coreEnv.RegisterDockTools)
 			end
 		end
 
-		step("Move…")
-		local toolsFolder = tool:FindFirstChild("Tools")
-		local moveScript = toolsFolder and toolsFolder:FindFirstChild("Move")
-		if moveScript and moveScript:IsA("ModuleScript") then
-			local okMove, moveModOrErr = pcall(RemoteLoader.run, "Tools/Move/init.lua", tool, moveScript)
-			if okMove and type(moveModOrErr) == "table" and type(moveModOrErr.Equip) == "function" and type(coreEnv) == "table" then
-				coreEnv.__bt_defaultMove = moveModOrErr
-				_G.Core = coreEnv
-			elseif not okMove then
-				warn(`[BT] Move preload: {moveModOrErr}`)
-			else
-				warn("[BT] Move preload: модуль без Equip/Unequip")
+		if not moveMod then
+			moveMod = preloadMoveModule(tool)
+			if moveMod and type(coreEnv) == "table" then
+				coreEnv.__bt_defaultMove = moveMod
 			end
 		end
+
+		step("Док…")
+		finishDockRegistration(coreEnv, tool)
 
 		if tool:GetAttribute("BT_InterfacesPending") then
 			step("Интерфейсы (lol)…")

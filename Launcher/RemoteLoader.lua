@@ -266,7 +266,13 @@ function RegisterDockTools()
 		return proxy
 	end
 	local function BT_Reg(iconKey, hotkey, moduleName, displayName, themeColor)
-		local iconId = Assets[iconKey]
+		local iconId = rawget(Assets, iconKey)
+		if type(iconId) ~= "string" then
+			local fb = _G.__bt_dock_icons
+			if type(fb) == "table" then
+				iconId = fb[iconKey]
+			end
+		end
 		if type(iconId) ~= "string" then
 			warn("[BT] нет иконки:", iconKey)
 			return
@@ -326,6 +332,11 @@ local function patchCoreLateExports(source: string): string
 		"Core.AddToolButton(Assets[iconKey], hotkey,"
 	)
 	if source:find("function RegisterDockTools", 1, true) then
+		source = source:gsub(
+			"InitializeUI%(%);\r?\nRegisterDockTools%(%);",
+			"InitializeUI(); -- BT: RegisterDockTools deferred to StartRuntime",
+			1
+		)
 		if not source:find("RegisterDockTools%(%);", 1, true) then
 			source = source:gsub("(InitializeUI%(%);%s*\n)", "%1RegisterDockTools();\n", 1)
 		end
@@ -646,6 +657,7 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		source = applyCoreEquipSafetyPatches(source)
 		if not source:find("__bt_equip_guard", 1, true) then
 			source = source:gsub(
 				"function EquipTool%(BuildingToolModule%)\r?\n\t%-%- Equips[^\n]*\n",
@@ -1053,6 +1065,43 @@ function RemoteLoader.getFetchCount(): number
 	return fetchCount
 end
 
+function RemoteLoader.getCachedModule(path: string): any
+	local cached = moduleCache[path]
+	if cached == false then
+		return nil
+	end
+	return cached
+end
+
+local function applyCoreEquipSafetyPatches(source: string): string
+	source = source:gsub(
+		"BuildingToolModule:Equip%(%);",
+		[[if type(BuildingToolModule) == "table" and type(BuildingToolModule.Equip) == "function" then
+		local __bt_ok, __bt_err = pcall(function()
+			BuildingToolModule:Equip()
+		end)
+		if not __bt_ok then
+			warn("[BT] Equip failed:", __bt_err)
+		end
+	end]]
+	)
+	source = source:gsub(
+		"EquipTool%(initialTool%);",
+		[[do
+		local __bt_t = initialTool
+		if type(__bt_t) ~= "table" or type(__bt_t.Equip) ~= "function" then
+			__bt_t = (type(Core) == "table" and Core.__bt_defaultMove) or nil
+		end
+		if type(__bt_t) == "table" and type(__bt_t.Equip) == "function" then
+			EquipTool(__bt_t)
+		else
+			warn("[BT] Enable: Move недоступен, Equip пропущен")
+		end
+	end]]
+	)
+	return source
+end
+
 function RemoteLoader.registerModule(moduleScript: ModuleScript, path: string)
 	registry[moduleScript] = path
 	moduleScript:SetAttribute("BTPath", path)
@@ -1372,6 +1421,7 @@ local function rewriteForModuleEnv(path: string, source: string): string
 	if path == "Core/init.lua" then
 		source = patchCoreSelfReference(source)
 		source = patchCoreToolParamShadowing(source)
+		source = applyCoreEquipSafetyPatches(source)
 	end
 	return source
 end
