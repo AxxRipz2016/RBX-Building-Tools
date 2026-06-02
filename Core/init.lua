@@ -1165,7 +1165,7 @@ if not Core.__dockToolsRegistered then
 		AssignHotkey(hotkey, function()
 			EquipTool(require(Tool:WaitForChild('Tools'):WaitForChild(moduleName)))
 		end)
-		AddToolButton(Assets[iconKey], hotkey, lazy)
+		Core.AddToolButton(Assets[iconKey], hotkey, lazy)
 	end
 	BT_Reg('MoveIcon', 'Z', 'Move', 'Move Tool', Color3.fromRGB(255, 140, 60))
 	BT_Reg('ResizeIcon', 'X', 'Resize', 'Resize Tool', Color3.fromRGB(0, 120, 255))

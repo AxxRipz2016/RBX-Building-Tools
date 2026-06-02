@@ -432,11 +432,11 @@ function RemoteToolBuilder.Build(
 	if onMessage then
 		onMessage("Предзагрузка Libraries…")
 	end
-	RemoteLoader.preloadByPrefixes(paths, { "Libraries/" })
+	RemoteLoader.preloadByPrefixes(paths, { "Libraries/" }, onFile)
 	if onMessage then
 		onMessage("Предзагрузка Roact…")
 	end
-	RemoteLoader.preloadByPrefixes(paths, { "Vendor/Roact/" })
+	RemoteLoader.preloadByPrefixes(paths, { "Vendor/Roact/" }, onFile)
 
 	if tool:GetAttribute("BT_LocalOnly") then
 		if onMessage then
@@ -444,7 +444,7 @@ function RemoteToolBuilder.Build(
 		end
 		local warmPrefixes = { "Core/", "Tools/Move/", "UI/Dock/", "UI/Explorer/", "Support/Assets.lua" }
 		for _, prefix in warmPrefixes do
-			RemoteLoader.preloadByPrefixes(paths, { prefix })
+			RemoteLoader.preloadByPrefixes(paths, { prefix }, onFile)
 			task.wait()
 		end
 	else

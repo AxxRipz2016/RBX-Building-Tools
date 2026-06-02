@@ -188,11 +188,14 @@ if not Core.__dockToolsRegistered then
 		return proxy
 	end
 	local function BT_Reg(iconKey, hotkey, moduleName, displayName, themeColor)
+		if type(Core.AddToolButton) ~= "function" then
+			return
+		end
 		local lazy = LazyTool(moduleName, displayName, themeColor)
 		AssignHotkey(hotkey, function()
 			EquipTool(require(Tool:WaitForChild('Tools'):WaitForChild(moduleName)))
 		end)
-		AddToolButton(Assets[iconKey], hotkey, lazy)
+		Core.AddToolButton(Assets[iconKey], hotkey, lazy)
 	end
 	BT_Reg('MoveIcon', 'Z', 'Move', 'Move Tool', Color3.fromRGB(255, 140, 60))
 	BT_Reg('ResizeIcon', 'X', 'Resize', 'Resize Tool', Color3.fromRGB(0, 120, 255))
@@ -234,6 +237,11 @@ local function patchCoreUiExports(source: string): string
 end
 
 local function patchCoreLateExports(source: string): string
+	source = source:gsub("BrickColor%.new%('Black'%)", "BrickColor.new('Really black')")
+	source = source:gsub(
+		"AddToolButton%(Assets%[iconKey%], hotkey,",
+		"Core.AddToolButton(Assets[iconKey], hotkey,"
+	)
 	if source:find("BT_Reg%('MoveIcon'", 1, true) then
 		return source
 	end
@@ -892,25 +900,37 @@ function RemoteLoader.preloadRemaining(
 	return hardFailures
 end
 
-function RemoteLoader.preloadByPrefixes(paths: { string }, prefixes: { string })
-	table.sort(paths, function(a, b)
-		return #a < #b
-	end)
-
+function RemoteLoader.preloadByPrefixes(
+	paths: { string },
+	prefixes: { string },
+	onProgress: ((number, number, string, boolean, string?) -> ())?
+)
+	local pending: { string } = {}
 	for _, path in paths do
-		if loadCancelled then
-			break
-		end
 		for _, prefix in prefixes do
 			if path:sub(1, #prefix) == prefix then
-				local ok, err = RemoteLoader.fetchSource(path)
-				if not ok then
-					error(`[BT] preload {path}: {err}`, 0)
-				end
-				task.wait(0.05)
+				table.insert(pending, path)
 				break
 			end
 		end
+	end
+	table.sort(pending, function(a, b)
+		return #a < #b
+	end)
+
+	local total = #pending
+	for index, path in pending do
+		if loadCancelled then
+			break
+		end
+		local ok, err = RemoteLoader.fetchSource(path)
+		if onProgress then
+			onProgress(index, total, path, ok, err)
+		end
+		if not ok then
+			error(`[BT] preload {path}: {err}`, 0)
+		end
+		task.wait(0.02)
 	end
 end
 
@@ -1166,6 +1186,9 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 		ReplicatedStorage = game:GetService("ReplicatedStorage"),
 		UserInputService = game:GetService("UserInputService"),
 		CollectionService = game:GetService("CollectionService"),
+		Color3 = Color3,
+		BrickColor = BrickColor,
+		Enum = Enum,
 	}
 	env.Core = env
 	env.Core.script = scriptInstance

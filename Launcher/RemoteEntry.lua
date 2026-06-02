@@ -355,8 +355,12 @@ local ok, err = pcall(function()
 	local player = Players.LocalPlayer
 	local tool = RemoteToolBuilder.Build(player, {
 		onFile = function(index, total, path, fileOk, fileErr)
-			fileIndex = math.max(fileIndex, index)
-			ui.setProgress(index, if total > 0 then total else totalFiles, path, fileOk)
+			if index and index > fileIndex then
+				fileIndex = index
+			else
+				fileIndex += 1
+			end
+			ui.setProgress(fileIndex, totalFiles, path, fileOk)
 			if fileOk == false then
 				ui.addError(path, fileErr or "неизвестная ошибка")
 			end
