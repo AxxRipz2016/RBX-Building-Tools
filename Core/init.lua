@@ -112,6 +112,7 @@ function ResolveBuildingToolModule(BuildingToolModule)
 end
 
 function EquipTool(BuildingToolModule)
+	-- __bt_equip_guard
 	-- Equips and switches to the given tool
 	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
 	if not IsBuildingToolModule(BuildingToolModule) then
@@ -425,7 +426,9 @@ function InitializeUI()
 	local DockHandle = Roact.mount(DockElement, UI, 'Dock')
 
 	-- Provide API for adding tool buttons to dock
+	Core.__bt_dockButtonCount = 0
 	local function AddToolButton(IconAssetId, HotkeyLabel, ToolModule)
+		Core.__bt_dockButtonCount = (Core.__bt_dockButtonCount or 0) + 1
 		table.insert(ToolList, {
 			IconAssetId = IconAssetId;
 			HotkeyLabel = HotkeyLabel;
@@ -1215,19 +1218,22 @@ Core.ToggleSwitch = ToggleSwitch
 Core.Mouse = Mouse
 Core.CurrentTool = CurrentTool
 
--- Initialize the UI
-InitializeUI();
+function RegisterDockTools()
+	if type(Core.AddToolButton) ~= "function" then
+		warn("[BT] RegisterDockTools: сначала нужен InitializeUI (AddToolButton)")
+		return
+	end
+	if type(Assets) ~= "table" then
+		warn("[BT] RegisterDockTools: Assets не загружен")
+		return
+	end
+	if Core.__dockToolsRegistered and (Core.__bt_dockButtonCount or 0) > 0 then
+		if Core.RefreshToolDock then
+			Core.RefreshToolDock()
+		end
+		return
+	end
 
-Core.ResolveBuildingToolModule = ResolveBuildingToolModule
-Core.EquipTool = EquipTool
-Core.AssignHotkey = AssignHotkey
-Core.ToggleExplorer = ToggleExplorer
-Core.DeleteSelection = DeleteSelection
-Core.CloneSelection = CloneSelection
-Core.ExportSelection = ExportSelection
-
-if not Core.__dockToolsRegistered then
-	Core.__dockToolsRegistered = true
 	local function LazyTool(moduleName, displayName, themeColor)
 		local loaded
 		local proxy = {
@@ -1257,13 +1263,20 @@ if not Core.__dockToolsRegistered then
 		})
 		return proxy
 	end
+
 	local function BT_Reg(iconKey, hotkey, moduleName, displayName, themeColor)
+		local iconId = Assets[iconKey]
+		if type(iconId) ~= "string" then
+			warn("[BT] нет иконки:", iconKey)
+			return
+		end
 		local lazy = LazyTool(moduleName, displayName, themeColor)
 		AssignHotkey(hotkey, function()
 			EquipTool(require(Tool:WaitForChild('Tools'):WaitForChild(moduleName)))
 		end)
-		Core.AddToolButton(Assets[iconKey], hotkey, lazy)
+		Core.AddToolButton(iconId, hotkey, lazy)
 	end
+
 	BT_Reg('MoveIcon', 'Z', 'Move', 'Move Tool', Color3.fromRGB(255, 140, 60))
 	BT_Reg('ResizeIcon', 'X', 'Resize', 'Resize Tool', Color3.fromRGB(0, 120, 255))
 	BT_Reg('RotateIcon', 'C', 'Rotate', 'Rotate Tool', Color3.fromRGB(80, 200, 80))
@@ -1278,10 +1291,25 @@ if not Core.__dockToolsRegistered then
 	BT_Reg('WeldIcon', 'F', 'Weld', 'Weld Tool', Color3.fromRGB(30, 30, 30))
 	BT_Reg('LightingIcon', 'U', 'Lighting', 'Lighting Tool', Color3.fromRGB(255, 230, 100))
 	BT_Reg('DecorateIcon', 'P', 'Decorate', 'Decorate Tool', Color3.fromRGB(255, 100, 180))
+
+	Core.__dockToolsRegistered = true
 	if Core.RefreshToolDock then
 		Core.RefreshToolDock()
 	end
 end
+
+-- Initialize the UI
+InitializeUI();
+RegisterDockTools();
+
+Core.ResolveBuildingToolModule = ResolveBuildingToolModule
+Core.RegisterDockTools = RegisterDockTools
+Core.EquipTool = EquipTool
+Core.AssignHotkey = AssignHotkey
+Core.ToggleExplorer = ToggleExplorer
+Core.DeleteSelection = DeleteSelection
+Core.CloneSelection = CloneSelection
+Core.ExportSelection = ExportSelection
 
 pcall(function()
 	Core.__bt_defaultMove = DefaultBuildingToolModule()

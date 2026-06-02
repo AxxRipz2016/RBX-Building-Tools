@@ -30,6 +30,7 @@ local NO_STUB_PATHS: { [string]: boolean } = {
 	["Core/Snapping.lua"] = true,
 	["SyncAPI.lua"] = true,
 	["Tools/Move/init.lua"] = true,
+	["Support/Assets.lua"] = true,
 }
 
 local CRITICAL_PATHS = {
@@ -201,6 +202,7 @@ end
 
 local CORE_LATE_EXPORT_BLOCK = [[
 Core.ResolveBuildingToolModule = ResolveBuildingToolModule
+Core.RegisterDockTools = RegisterDockTools
 Core.EquipTool = EquipTool
 Core.AssignHotkey = AssignHotkey
 Core.ToggleExplorer = ToggleExplorer
@@ -223,8 +225,21 @@ Core.CurrentTool = CurrentTool
 -- Регистрация кнопок дока: require только по клику/хоткею (не блокировать старт)
 local CORE_DOCK_REGISTER_BLOCK = [[
 
-if not Core.__dockToolsRegistered then
-	Core.__dockToolsRegistered = true
+function RegisterDockTools()
+	if type(Core.AddToolButton) ~= "function" then
+		warn("[BT] RegisterDockTools: сначала нужен InitializeUI (AddToolButton)")
+		return
+	end
+	if type(Assets) ~= "table" then
+		warn("[BT] RegisterDockTools: Assets не загружен")
+		return
+	end
+	if Core.__dockToolsRegistered and (Core.__bt_dockButtonCount or 0) > 0 then
+		if Core.RefreshToolDock then
+			Core.RefreshToolDock()
+		end
+		return
+	end
 	local function LazyTool(moduleName, displayName, themeColor)
 		local loaded
 		local proxy = {
@@ -251,14 +266,16 @@ if not Core.__dockToolsRegistered then
 		return proxy
 	end
 	local function BT_Reg(iconKey, hotkey, moduleName, displayName, themeColor)
-		if type(Core.AddToolButton) ~= "function" then
+		local iconId = Assets[iconKey]
+		if type(iconId) ~= "string" then
+			warn("[BT] нет иконки:", iconKey)
 			return
 		end
 		local lazy = LazyTool(moduleName, displayName, themeColor)
 		AssignHotkey(hotkey, function()
 			EquipTool(require(Tool:WaitForChild('Tools'):WaitForChild(moduleName)))
 		end)
-		Core.AddToolButton(Assets[iconKey], hotkey, lazy)
+		Core.AddToolButton(iconId, hotkey, lazy)
 	end
 	BT_Reg('MoveIcon', 'Z', 'Move', 'Move Tool', Color3.fromRGB(255, 140, 60))
 	BT_Reg('ResizeIcon', 'X', 'Resize', 'Resize Tool', Color3.fromRGB(0, 120, 255))
@@ -274,10 +291,13 @@ if not Core.__dockToolsRegistered then
 	BT_Reg('WeldIcon', 'F', 'Weld', 'Weld Tool', Color3.fromRGB(30, 30, 30))
 	BT_Reg('LightingIcon', 'U', 'Lighting', 'Lighting Tool', Color3.fromRGB(255, 230, 100))
 	BT_Reg('DecorateIcon', 'P', 'Decorate', 'Decorate Tool', Color3.fromRGB(255, 100, 180))
+	Core.__dockToolsRegistered = true
 	if Core.RefreshToolDock then
 		Core.RefreshToolDock()
 	end
 end
+
+RegisterDockTools();
 ]]
 
 local function patchCoreModuleExports(source: string): string
@@ -305,7 +325,13 @@ local function patchCoreLateExports(source: string): string
 		"AddToolButton%(Assets%[iconKey%], hotkey,",
 		"Core.AddToolButton(Assets[iconKey], hotkey,"
 	)
-	if source:find("BT_Reg('MoveIcon'", 1, true) or source:find("__dockToolsRegistered", 1, true) then
+	if source:find("function RegisterDockTools", 1, true) then
+		if not source:find("RegisterDockTools%(%);", 1, true) then
+			source = source:gsub("(InitializeUI%(%);%s*\n)", "%1RegisterDockTools();\n", 1)
+		end
+		return source
+	end
+	if source:find("BT_Reg%('MoveIcon'", 1, true) or source:find("__dockToolsRegistered", 1, true) then
 		return source
 	end
 	-- убрать ранний ошибочный экспорт (r47): AssignHotkey ещё не объявлен
@@ -620,7 +646,7 @@ end
 	end
 
 	if path == "Core/init.lua" then
-		if not source:find("SafeCallEquip", 1, true) then
+		if not source:find("__bt_equip_guard", 1, true) then
 			source = source:gsub(
 				"function EquipTool%(BuildingToolModule%)\r?\n\t%-%- Equips[^\n]*\n",
 				[[function EquipTool(BuildingToolModule)
@@ -1660,6 +1686,7 @@ function RemoteLoader.clear()
 	table.clear(registry)
 	table.clear(failedPaths)
 	table.clear(runtimeErrors)
+	_G.Core = nil
 	loadCancelled = false
 	fetchCount = 0
 	lastFetchAt = 0

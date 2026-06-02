@@ -517,9 +517,31 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 	if tool:GetAttribute("BT_LocalOnly") then
 		step("Core…")
 		local coreScript = tool:WaitForChild("Core") :: ModuleScript
+		local assetsScript = tool:FindFirstChild("Assets")
+		if assetsScript and assetsScript:IsA("ModuleScript") then
+			pcall(RemoteLoader.run, "Support/Assets.lua", tool, assetsScript)
+		end
+
 		local coreEnv = RemoteLoader.run("Core/init.lua", tool, coreScript)
 		if type(coreEnv) == "table" then
 			_G.Core = coreEnv
+			local rawEquip = coreEnv.EquipTool
+			if type(rawEquip) == "function" then
+				coreEnv.EquipTool = function(toolModule: any)
+					local move = coreEnv.__bt_defaultMove
+					if type(toolModule) ~= "table" or type(toolModule.Equip) ~= "function" then
+						toolModule = move
+					end
+					if type(toolModule) ~= "table" or type(toolModule.Equip) ~= "function" then
+						warn("[BT] EquipTool: модуль инструмента недоступен")
+						return
+					end
+					return rawEquip(toolModule)
+				end
+			end
+			if type(coreEnv.RegisterDockTools) == "function" then
+				pcall(coreEnv.RegisterDockTools)
+			end
 		end
 
 		step("Move…")
