@@ -929,6 +929,50 @@ local function runModuleWithEnv(
 ): any
 	local compileFn = RemoteLoader.compile or defaultCompile
 
+	-- Огромный auto-generated UI (lol.lua) не компилируется одним чанком
+	-- из-за лимита локальных регистров (200). Выполняем по секциям "Элемент:".
+	if path == "Launcher/Interfaces/lol.lua" then
+		local env = buildModuleEnv(tool, scriptInstance, btRequire)
+		local prefix = "local workspace = script.Parent\n"
+		local marker = "\n-- Элемент:"
+		local blocks: { string } = {}
+		local searchFrom = 1
+		local firstStart = string.find(raw, "-- Элемент:", 1, true)
+
+		if firstStart then
+			while true do
+				local blockStart = string.find(raw, "-- Элемент:", searchFrom, true)
+				if not blockStart then
+					break
+				end
+				local nextStart = string.find(raw, marker, blockStart + 1, true)
+				local blockEnd = if nextStart then nextStart - 1 else #raw
+				local block = string.sub(raw, blockStart, blockEnd)
+				table.insert(blocks, prefix .. block)
+				if not nextStart then
+					break
+				end
+				searchFrom = nextStart + 1
+			end
+		else
+			table.insert(blocks, raw)
+		end
+
+		for i, block in ipairs(blocks) do
+			local fn, compileError = compileFn(block, "@" .. path .. "#part" .. tostring(i), env)
+			if not fn then
+				error(`compile part {i}: {compileError}`, 0)
+			end
+			local ok, runErr = runWithPinnedGlobals(function()
+				return fn()
+			end, btRequire, tool, scriptInstance)
+			if not ok then
+				error(`run part {i}: {runErr}`, 0)
+			end
+		end
+		return true
+	end
+
 	local coreEnv = buildModuleEnv(tool, scriptInstance, btRequire)
 	if path == "Core/init.lua" then
 		_G.Core = coreEnv
