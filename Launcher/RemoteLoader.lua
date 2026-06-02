@@ -215,6 +215,49 @@ local function patchCoreReturn(source: string): string
 	return source:gsub("return getfenv%(0%)", "return (_G.Core or Core)")
 end
 
+local CORE_BT = "((_G.__bt_tool or Tool):WaitForChild('Core'))"
+
+-- executor: require(script.Parent) / require(Tool.Core) часто не тот же объект, что _G.Core
+local function patchCoreAndToolRequires(path: string, source: string): string
+	local coreViaScript = "(_G.Core or require(script.Parent))"
+
+	if path:sub(1, 6) == "Core/" and path ~= "Core/init.lua" then
+		source = source:gsub("Core = require%(script%.Parent%);", "Core = " .. coreViaScript .. ";")
+		source = source:gsub("local Core = require%(script%.Parent%);", "local Core = " .. coreViaScript .. ";")
+		source = source:gsub("return require%(script%.Parent%);", "return _G.Core or require(script.Parent);")
+
+		for _, child in CORE_INIT_CHILDREN do
+			source = source:gsub(
+				"require%(script%.Parent." .. child .. "%)",
+				"require(" .. CORE_BT .. ":WaitForChild('" .. child .. "'))"
+			)
+		end
+
+		source = source:gsub(
+			"require%(Core%.Tool%.Core%.BoundingBox%)",
+			"require(" .. CORE_BT .. ":WaitForChild('BoundingBox'))"
+		)
+
+		if path == "Core/ListenForManualWindowTrigger.lua" then
+			source = source:gsub(
+				"local Core = require%(Tool%.Core%)",
+				"local Core = _G.Core or require(Tool.Core)"
+			)
+		end
+	end
+
+	if path:find("^Tools/", 1, true) or path == "Core/ListenForManualWindowTrigger.lua" then
+		source = source:gsub("Core = require%(Tool%.Core%);", "Core = _G.Core or require(Tool.Core);")
+		source = source:gsub("local Core = require%(Tool%.Core%)", "local Core = _G.Core or require(Tool.Core)")
+		source = source:gsub(
+			"require%(Core%.Tool%.Tools%.Move%)",
+			"require((Core.Tool or Tool).Tools.Move)"
+		)
+	end
+
+	return source
+end
+
 local function patchCoreInitRequires(source: string): string
 	for _, child in CORE_INIT_CHILDREN do
 		local viaTool = `require(Tool:WaitForChild('Core'):WaitForChild('{child}'))`
@@ -288,6 +331,10 @@ return Notifications]]
 
 	if path == "Core/Targeting.lua" then
 		source = source:gsub(
+			"local Core = GetCore%(%);\n\tlocal Connections = Core%.Connections;",
+			"local Core = GetCore();\n\tif not Core.Connections then\n\t\tCore.Connections = {};\n\tend\n\tlocal Connections = Core.Connections;"
+		)
+		source = source:gsub(
 			"if not Core%.IsSelectable%(%{ NewTarget %}%) then",
 			"if (not Core) or type(Core.IsSelectable) ~= 'function' or not Core.IsSelectable({ NewTarget }) then"
 		)
@@ -336,13 +383,28 @@ end;]]
 			"if not Core.StartupNotificationsDisplayed then\n\t\tCore.StartupNotificationsDisplayed = true\n\tend;"
 		)
 		source = source:gsub(
-			"\tEquipTool%(CurrentTool or require%(Tool%.Tools%.Move%)%);",
-			"\tpcall(function()\n\t\tEquipTool(CurrentTool or require(Tool.Tools.Move));\n\tend);"
+			"Targeting:EnableTargeting%(%)\n\tSelection%.EnableOutlines%(%);",
+			"pcall(function()\n\t\tTargeting:EnableTargeting();\n\tend)\n\tSelection.EnableOutlines();"
+		)
+		source = source:gsub(
+			"Connections = {};",
+			"Connections = {};\nCore.Connections = Connections;",
+			1
+		)
+		source = source:gsub(
+			"Tools = ToolList;",
+			"Tools = ToolList;\n\t\tUIRoot = UI;",
+			1
+		)
+		source = source:gsub(
+			"Roact%.update%(DockHandle, Roact%.createElement%(DockComponent, {\n\t\t\tCore = Core;\n\t\t\tTools = Cryo%.List%.join%(ToolList%);\n\t\t}%)\)",
+			"Roact.update(DockHandle, Roact.createElement(DockComponent, {\n\t\t\tCore = Core;\n\t\t\tTools = Cryo.List.join(ToolList);\n\t\t\tUIRoot = UI;\n\t\t}))"
+		)
+		source = source:gsub(
+			"Core%.AddToolButton = AddToolButton\n",
+			"Core.AddToolButton = AddToolButton\n\tfunction Core.RefreshToolDock()\n\t\tif DockHandle and ToolList then\n\t\t\tRoact.update(DockHandle, Roact.createElement(DockComponent, {\n\t\t\t\tCore = Core;\n\t\t\t\tTools = Cryo.List.join(ToolList);\n\t\t\t\tUIRoot = UI;\n\t\t\t}))\n\t\tend\n\tend\n"
 		)
 		source = patchCoreReturn(source)
-		if not source:find("UIRoot = UI", 1, true) then
-			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
-		end
 		source = source:gsub(
 			"(Core%.UI = UI\n)",
 			"%1\tUI.Parent = nil;\n\tUI.Enabled = false;\n"
@@ -385,13 +447,20 @@ end;]]
 
 	if path == "Loader/init.lua" then
 		local loaderBootstrap = [[
+Core = _G.Core or Core
 if Core then
 	if not Core.Support then
 		Core.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))
 	end
-	if type(Core.AddToolButton) ~= 'function' then
-		Core.AddToolButton = function() end
+	if not Core.Assets then
+		Core.Assets = require(Tool:WaitForChild('Assets'))
 	end
+end
+]]
+		local loaderFinish = [[
+
+if Core and type(Core.RefreshToolDock) == 'function' then
+	Core.RefreshToolDock()
 end
 ]]
 		source = source:gsub(
@@ -402,6 +471,7 @@ end
 			"(local Core = require%(Tool:WaitForChild%('Core'%)%)\n)",
 			"%1" .. loaderBootstrap
 		)
+		source = source:gsub("\nreturn Core%s*;?%s*$", loaderFinish .. "\nreturn Core\n")
 		-- executor: Core.Support.Call часто nil — тот же смысл, что Support.Call(EquipTool, tool)
 		source = source:gsub(
 			"Core%.AssignHotkey%('([^']+)', Core%.Support%.Call%(Core%.EquipTool, (%w+)%)%);",
@@ -411,6 +481,12 @@ end
 
 	if path:find("^Tools/", 1, true) or path == "Core/Snapping.lua" then
 		source = source:gsub("Core%.Tool%.Interfaces%.", "(Core.Tool or Tool):WaitForChild('Interfaces').")
+		source = source:gsub(
+			"Core%.Tool%.Core%.([%w_]+)",
+			function(child)
+				return CORE_BT .. ":WaitForChild('" .. child .. "')"
+			end
+		)
 	end
 
 	if path == "Launcher/Interfaces/lol.lua" then
@@ -420,6 +496,8 @@ end
 			"local workspace = (_G.__bt_interfaces_root or (script and script.Parent) or workspace)"
 		)
 	end
+
+	source = patchCoreAndToolRequires(path, source)
 
 	return source
 end
