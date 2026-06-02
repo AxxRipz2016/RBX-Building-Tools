@@ -518,6 +518,35 @@ local function patchCoreInitRequires(source: string): string
 	return source
 end
 
+local function applyCoreEquipSafetyPatches(source: string): string
+	source = source:gsub(
+		"BuildingToolModule:Equip%(%);",
+		[[if type(BuildingToolModule) == "table" and type(BuildingToolModule.Equip) == "function" then
+		local __bt_ok, __bt_err = pcall(function()
+			BuildingToolModule:Equip()
+		end)
+		if not __bt_ok then
+			warn("[BT] Equip failed:", __bt_err)
+		end
+	end]]
+	)
+	source = source:gsub(
+		"EquipTool%(initialTool%);",
+		[[do
+		local __bt_t = initialTool
+		if type(__bt_t) ~= "table" or type(__bt_t.Equip) ~= "function" then
+			__bt_t = (type(Core) == "table" and Core.__bt_defaultMove) or nil
+		end
+		if type(__bt_t) == "table" and type(__bt_t.Equip) == "function" then
+			EquipTool(__bt_t)
+		else
+			warn("[BT] Enable: Move недоступен, Equip пропущен")
+		end
+	end]]
+	)
+	return source
+end
+
 local function patchRemoteSource(path: string, source: string): string
 	if path:find("RobloxRenderer.lua", 1, true) then
 		source = source:gsub(
@@ -1071,35 +1100,6 @@ function RemoteLoader.getCachedModule(path: string): any
 		return nil
 	end
 	return cached
-end
-
-local function applyCoreEquipSafetyPatches(source: string): string
-	source = source:gsub(
-		"BuildingToolModule:Equip%(%);",
-		[[if type(BuildingToolModule) == "table" and type(BuildingToolModule.Equip) == "function" then
-		local __bt_ok, __bt_err = pcall(function()
-			BuildingToolModule:Equip()
-		end)
-		if not __bt_ok then
-			warn("[BT] Equip failed:", __bt_err)
-		end
-	end]]
-	)
-	source = source:gsub(
-		"EquipTool%(initialTool%);",
-		[[do
-		local __bt_t = initialTool
-		if type(__bt_t) ~= "table" or type(__bt_t.Equip) ~= "function" then
-			__bt_t = (type(Core) == "table" and Core.__bt_defaultMove) or nil
-		end
-		if type(__bt_t) == "table" and type(__bt_t.Equip) == "function" then
-			EquipTool(__bt_t)
-		else
-			warn("[BT] Enable: Move недоступен, Equip пропущен")
-		end
-	end]]
-	)
-	return source
 end
 
 function RemoteLoader.registerModule(moduleScript: ModuleScript, path: string)
