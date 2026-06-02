@@ -101,9 +101,10 @@ local ok, err = pcall(function()
 	end)
 
 	local fileIndex = 0
+	local totalFiles = #manifest
 	RemoteLoader.setProgressCallback(function(path, fileOk, fileErr)
 		fileIndex += 1
-		ui.setProgress(fileIndex, 0, path, fileOk)
+		ui.setProgress(fileIndex, totalFiles, path, fileOk)
 		if fileOk == false then
 			ui.addError(path, fileErr or "неизвестная ошибка")
 		end
@@ -111,8 +112,15 @@ local ok, err = pcall(function()
 
 	local player = Players.LocalPlayer
 	local tool = RemoteToolBuilder.Build(player, {
+		onFile = function(index, total, path, fileOk, fileErr)
+			fileIndex = math.max(fileIndex, index)
+			ui.setProgress(index, if total > 0 then total else totalFiles, path, fileOk)
+			if fileOk == false then
+				ui.addError(path, fileErr or "неизвестная ошибка")
+			end
+		end,
 		onMessage = function(message: string)
-			ui.setProgress(0, 0, message, true)
+			ui.setProgress(fileIndex, totalFiles, message, true)
 		end,
 	})
 

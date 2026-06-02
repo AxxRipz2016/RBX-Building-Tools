@@ -129,6 +129,7 @@ Core.Support = Support
 Core.Try = Try
 Core.Make = Make
 Core.Assets = Assets
+Core.Tool = Tool
 ]]
 
 local CORE_UI_EXPORT_BLOCK = [[
@@ -327,16 +328,24 @@ end;]]
 		-- UI должна показываться только когда Tool действительно в руках персонажа.
 		source = source:gsub(
 			"UI%.Parent = UIContainer;",
-			"if Mode ~= 'Tool' or (Player.Character and Tool.Parent == Player.Character) then\n\t\tUI.Parent = UIContainer;\n\tend;"
+			"if Mode ~= 'Tool' or (Player.Character and Tool.Parent == Player.Character) then\n\t\tUI.Parent = UIContainer;\n\t\tUI.Enabled = true;\n\tend;"
 		)
-		source = source:gsub("UI%.Parent = script;", "UI.Parent = nil;")
+		source = source:gsub("UI%.Parent = script;", "UI.Parent = nil; UI.Enabled = false;")
+		source = source:gsub(
+			"if not Core%.StartupNotificationsDisplayed then[%s%S]-Core%.StartupNotificationsDisplayed = true\n\tend;",
+			"if not Core.StartupNotificationsDisplayed then\n\t\tCore.StartupNotificationsDisplayed = true\n\tend;"
+		)
+		source = source:gsub(
+			"\tEquipTool%(CurrentTool or require%(Tool%.Tools%.Move%)%);",
+			"\tpcall(function()\n\t\tEquipTool(CurrentTool or require(Tool.Tools.Move));\n\tend);"
+		)
 		source = patchCoreReturn(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
 		end
 		source = source:gsub(
 			"(Core%.UI = UI\n)",
-			"%1\tif UIContainer then\n\t\tUI.Parent = UIContainer\n\tend\n"
+			"%1\tUI.Parent = nil;\n\tUI.Enabled = false;\n"
 		)
 		if not source:find("Core%.Security = Security", 1, true) then
 			source = source:gsub(
@@ -398,6 +407,10 @@ end
 			"Core%.AssignHotkey%('([^']+)', Core%.Support%.Call%(Core%.EquipTool, (%w+)%)%);",
 			"Core.AssignHotkey('%1', function() Core.EquipTool(%2) end);"
 		)
+	end
+
+	if path:find("^Tools/", 1, true) or path == "Core/Snapping.lua" then
+		source = source:gsub("Core%.Tool%.Interfaces%.", "(Core.Tool or Tool):WaitForChild('Interfaces').")
 	end
 
 	if path == "Launcher/Interfaces/lol.lua" then
@@ -623,6 +636,38 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 		progressCallback(path, false, failedPaths[path])
 	end
 	return false, failedPaths[path]
+end
+
+function RemoteLoader.preloadRemaining(
+	paths: { string },
+	onProgress: ((number, number, string, boolean, string?) -> ())?
+): { string }
+	local hardFailures: { string } = {}
+	local pending: { string } = {}
+	for _, path in paths do
+		if not sourceCache[path] then
+			table.insert(pending, path)
+		end
+	end
+	table.sort(pending, function(a, b)
+		return #a < #b
+	end)
+
+	local total = #pending
+	for index, path in pending do
+		if loadCancelled then
+			break
+		end
+		local ok, err = RemoteLoader.fetchSource(path)
+		if onProgress then
+			onProgress(index, total, path, ok, err)
+		end
+		if not ok then
+			table.insert(hardFailures, path)
+		end
+		task.wait(0.02)
+	end
+	return hardFailures
 end
 
 function RemoteLoader.preloadByPrefixes(paths: { string }, prefixes: { string })
@@ -902,6 +947,7 @@ local function buildModuleEnv(tool: Tool, scriptInstance: Instance?, btRequire: 
 	}
 	env.Core = env
 	env.Core.script = scriptInstance
+	env.Core.Tool = tool
 	return setmetatable(env, {
 		__index = function(_t, k)
 			local v = rawget(env, k)

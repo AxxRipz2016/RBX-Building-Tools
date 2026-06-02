@@ -242,6 +242,7 @@ local function attachMetadata(tool: Tool)
 	-- Fallback: собираем Interfaces из Launcher/Interfaces/lol.lua
 	-- (нужно для solo-режима, когда Payload.Interfaces отсутствует).
 	if not hasAllInterfaces then
+		_G.__bt_interfaces_root = interfaces
 		local fallbackHost = Instance.new("ModuleScript")
 		fallbackHost.Name = "lol_fallback"
 		fallbackHost.Parent = interfaces
@@ -251,6 +252,12 @@ local function attachMetadata(tool: Tool)
 		end)
 		if not ok then
 			warn(`[BT] не удалось собрать Interfaces из lol.lua: {tostring(err)}`)
+		else
+			for _, name in requiredInterfaces do
+				if not interfaces:FindFirstChild(name) then
+					warn(`[BT] после lol.lua нет GUI: {name}`)
+				end
+			end
 		end
 		fallbackHost:Destroy()
 	end
@@ -353,7 +360,8 @@ function RemoteToolBuilder.Build(
 	tool.RequiresHandle = true
 	tool.CanBeDropped = true
 	tool:SetAttribute("BT_LocalOnly", true)
-	tool.Parent = getStagingParent()
+	-- Не кладём в ReplicatedStorage: иначе можно взять в руки до окончания StartRuntime
+	tool.Parent = nil
 
 	-- Handle, чтобы Tool можно было держать в руках (куб).
 	do
@@ -386,6 +394,14 @@ function RemoteToolBuilder.Build(
 		onMessage("Предзагрузка Roact…")
 	end
 	RemoteLoader.preloadByPrefixes(paths, { "Vendor/Roact/" })
+
+	if onMessage then
+		onMessage("Предзагрузка остальных модулей…")
+	end
+	local preloadFailed = RemoteLoader.preloadRemaining(paths, onFile)
+	if #preloadFailed > 0 then
+		warn(`[BT] не предзагружено: {table.concat(preloadFailed, ", ")}`)
+	end
 
 	attachSyncAPI(tool)
 	attachLoadedIndicator(tool)
