@@ -506,6 +506,155 @@ function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 	tool.Parent = player:WaitForChild("Backpack")
 end
 
+-- Fallback иконок (если Assets не в кэше); дублирует BT_DockIcons.lua
+local DOCK_ICON_FALLBACK: { [string]: string } = {
+	MoveIcon = "rbxassetid://141741366",
+	ResizeIcon = "rbxassetid://141794324",
+	RotateIcon = "rbxassetid://141807775",
+	PaintIcon = "rbxassetid://141741444",
+	SurfaceIcon = "rbxassetid://141803491",
+	MaterialIcon = "rbxassetid://141809090",
+	AnchorIcon = "rbxassetid://141741323",
+	CollisionIcon = "rbxassetid://141809596",
+	NewPartIcon = "rbxassetid://141741393",
+	MeshIcon = "rbxassetid://141806786",
+	TextureIcon = "rbxassetid://141805275",
+	WeldIcon = "rbxassetid://141741418",
+	LightingIcon = "rbxassetid://141741341",
+	DecorateIcon = "rbxassetid://141741412",
+}
+
+local DOCK_TOOL_ROWS: { { string } } = {
+	{ "MoveIcon", "Z", "Move" },
+	{ "ResizeIcon", "X", "Resize" },
+	{ "RotateIcon", "C", "Rotate" },
+	{ "PaintIcon", "V", "Paint" },
+	{ "SurfaceIcon", "B", "Surface" },
+	{ "MaterialIcon", "N", "Material" },
+	{ "AnchorIcon", "M", "Anchor" },
+	{ "CollisionIcon", "K", "Collision" },
+	{ "NewPartIcon", "J", "NewPart" },
+	{ "MeshIcon", "H", "Mesh" },
+	{ "TextureIcon", "G", "Texture" },
+	{ "WeldIcon", "F", "Weld" },
+	{ "LightingIcon", "U", "Lighting" },
+	{ "DecorateIcon", "P", "Decorate" },
+}
+
+local function getDockIconTable(): { [string]: string }
+	local icons: { [string]: string } = {}
+	for key, id in DOCK_ICON_FALLBACK do
+		icons[key] = id
+	end
+	local ok, fromLauncher = pcall(req, "BT_DockIcons")
+	if ok and type(fromLauncher) == "table" then
+		for key, id in fromLauncher do
+			if type(id) == "string" then
+				icons[key] = id
+			end
+		end
+	end
+	local assets = RemoteLoader.getCachedModule("Support/Assets.lua")
+	if type(assets) == "table" then
+		for key, id in assets do
+			if type(id) == "string" and type(key) == "string" and key:match("Icon$") then
+				icons[key] = id
+			end
+		end
+	end
+	return icons
+end
+
+local function runBuildingToolModule(tool: Tool, moduleName: string): any?
+	local modScript = tool:WaitForChild("Tools"):FindFirstChild(moduleName)
+	if not modScript or not modScript:IsA("ModuleScript") then
+		return nil
+	end
+	local path = modScript:GetAttribute("BTPath") or (`Tools/{moduleName}/init.lua`)
+	return RemoteLoader.run(path, tool, modScript)
+end
+
+local function makeLazyBuildingTool(tool: Tool, moduleName: string, displayName: string, themeColor: Color3): any
+	local loaded: any
+	local proxy = {
+		Name = displayName,
+		Color = themeColor,
+		__btModuleName = moduleName,
+	}
+	setmetatable(proxy, {
+		__index = function(_, key)
+			if not loaded then
+				loaded = runBuildingToolModule(tool, moduleName)
+				if type(loaded) == "table" then
+					if loaded.Name then
+						proxy.Name = loaded.Name
+					end
+					if loaded.Color then
+						proxy.Color = loaded.Color
+					end
+				end
+			end
+			if type(loaded) ~= "table" then
+				return nil
+			end
+			local value = loaded[key]
+			if type(value) == "function" then
+				return function(_, ...)
+					return value(loaded, ...)
+				end
+			end
+			return value
+		end,
+	})
+	return proxy
+end
+
+local function registerDockDirect(coreEnv: any, tool: Tool)
+	if type(coreEnv) ~= "table" or type(coreEnv.AddToolButton) ~= "function" then
+		warn("[BT] registerDockDirect: нет Core.AddToolButton (InitializeUI?)")
+		return 0
+	end
+
+	local icons = getDockIconTable()
+	_G.__bt_dock_icons = icons
+	coreEnv.Assets = icons
+	coreEnv.__dockToolsRegistered = false
+	coreEnv.__bt_dockButtonCount = 0
+
+	local added = 0
+	for _, row in DOCK_TOOL_ROWS do
+		local iconKey, hotkey, moduleName = row[1], row[2], row[3]
+		local iconId = icons[iconKey]
+		if type(iconId) ~= "string" then
+			warn(`[BT] нет иконки: {iconKey}`)
+			continue
+		end
+		local toolsFolder = tool:FindFirstChild("Tools")
+		if not toolsFolder or not toolsFolder:FindFirstChild(moduleName) then
+			warn(`[BT] нет Tools/{moduleName}`)
+			continue
+		end
+
+		local lazy = makeLazyBuildingTool(tool, moduleName, moduleName .. " Tool", Color3.fromRGB(255, 140, 60))
+		if type(coreEnv.AssignHotkey) == "function" then
+			coreEnv.AssignHotkey(hotkey, function()
+				local mod = runBuildingToolModule(tool, moduleName)
+				if type(coreEnv.EquipTool) == "function" then
+					coreEnv.EquipTool(mod)
+				end
+			end)
+		end
+		coreEnv.AddToolButton(iconId, hotkey, lazy)
+		added += 1
+	end
+
+	coreEnv.__dockToolsRegistered = true
+	if type(coreEnv.RefreshToolDock) == "function" then
+		coreEnv.RefreshToolDock()
+	end
+	return added
+end
+
 local function preloadMoveModule(tool: Tool): any?
 	local toolsFolder = tool:FindFirstChild("Tools")
 	local moveScript = toolsFolder and toolsFolder:FindFirstChild("Move")
@@ -526,25 +675,24 @@ local function preloadMoveModule(tool: Tool): any?
 end
 
 local function finishDockRegistration(coreEnv: any, tool: Tool)
-	if type(coreEnv) ~= "table" or type(coreEnv.RegisterDockTools) ~= "function" then
-		return
-	end
-	_G.__bt_dock_icons = req("BT_DockIcons")
 	local assetsScript = tool:FindFirstChild("Assets")
 	if assetsScript and assetsScript:IsA("ModuleScript") then
 		pcall(RemoteLoader.run, "Support/Assets.lua", tool, assetsScript)
 	end
-	coreEnv.__dockToolsRegistered = false
-	coreEnv.__bt_dockButtonCount = 0
-	local ok, err = pcall(coreEnv.RegisterDockTools)
-	if not ok then
-		warn(`[BT] RegisterDockTools: {err}`)
+	local added = registerDockDirect(coreEnv, tool)
+	if added == 0 and type(coreEnv) == "table" and type(coreEnv.RegisterDockTools) == "function" then
+		coreEnv.__dockToolsRegistered = false
+		coreEnv.__bt_dockButtonCount = 0
+		local ok, err = pcall(coreEnv.RegisterDockTools)
+		if not ok then
+			warn(`[BT] RegisterDockTools fallback: {err}`)
+		end
+		added = coreEnv.__bt_dockButtonCount or 0
 	end
-	local count = coreEnv.__bt_dockButtonCount or 0
-	if count == 0 then
-		warn("[BT] док: 0 кнопок инструментов — проверь Assets и BT_DockIcons")
+	if added == 0 then
+		warn("[BT] док: 0 кнопок — проверь Tools/ и иконки")
 	else
-		print(`[BT] док: {count} кнопок инструментов`)
+		print(`[BT] док: {added} кнопок инструментов`)
 	end
 end
 

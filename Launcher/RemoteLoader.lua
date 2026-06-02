@@ -337,6 +337,11 @@ local function patchCoreLateExports(source: string): string
 			"InitializeUI(); -- BT: RegisterDockTools deferred to StartRuntime",
 			1
 		)
+		source = source:gsub(
+			"\nRegisterDockTools%(%);\r?\n\r?\nCore%.ResolveBuildingToolModule",
+			"\n-- BT: RegisterDockTools via StartRuntime\n\nCore.ResolveBuildingToolModule",
+			1
+		)
 		if not source:find("RegisterDockTools%(%);", 1, true) then
 			source = source:gsub("(InitializeUI%(%);%s*\n)", "%1RegisterDockTools();\n", 1)
 		end
