@@ -213,6 +213,47 @@ local function attachMetadata(tool: Tool)
 			child:Clone().Parent = interfaces
 		end
 	end
+
+	local requiredInterfaces = {
+		"BTAnchorToolGUI",
+		"BTCollisionToolGUI",
+		"BTDecorateToolGUI",
+		"BTLightingToolGUI",
+		"BTMaterialToolGUI",
+		"BTMeshToolGUI",
+		"BTMoveToolGUI",
+		"BTNewPartToolGUI",
+		"BTPaintToolGUI",
+		"BTResizeToolGUI",
+		"BTRotateToolGUI",
+		"BTSurfaceToolGUI",
+		"BTTextureToolGUI",
+		"BTWeldToolGUI",
+	}
+
+	local hasAllInterfaces = true
+	for _, name in requiredInterfaces do
+		if not interfaces:FindFirstChild(name) then
+			hasAllInterfaces = false
+			break
+		end
+	end
+
+	-- Fallback: собираем Interfaces из Launcher/Interfaces/lol.lua
+	-- (нужно для solo-режима, когда Payload.Interfaces отсутствует).
+	if not hasAllInterfaces then
+		local fallbackHost = Instance.new("ModuleScript")
+		fallbackHost.Name = "lol_fallback"
+		fallbackHost.Parent = interfaces
+		RemoteLoader.registerModule(fallbackHost, "Launcher/Interfaces/lol.lua")
+		local ok, err = pcall(function()
+			RemoteLoader.run("Launcher/Interfaces/lol.lua", tool, fallbackHost)
+		end)
+		if not ok then
+			warn(`[BT] не удалось собрать Interfaces из lol.lua: {tostring(err)}`)
+		end
+		fallbackHost:Destroy()
+	end
 end
 
 local SKIPPED_TREE_PATHS = {

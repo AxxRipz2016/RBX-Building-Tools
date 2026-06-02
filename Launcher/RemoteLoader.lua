@@ -266,6 +266,27 @@ end]]
 		source = patchCoreUiExports(source)
 		source = patchCoreLateExports(source)
 		source = patchCoreToolParamShadowing(source)
+		source = source:gsub(
+			"function RecolorHandle%(Color%)\n\tSyncAPI:Invoke%('RecolorHandle', Color%);\nend;",
+			[[function RecolorHandle(Color)
+	local target = Color
+	if typeof(target) == "BrickColor" then
+		target = target.Color
+	end
+	if typeof(target) ~= "Color3" then
+		return
+	end
+	local ok = pcall(function()
+		local handle = Tool:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			handle.Color = target
+		end
+	end)
+	if not ok then
+		-- no-op
+	end
+end;]]
+		)
 		source = patchCoreReturn(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")

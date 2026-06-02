@@ -133,6 +133,10 @@ function TargetingModule:UpdateTarget(Scope, Force)
 
 	-- Make sure target is selectable
 	local Core = GetCore()
+	if not Core or type(Core.IsSelectable) ~= "function" then
+		self.HighlightTarget(nil)
+		return
+	end
 	if not Core.IsSelectable({ NewTarget }) then
 		self.HighlightTarget(nil)
 		self.LastTarget = nil
@@ -151,7 +155,7 @@ function TargetingModule:UpdateTarget(Scope, Force)
 	end
 
 	-- Update scope target highlight
-	if not Core.Selection.IsSelected(NewScopeTarget) then
+	if Core.Selection and type(Core.Selection.IsSelected) == "function" and not Core.Selection.IsSelected(NewScopeTarget) then
 		self.HighlightTarget(NewScopeTarget)
 	end
 

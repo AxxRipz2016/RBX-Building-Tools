@@ -26,10 +26,11 @@ function Notifications:init()
     end
 
     fastSpawn(function ()
-        if not self.Active or type(core.IsVersionOutdated) ~= "function" then
+        local isVersionOutdated = core and core.IsVersionOutdated
+        if not self.Active or type(isVersionOutdated) ~= "function" then
             return
         end
-        local ok, IsOutdated = pcall(core.IsVersionOutdated)
+        local ok, IsOutdated = pcall(isVersionOutdated)
         if ok and self.Active then
             self:setState({
                 ShouldWarnAboutUpdate = IsOutdated;
@@ -37,11 +38,12 @@ function Notifications:init()
         end
     end)
     fastSpawn(function ()
-        if not self.Active or not core.SyncAPI or type(core.SyncAPI.Invoke) ~= "function" then
+        local syncApi = core and core.SyncAPI
+        if not self.Active or not syncApi or type(syncApi.Invoke) ~= "function" then
             return
         end
         local ok, IsHttpServiceDisabled = pcall(function ()
-            return (core.Mode == 'Tool') and not core.SyncAPI:Invoke('IsHttpServiceEnabled')
+            return (core.Mode == 'Tool') and not syncApi:Invoke('IsHttpServiceEnabled')
         end)
         if ok and self.Active then
             self:setState({
