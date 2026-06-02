@@ -933,12 +933,11 @@ local function runModuleWithEnv(
 	-- из-за лимита локальных регистров (200). Выполняем по секциям "Элемент:".
 	if path == "Launcher/Interfaces/lol.lua" then
 		local env = buildModuleEnv(tool, scriptInstance, btRequire)
-		local prefix = [[local __bt_interfaces_root = (_G.__bt_script and _G.__bt_script.Parent)
-	or (_G.__bt_tool and _G.__bt_tool:FindFirstChild("Interfaces"))
-	or (script and script.Parent)
-	or workspace
-local workspace = __bt_interfaces_root
-]]
+		local interfacesRoot = if scriptInstance and scriptInstance.Parent
+			then scriptInstance.Parent
+			else (tool:FindFirstChild("Interfaces") or tool)
+		env.__bt_interfaces_root = interfacesRoot
+		local prefix = "local workspace = __bt_interfaces_root\n"
 		local marker = "\n-- Элемент:"
 		local blocks: { string } = {}
 		local searchFrom = 1
