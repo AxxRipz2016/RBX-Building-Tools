@@ -419,8 +419,11 @@ local ok, err = pcall(function()
 			dockCount = RemoteToolBuilder.rebuildToolDock(tool) or 0
 			tool:SetAttribute("BT_DockButtonCount", dockCount)
 		end
+		local dockHint = if dockCount == 0
+			then " (Core.UI/ToolList — см. warn выше)"
+			else ""
 		print(
-			`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · док {dockCount} кнопок · {RemoteLoader.getFetchCount()} файлов — готов`
+			`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · док {dockCount} кнопок · {RemoteLoader.getFetchCount()} файлов — готов{dockHint}`
 		)
 	end)
 end)

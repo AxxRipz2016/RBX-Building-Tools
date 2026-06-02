@@ -407,8 +407,8 @@ end;
 function InitializeUI()
 	-- Sets up the UI
 
-	-- Ensure UI has not yet been initialized
-	if UI then
+	-- Ensure UI has not yet been initialized (не «if UI» — в executor глобаль UI может быть чужим)
+	if Core.UI then
 		return;
 	end;
 

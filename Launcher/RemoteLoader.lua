@@ -713,6 +713,10 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		source = source:gsub(
+			"if UI then\r?\n\t\treturn;",
+			"if Core.UI then\n\t\treturn;"
+		)
 		if not source:find("Core.__bt_Roact", 1, true) then
 			source = source:gsub(
 				"(local Cryo = require%(Tool%.Libraries:WaitForChild%('Cryo'%)%)\n)",
@@ -1789,6 +1793,7 @@ function RemoteLoader.clear()
 	table.clear(failedPaths)
 	table.clear(runtimeErrors)
 	_G.Core = nil
+	_G.UI = nil
 	loadCancelled = false
 	fetchCount = 0
 	lastFetchAt = 0

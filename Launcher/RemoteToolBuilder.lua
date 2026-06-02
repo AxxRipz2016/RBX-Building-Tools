@@ -442,7 +442,7 @@ function RemoteToolBuilder.Build(
 		if onMessage then
 			onMessage("Предзагрузка Core / Move / UI…")
 		end
-		local warmPrefixes = { "Core/", "Tools/Move/", "UI/Dock/", "UI/Explorer/", "Support/Assets.lua" }
+		local warmPrefixes = { "Core/", "Tools/", "UI/Dock/", "UI/Explorer/", "Support/Assets.lua" }
 		for _, prefix in warmPrefixes do
 			RemoteLoader.preloadByPrefixes(paths, { prefix }, onFile)
 			task.wait()
@@ -576,13 +576,92 @@ local function getDockIconTable(): { [string]: string }
 	return icons
 end
 
-local function runBuildingToolModule(tool: Tool, moduleName: string): any?
-	local modScript = tool:WaitForChild("Tools"):FindFirstChild(moduleName)
-	if not modScript or not modScript:IsA("ModuleScript") then
+local function findDockToolModule(tool: Tool, moduleName: string): ModuleScript?
+	local tools = tool:FindFirstChild("Tools")
+	if not tools then
 		return nil
 	end
-	local path = modScript:GetAttribute("BTPath") or (`Tools/{moduleName}/init.lua`)
+	local direct = tools:FindFirstChild(moduleName)
+	if direct and direct:IsA("ModuleScript") then
+		return direct
+	end
+	if direct and direct:IsA("Folder") then
+		local initMod = direct:FindFirstChild("init")
+		if initMod and initMod:IsA("ModuleScript") then
+			return initMod
+		end
+	end
+	for _, child in tools:GetChildren() do
+		if child.Name == moduleName and child:IsA("ModuleScript") then
+			return child
+		end
+	end
+	return nil
+end
+
+local function getDockRoactCryo(tool: Tool, coreEnv: any): (any?, any?)
+	if type(coreEnv) == "table" and type(coreEnv.__bt_Roact) == "table" and type(coreEnv.__bt_Cryo) == "table" then
+		return coreEnv.__bt_Roact, coreEnv.__bt_Cryo
+	end
+	local vendor = tool:FindFirstChild("Vendor")
+	local libraries = tool:FindFirstChild("Libraries")
+	if not vendor or not libraries then
+		return nil, nil
+	end
+	local roactInst = vendor:FindFirstChild("Roact")
+	local cryoInst = libraries:FindFirstChild("Cryo")
+	local Roact, Cryo
+	if roactInst and roactInst:IsA("ModuleScript") then
+		local path = roactInst:GetAttribute("BTPath") or "Vendor/Roact/src/init.lua"
+		Roact = RemoteLoader.getCachedModule(path)
+		if Roact == nil then
+			Roact = RemoteLoader.run(path, tool, roactInst)
+		end
+	end
+	if cryoInst and cryoInst:IsA("ModuleScript") then
+		local path = cryoInst:GetAttribute("BTPath") or "Libraries/Cryo/init.lua"
+		Cryo = RemoteLoader.getCachedModule(path)
+		if Cryo == nil then
+			Cryo = RemoteLoader.run(path, tool, cryoInst)
+		end
+	end
+	if type(coreEnv) == "table" then
+		if Roact then
+			coreEnv.__bt_Roact = Roact
+		end
+		if Cryo then
+			coreEnv.__bt_Cryo = Cryo
+		end
+	end
+	return Roact, Cryo
+end
+
+local function runBuildingToolModule(tool: Tool, moduleName: string): any?
+	local modScript = findDockToolModule(tool, moduleName)
+	if not modScript then
+		return nil
+	end
+	local path = modScript:GetAttribute("BTPath")
+		or (if moduleName == "Move" or moduleName == "Paint"
+			then `Tools/{moduleName}/init.lua`
+			else `Tools/{moduleName}.lua`)
 	return RemoteLoader.run(path, tool, modScript)
+end
+
+local function purgeOldPlayerUI()
+	local player = Players.LocalPlayer
+	if not player then
+		return
+	end
+	local pg = player:FindFirstChild("PlayerGui")
+	if not pg then
+		return
+	end
+	local old = pg:FindFirstChild("Building Tools by F3X (UI)")
+	if old then
+		old:Destroy()
+	end
+	_G.UI = nil
 end
 
 local function makeLazyBuildingTool(tool: Tool, moduleName: string, displayName: string, themeColor: Color3): any
@@ -626,7 +705,7 @@ local function ensureDockHotkeys(coreEnv: any, tool: Tool, icons: { [string]: st
 	end
 	for _, row in DOCK_TOOL_ROWS do
 		local iconKey, hotkey, moduleName = row[1], row[2], row[3]
-		if type(icons[iconKey]) == "string" and tool:FindFirstChild("Tools") and tool.Tools:FindFirstChild(moduleName) then
+		if type(icons[iconKey]) == "string" and findDockToolModule(tool, moduleName) then
 			coreEnv.AssignHotkey(hotkey, function()
 				local mod = runBuildingToolModule(tool, moduleName)
 				if type(coreEnv.EquipTool) == "function" then
@@ -638,8 +717,22 @@ local function ensureDockHotkeys(coreEnv: any, tool: Tool, icons: { [string]: st
 	coreEnv.__bt_dockHotkeysDone = true
 end
 
+local function describeToolModules(tool: Tool): string
+	local tools = tool:FindFirstChild("Tools")
+	if not tools then
+		return "Tools:нет"
+	end
+	local names: { string } = {}
+	for _, child in tools:GetChildren() do
+		table.insert(names, child.Name .. "(" .. child.ClassName .. ")")
+	end
+	return "Tools:" .. table.concat(names, ",")
+end
+
 local function registerDockDirect(coreEnv: any, tool: Tool): number
+	coreEnv = (type(coreEnv) == "table" and coreEnv) or _G.Core
 	if type(coreEnv) ~= "table" then
+		warn("[BT] док: Core не загружен (_G.Core nil)")
 		return 0
 	end
 
@@ -651,12 +744,13 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 	local dockHandle = coreEnv.__bt_DockHandle
 	local dockComponent = coreEnv.__bt_DockComponent
 	local ui = coreEnv.__bt_UI or coreEnv.UI
-	local Roact = coreEnv.__bt_Roact
-	local Cryo = coreEnv.__bt_Cryo
+	local Roact, Cryo = getDockRoactCryo(tool, coreEnv)
 
 	if type(toolList) ~= "table" or not dockHandle or not dockComponent or not Roact or not Cryo then
 		if type(coreEnv.AddToolButton) ~= "function" then
-			warn("[BT] док: нет __bt_ToolList и AddToolButton")
+			warn(
+				`[BT] док: нет API (ToolList={toolList ~= nil}, AddToolButton={type(coreEnv.AddToolButton)}, Core.UI={coreEnv.UI ~= nil}) · {describeToolModules(tool)}`
+			)
 			return 0
 		end
 		coreEnv.__bt_dockButtonCount = 0
@@ -664,7 +758,7 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		for _, row in DOCK_TOOL_ROWS do
 			local iconKey, hotkey, moduleName = row[1], row[2], row[3]
 			local iconId = icons[iconKey]
-			if type(iconId) == "string" and tool:FindFirstChild("Tools") and tool.Tools:FindFirstChild(moduleName) then
+			if type(iconId) == "string" and findDockToolModule(tool, moduleName) then
 				ensureDockHotkeys(coreEnv, tool, icons)
 				local lazy = makeLazyBuildingTool(tool, moduleName, moduleName .. " Tool", Color3.fromRGB(255, 140, 60))
 				coreEnv.AddToolButton(iconId, hotkey, lazy)
@@ -685,7 +779,7 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		local iconId = icons[iconKey]
 		if type(iconId) ~= "string" then
 			warn(`[BT] нет иконки: {iconKey}`)
-		elseif not tool:FindFirstChild("Tools") or not tool.Tools:FindFirstChild(moduleName) then
+		elseif not findDockToolModule(tool, moduleName) then
 			warn(`[BT] нет Tools/{moduleName}`)
 		else
 			ensureDockHotkeys(coreEnv, tool, icons)
@@ -765,6 +859,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 
 	if tool:GetAttribute("BT_LocalOnly") then
 		_G.__bt_tool = tool
+		purgeOldPlayerUI()
 
 		step("Assets…")
 		local assetsScript = tool:FindFirstChild("Assets")
