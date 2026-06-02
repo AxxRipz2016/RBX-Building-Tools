@@ -177,6 +177,21 @@ local function patchCoreLateExports(source: string): string
 	return source:gsub("(InitializeUI%(%);\n)", "%1" .. CORE_LATE_EXPORT_BLOCK .. "\n", 1)
 end
 
+local function patchCoreToolChangedCallback(source: string): string
+	if source:find("ActiveBuildingTool%.Color", 1, true) then
+		return source
+	end
+	local replaced, count = source:gsub(
+		"ToolChanged:Connect%(function %(Tool%)\r?\n%s*coroutine%.wrap%(RecolorHandle%)%(Tool%.Color%);%s*\r?\n%s*coroutine%.wrap%(Selection%.RecolorOutlines%)%(Tool%.Color%);",
+		"ToolChanged:Connect(function (ActiveBuildingTool)\n\tcoroutine.wrap(RecolorHandle)(ActiveBuildingTool.Color);\n\tcoroutine.wrap(Selection.RecolorOutlines)(ActiveBuildingTool.Color);"
+	)
+	if count == 0 then
+		replaced = source:gsub("function %(Tool%)", "function (ActiveBuildingTool)", 1)
+		replaced = replaced:gsub("(ToolChanged:Connect%([^)]+%)[^\n]+\n[^\n]+)Tool%.Color", "%1ActiveBuildingTool.Color", 2)
+	end
+	return replaced
+end
+
 local function patchCoreReturn(source: string): string
 	return source:gsub("return getfenv%(0%)", "return (_G.Core or Core)")
 end
@@ -232,6 +247,7 @@ end]]
 		source = patchCoreModuleExports(source)
 		source = patchCoreUiExports(source)
 		source = patchCoreLateExports(source)
+		source = patchCoreToolChangedCallback(source)
 		source = patchCoreReturn(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
