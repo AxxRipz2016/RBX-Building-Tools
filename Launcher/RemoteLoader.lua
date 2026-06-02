@@ -179,7 +179,9 @@ end
 
 -- В env Tool = Roblox Tool; параметры function (Tool) перекрывают env → Tool.Color у Building Tools
 local function patchCoreToolParamShadowing(source: string): string
-	if source:find("RecolorHandle%(ActiveBuildingTool%.Color%)", 1, true) then
+	if source:find("RecolorHandle%(ActiveBuildingTool%.Color%)", 1, true)
+		and source:find("AddToolButton%(IconAssetId, HotkeyLabel, ToolModule%)", 1, true)
+	then
 		return source
 	end
 
@@ -194,6 +196,16 @@ local function patchCoreToolParamShadowing(source: string): string
 	source = source:gsub("CurrentTool = Tool;", "CurrentTool = BuildingToolModule;")
 	source = source:gsub("ToolChanged:Fire%(Tool%)", "ToolChanged:Fire(BuildingToolModule)")
 	source = source:gsub("Tool:Equip%(%);", "BuildingToolModule:Equip();", 1)
+
+	-- AddToolButton: { Tool = Tool } в executor берёт env Tool (Roblox), не параметр
+	source = source:gsub(
+		"local function AddToolButton%(IconAssetId, HotkeyLabel, Tool%)",
+		"local function AddToolButton(IconAssetId, HotkeyLabel, ToolModule)"
+	)
+	source = source:gsub(
+		"HotkeyLabel = HotkeyLabel;\n\t\t\tTool = Tool;",
+		"HotkeyLabel = HotkeyLabel;\n\t\t\tTool = ToolModule;"
+	)
 
 	return source
 end
