@@ -571,7 +571,8 @@ end
 local function rewriteForModuleEnv(path: string, source: string): string
 	source = rewriteToolParentForRemote(path, source)
 	source = ensureModulePreamble(source)
-	source = rewriteCommon(source, true)
+	-- require не заменяем на __bt_require: в теле должен быть require(), local require = … в preamble
+	source = rewriteCommon(source, false)
 	source = rewriteToolParentForRemote(path, source)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
@@ -690,6 +691,9 @@ local function tryParamWrapperRun(
 ): (boolean, any)
 	local innerBody = stripModulePreamble(body)
 	local wrapSource = "return function(__bt_script, __bt_tool, __bt_require)\n"
+		.. "_G.__bt_require = __bt_require\n"
+		.. "_G.__bt_tool = __bt_tool\n"
+		.. "_G.__bt_script = __bt_script\n"
 		.. "local require = __bt_require\n"
 		.. "local script = __bt_script\n"
 		.. `local Tool = __bt_tool\n`
