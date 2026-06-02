@@ -117,28 +117,29 @@ local function patchCoreSelfReference(source: string): string
 	return source
 end
 
--- Loader/UI читают Core.Support, Core.History — дублируем явно на таблицу Core
-local CORE_MODULE_EXPORTS = {
-	"Security",
-	"History",
-	"Selection",
-	"Targeting",
-	"Region",
-	"Signal",
-	"Support",
-	"Try",
-	"Make",
-	"Assets",
-}
+-- Loader/UI читают Core.Support — один блок после Assets (не gsub по всему файлу: ломает { Selection = … })
+local CORE_EXPORT_BLOCK = [[
+Core.Security = Security
+Core.History = History
+Core.Selection = Selection
+Core.Targeting = Targeting
+Core.Region = Region
+Core.Signal = Signal
+Core.Support = Support
+Core.Try = Try
+Core.Make = Make
+Core.Assets = Assets
+]]
 
 local function patchCoreModuleExports(source: string): string
-	for _, name in CORE_MODULE_EXPORTS do
-		local needle = `Core%.{name} = {name}`
-		if not source:find(needle, 1, true) then
-			source = source:gsub(`({name} = [^\n]+\n)`, `%1Core.{name} = {name}\n`)
-		end
+	if source:find("Core%.Support = Support", 1, true) then
+		return source
 	end
-	return source
+	local inserted = source:gsub("(Assets = require%([^\n]+%)\n)", "%1" .. CORE_EXPORT_BLOCK .. "\n", 1)
+	if inserted == source then
+		inserted = source:gsub("(Cryo = require%([^\n]+%)\n)", "%1" .. CORE_EXPORT_BLOCK .. "\n", 1)
+	end
+	return inserted
 end
 
 local function patchCoreInitRequires(source: string): string
