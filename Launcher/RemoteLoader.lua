@@ -357,6 +357,14 @@ end
 		)
 	end
 
+	if path == "Launcher/Interfaces/lol.lua" then
+		-- Безопасно привязываем "workspace" к Tool.Interfaces в executor.
+		source = source:gsub(
+			"local workspace = script%.Parent",
+			"local workspace = (_G.__bt_interfaces_root or (script and script.Parent) or workspace)"
+		)
+	end
+
 	return source
 end
 
