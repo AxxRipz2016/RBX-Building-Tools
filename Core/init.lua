@@ -343,9 +343,19 @@ function InitializeUI()
 		Roact.update(DockHandle, Roact.createElement(DockComponent, {
 			Core = Core;
 			Tools = Cryo.List.join(ToolList);
+			UIRoot = UI;
 		}))
 	end
 	Core.AddToolButton = AddToolButton
+	function Core.RefreshToolDock()
+		if DockHandle and ToolList then
+			Roact.update(DockHandle, Roact.createElement(DockComponent, {
+				Core = Core;
+				Tools = Cryo.List.join(ToolList);
+				UIRoot = UI;
+			}))
+		end
+	end
 
 	-- Clean up UI on tool teardown
 	UIMaid = Maid.new()
@@ -1107,11 +1117,46 @@ end;
 
 Core.IsSelectable = IsSelectable
 Core.PreserveJoints = PreserveJoints
+Core.RestoreJoints = RestoreJoints
+Core.ToggleSwitch = ToggleSwitch
 Core.Mouse = Mouse
 Core.CurrentTool = CurrentTool
 
 -- Initialize the UI
 InitializeUI();
+
+Core.EquipTool = EquipTool
+Core.AssignHotkey = AssignHotkey
+Core.ToggleExplorer = ToggleExplorer
+Core.DeleteSelection = DeleteSelection
+Core.CloneSelection = CloneSelection
+Core.ExportSelection = ExportSelection
+
+if not Core.__dockToolsRegistered then
+	Core.__dockToolsRegistered = true
+	local function BT_Reg(iconKey, hotkey, moduleName)
+		local toolModule = require(Tool:WaitForChild('Tools'):WaitForChild(moduleName))
+		AssignHotkey(hotkey, function()
+			EquipTool(toolModule)
+		end)
+		AddToolButton(Assets[iconKey], hotkey, toolModule)
+	end
+	BT_Reg('MoveIcon', 'Z', 'Move')
+	BT_Reg('ResizeIcon', 'X', 'Resize')
+	BT_Reg('RotateIcon', 'C', 'Rotate')
+	BT_Reg('PaintIcon', 'V', 'Paint')
+	BT_Reg('SurfaceIcon', 'B', 'Surface')
+	BT_Reg('MaterialIcon', 'N', 'Material')
+	BT_Reg('AnchorIcon', 'M', 'Anchor')
+	BT_Reg('CollisionIcon', 'K', 'Collision')
+	BT_Reg('NewPartIcon', 'J', 'NewPart')
+	BT_Reg('MeshIcon', 'H', 'Mesh')
+	BT_Reg('TextureIcon', 'G', 'Texture')
+	BT_Reg('WeldIcon', 'F', 'Weld')
+	BT_Reg('LightingIcon', 'U', 'Lighting')
+	BT_Reg('DecorateIcon', 'P', 'Decorate')
+	Core.RefreshToolDock()
+end
 
 -- Return core
 return getfenv(0);

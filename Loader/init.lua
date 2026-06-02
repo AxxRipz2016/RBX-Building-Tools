@@ -12,6 +12,13 @@ if not Core.Assets then
 	Core.Assets = require(Tool:WaitForChild('Assets'));
 end
 
+if Core.__dockToolsRegistered then
+	if type(Core.RefreshToolDock) == 'function' then
+		Core.RefreshToolDock();
+	end
+	return Core;
+end
+
 local function registerTool(iconKey, hotkey, moduleName)
 	local toolModule = require(Tool.Tools:WaitForChild(moduleName));
 	Core.AssignHotkey(hotkey, function()
@@ -38,6 +45,7 @@ registerTool('WeldIcon', 'F', 'Weld');
 registerTool('LightingIcon', 'U', 'Lighting');
 registerTool('DecorateIcon', 'P', 'Decorate');
 
+Core.__dockToolsRegistered = true;
 if type(Core.RefreshToolDock) == 'function' then
 	Core.RefreshToolDock();
 end

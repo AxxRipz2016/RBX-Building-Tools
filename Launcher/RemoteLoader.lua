@@ -154,9 +154,43 @@ Core.ExportSelection = ExportSelection
 local CORE_API_EXPORT_BLOCK = [[
 Core.IsSelectable = IsSelectable
 Core.PreserveJoints = PreserveJoints
+Core.RestoreJoints = RestoreJoints
+Core.ToggleSwitch = ToggleSwitch
 Core.SyncAPI = SyncAPI
 Core.Mouse = Mouse
 Core.CurrentTool = CurrentTool
+]]
+
+-- Регистрация кнопок дока внутри Core (Loader в другом env часто не дополняет ToolList)
+local CORE_DOCK_REGISTER_BLOCK = [[
+
+if not Core.__dockToolsRegistered then
+	Core.__dockToolsRegistered = true
+	local function BT_Reg(iconKey, hotkey, moduleName)
+		local toolModule = require(Tool:WaitForChild('Tools'):WaitForChild(moduleName))
+		AssignHotkey(hotkey, function()
+			EquipTool(toolModule)
+		end)
+		AddToolButton(Assets[iconKey], hotkey, toolModule)
+	end
+	BT_Reg('MoveIcon', 'Z', 'Move')
+	BT_Reg('ResizeIcon', 'X', 'Resize')
+	BT_Reg('RotateIcon', 'C', 'Rotate')
+	BT_Reg('PaintIcon', 'V', 'Paint')
+	BT_Reg('SurfaceIcon', 'B', 'Surface')
+	BT_Reg('MaterialIcon', 'N', 'Material')
+	BT_Reg('AnchorIcon', 'M', 'Anchor')
+	BT_Reg('CollisionIcon', 'K', 'Collision')
+	BT_Reg('NewPartIcon', 'J', 'NewPart')
+	BT_Reg('MeshIcon', 'H', 'Mesh')
+	BT_Reg('TextureIcon', 'G', 'Texture')
+	BT_Reg('WeldIcon', 'F', 'Weld')
+	BT_Reg('LightingIcon', 'U', 'Lighting')
+	BT_Reg('DecorateIcon', 'P', 'Decorate')
+	if Core.RefreshToolDock then
+		Core.RefreshToolDock()
+	end
+end
 ]]
 
 local function patchCoreModuleExports(source: string): string
@@ -179,7 +213,7 @@ local function patchCoreUiExports(source: string): string
 end
 
 local function patchCoreLateExports(source: string): string
-	if source:find("Core%.IsSelectable = IsSelectable", 1, true) then
+	if source:find("BT_Reg%('MoveIcon'", 1, true) then
 		return source
 	end
 	-- убрать ранний ошибочный экспорт (r47): AssignHotkey ещё не объявлен
@@ -187,9 +221,16 @@ local function patchCoreLateExports(source: string): string
 		"(ToolChanged = Signal%.new%(%)\nCore%.ToolChanged = ToolChanged\nCore%.Mode = Mode\n)Core%.EquipTool = EquipTool\nCore%.AssignHotkey = AssignHotkey\n",
 		"%1"
 	)
+	if source:find("Core%.IsSelectable = IsSelectable", 1, true) then
+		return source:gsub(
+			"(InitializeUI%(%);)",
+			"%1\n" .. CORE_DOCK_REGISTER_BLOCK .. "\n" .. CORE_LATE_EXPORT_BLOCK .. "\n",
+			1
+		)
+	end
 	return source:gsub(
 		"(%-%- Initialize the UI\nInitializeUI%(%);)",
-		CORE_API_EXPORT_BLOCK .. "\n\n%1\n" .. CORE_LATE_EXPORT_BLOCK .. "\n",
+		CORE_API_EXPORT_BLOCK .. "\n\n%1\n" .. CORE_LATE_EXPORT_BLOCK .. "\n" .. CORE_DOCK_REGISTER_BLOCK .. "\n",
 		1
 	)
 end
