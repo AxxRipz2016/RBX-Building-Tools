@@ -177,19 +177,28 @@ local function patchCoreLateExports(source: string): string
 	return source:gsub("(InitializeUI%(%);\n)", "%1" .. CORE_LATE_EXPORT_BLOCK .. "\n", 1)
 end
 
-local function patchCoreToolChangedCallback(source: string): string
-	if source:find("ActiveBuildingTool%.Color", 1, true) then
+-- В env Tool = Roblox Tool; параметры function (Tool) перекрывают env → Tool.Color у Building Tools
+local function patchCoreToolParamShadowing(source: string): string
+	if source:find("EquipTool%(BuildingToolModule%)", 1, true) then
 		return source
 	end
-	local replaced, count = source:gsub(
-		"ToolChanged:Connect%(function %(Tool%)\r?\n%s*coroutine%.wrap%(RecolorHandle%)%(Tool%.Color%);%s*\r?\n%s*coroutine%.wrap%(Selection%.RecolorOutlines%)%(Tool%.Color%);",
-		"ToolChanged:Connect(function (ActiveBuildingTool)\n\tcoroutine.wrap(RecolorHandle)(ActiveBuildingTool.Color);\n\tcoroutine.wrap(Selection.RecolorOutlines)(ActiveBuildingTool.Color);"
+
+	source = source:gsub(
+		"ToolChanged:Connect%(function %(Tool%)\r?\n\tcoroutine%.wrap%(RecolorHandle%)%(Tool%.Color%);",
+		"ToolChanged:Connect(function (ActiveBuildingTool)\n\tcoroutine.wrap(RecolorHandle)(ActiveBuildingTool.Color);"
 	)
-	if count == 0 then
-		replaced = source:gsub("function %(Tool%)", "function (ActiveBuildingTool)", 1)
-		replaced = replaced:gsub("(ToolChanged:Connect%([^)]+%)[^\n]+\n[^\n]+)Tool%.Color", "%1ActiveBuildingTool.Color", 2)
-	end
-	return replaced
+	source = source:gsub(
+		"coroutine%.wrap%(Selection%.RecolorOutlines%)%(Tool%.Color%);",
+		"coroutine.wrap(Selection.RecolorOutlines)(ActiveBuildingTool.Color);",
+		1
+	)
+
+	source = source:gsub("function EquipTool%(Tool%)", "function EquipTool(BuildingToolModule)")
+	source = source:gsub("CurrentTool = Tool;", "CurrentTool = BuildingToolModule;")
+	source = source:gsub("ToolChanged:Fire%(Tool%)", "ToolChanged:Fire(BuildingToolModule)")
+	source = source:gsub("\n\tTool:Equip%(%);", "\n\tBuildingToolModule:Equip();")
+
+	return source
 end
 
 local function patchCoreReturn(source: string): string
@@ -247,7 +256,7 @@ end]]
 		source = patchCoreModuleExports(source)
 		source = patchCoreUiExports(source)
 		source = patchCoreLateExports(source)
-		source = patchCoreToolChangedCallback(source)
+		source = patchCoreToolParamShadowing(source)
 		source = patchCoreReturn(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
@@ -745,6 +754,7 @@ local function rewriteForModuleEnv(path: string, source: string): string
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
 	if path == "Core/init.lua" then
 		source = patchCoreSelfReference(source)
+		source = patchCoreToolParamShadowing(source)
 	end
 	return source
 end
