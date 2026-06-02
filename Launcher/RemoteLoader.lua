@@ -742,6 +742,10 @@ function RemoteLoader.hasSource(path: string): boolean
 	return sourceCache[path] ~= nil
 end
 
+function RemoteLoader.getSource(path: string): string?
+	return sourceCache[path]
+end
+
 function RemoteLoader.getFailed(): { [string]: string }
 	return failedPaths
 end

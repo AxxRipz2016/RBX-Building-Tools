@@ -43,13 +43,16 @@ end
 
 local moduleCache: { [string]: any } = {}
 
+local GITHUB_REPO = "utststs95/RBX-Building-Tools"
+local GITHUB_BRANCH = "development"
+
 local function isLikelyLuaSource(body: string): boolean
 	body = body:gsub("^\239\187\191", ""):gsub("^%s+", ""):gsub("%s+$", "")
 	if #body < 4 then
 		return false
 	end
 	local head = body:sub(1, 200):lower()
-	if head:match("^%s*404") or head:match("^%s*403") then
+	if head:match("^%s*404") or head:match("^%s*403") or head:find("too many requests", 1, true) then
 		return false
 	end
 	if head:find("<!doctype", 1, true) or head:match("^%s*<html") then
@@ -58,13 +61,52 @@ local function isLikelyLuaSource(body: string): boolean
 	return true
 end
 
+local function httpGetWithRetry(path: string): string
+	local urls = {
+		gitUrl(path),
+		`https://cdn.jsdelivr.net/gh/{GITHUB_REPO}@{GITHUB_BRANCH}/{path}?bt={cacheTag}`,
+		`{BASE_URL}{path}?bt={cacheTag}&mirror=1`,
+	}
+	local lastPreview = ""
+	for attempt = 1, 6 do
+		for _, url in urls do
+			local ok, body = pcall(function()
+				return httpGet(url)
+			end)
+			if ok and type(body) == "string" and isLikelyLuaSource(body) then
+				return body
+			end
+			if ok and type(body) == "string" and #body > 0 then
+				lastPreview = body:sub(1, 60):gsub("%s+", " ")
+			end
+		end
+		task.wait(0.35 * attempt)
+	end
+	return ""
+end
+
 local function loadFromGit(path: string)
 	if moduleCache[path] ~= nil then
 		return moduleCache[path]
 	end
-	local src = httpGet(gitUrl(path))
+
+	local src: string
+	local activeLoader = _G.BT_RemoteLoader
+	if type(activeLoader) == "table" and type(activeLoader.fetchSource) == "function" and activeLoader.BaseUrl then
+		local okFetch, fetchErr = activeLoader.fetchSource(path)
+		if not okFetch then
+			error(`[BT] {path}: {fetchErr}`, 0)
+		end
+		src = activeLoader.getSource(path) or ""
+	else
+		src = httpGetWithRetry(path)
+	end
+
 	if not isLikelyLuaSource(src) then
-		error(`[BT] {path}: пустой ответ или HTML (проверь URL / лимит HttpGet)`, 0)
+		error(
+			`[BT] {path}: пустой ответ или HTML (GitHub лимит / обрезан HttpGet). Повтори через 1 мин или другой request`,
+			0
+		)
 	end
 	if path == "Launcher/RemoteLoader.lua" then
 		if #src < 30000 then
@@ -128,6 +170,7 @@ local ok, err = pcall(function()
 	Config.RemoteBaseUrl = BASE_URL
 
 	local RemoteLoader = loadFromGit("Launcher/RemoteLoader.lua")
+	_G.BT_RemoteLoader = RemoteLoader
 	if type(RemoteLoader) ~= "table" or type(RemoteLoader.configure) ~= "function" then
 		local fallback = _G.BT_RemoteLoader
 		if type(fallback) == "table" and type(fallback.configure) == "function" then
@@ -139,13 +182,22 @@ local ok, err = pcall(function()
 			)
 		end
 	end
-	local RemoteToolBuilder = loadFromGit("Launcher/RemoteToolBuilder.lua")
-	local manifest = loadFn(httpGet(gitUrl("Launcher/manifest.lua")), "Launcher/manifest.lua")()
-
 	RemoteLoader.configure(BASE_URL, Config.RemoteVendorUrls)
+	_G.BT_RemoteLoader = RemoteLoader
 	if Config.ContinueOnLoadErrors ~= false then
 		RemoteLoader.setContinueOnError(true)
 	end
+
+	local RemoteToolBuilder = loadFromGit("Launcher/RemoteToolBuilder.lua")
+	local manifestSrc = httpGetWithRetry("Launcher/manifest.lua")
+	if not isLikelyLuaSource(manifestSrc) then
+		local okM, _ = RemoteLoader.fetchSource("Launcher/manifest.lua")
+		if okM then
+			manifestSrc = RemoteLoader.getSource("Launcher/manifest.lua") or ""
+		end
+	end
+	local manifest = loadFn(manifestSrc, "Launcher/manifest.lua")()
+
 	RemoteToolBuilder.setManifest(manifest)
 	RemoteToolBuilder.setVersionInfo(Version)
 	_G.BT_LAUNCHER_VERSION = Version
