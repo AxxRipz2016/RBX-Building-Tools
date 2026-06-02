@@ -337,6 +337,16 @@ function RemoteToolBuilder.Build(
 	RemoteLoader.run("Support/DescendantCounter.local.client.lua", tool, tool.Loaded.DescendantCount.DescendantCounter :: LocalScript)
 	RemoteLoader.run("Support/ReplicationListener.client.lua", tool, tool.Loaded.ReplicationListener :: LocalScript)
 
+	-- Соло/executor: ReplicationListener может не успеть — Loader ждёт Loaded.Value
+	local loaded = tool:FindFirstChild("Loaded")
+	if loaded and loaded:IsA("BoolValue") and not loaded.Value then
+		local count = loaded:FindFirstChild("DescendantCount")
+		if count and count:IsA("IntValue") then
+			count.Value = #tool:GetDescendants()
+		end
+		loaded.Value = true
+	end
+
 	-- Tool в Backpack только после StartRuntime (см. RemoteEntry)
 	return tool
 end

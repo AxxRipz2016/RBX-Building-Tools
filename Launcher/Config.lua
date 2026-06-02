@@ -20,7 +20,7 @@ Config.RemoteVendorUrls = {
 }
 
 -- Меняй при push лаунчера (дублирует Version.lua для Rojo)
-Config.LauncherVersion = "38"
+Config.LauncherVersion = "39"
 
 -- true: не останавливать загрузку на ошибке run/require; список — в UI «Копировать»
 Config.ContinueOnLoadErrors = true

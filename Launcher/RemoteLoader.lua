@@ -510,6 +510,16 @@ local function rewriteCommon(source: string, useBtRequire: boolean): string
 	return source
 end
 
+local MODULE_ENV_PREAMBLE = "local require = __bt_require\n"
+	.. 'local script = (typeof(script) == "Instance" and script) or __bt_script\n'
+
+local function ensureModulePreamble(source: string): string
+	if source:find("local require = __bt_require", 1, true) then
+		return source
+	end
+	return MODULE_ENV_PREAMBLE .. source
+end
+
 local function rewriteToolParentForRemote(path: string, source: string): string
 	if path == "Loader/init.lua" or path == "Core/init.lua" then
 		source = source:gsub("Tool = script%.Parent;", "Tool = Tool;")
@@ -521,27 +531,20 @@ local function rewriteToolParentForRemote(path: string, source: string): string
 	return source
 end
 
--- ModuleScript в custom env: require нативный; script из env (глобальный script в executor часто nil)
+-- ModuleScript в custom env (присваивания → env / Core)
 local function rewriteForModuleEnv(path: string, source: string): string
-	if not source:find("local script = %(typeof%(script%)", 1, true) then
-		source = 'local script = (typeof(script) == "Instance" and script) or __bt_script\n' .. source
-	end
 	source = rewriteToolParentForRemote(path, source)
-	source = source:gsub("Tool%.Parent:IsA", "Tool.Parent and Tool.Parent:IsA")
-	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
-	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
-	return source
-end
-
--- ModuleScript в env: __bt_script/__bt_require; присваивания попадают в env (не в пустой _G.Core)
-local function rewriteForEnvWrap(path: string, source: string): string
-	-- Сначала Tool = Tool, иначе rewriteCommon заменит script.Parent на SCRIPT_PARENT_EXPR и Tool станет nil
-	source = rewriteToolParentForRemote(path, source)
+	source = ensureModulePreamble(source)
 	source = rewriteCommon(source, true)
 	source = rewriteToolParentForRemote(path, source)
 	source = source:gsub("local Core = getfenv%(0%)\r?\n?", "")
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
 	return source
+end
+
+-- ModuleScript в env: дублирует rewriteForModuleEnv (оставлено для читаемости / fallback-имени)
+local function rewriteForEnvWrap(path: string, source: string): string
+	return rewriteForModuleEnv(path, source)
 end
 
 local function rewriteForLocalWrap(source: string): string
@@ -660,17 +663,13 @@ local function runModuleWithEnv(
 		return pcall(fn)
 	end
 
-	local ok, result = tryCompiledBody(rewriteForEnvWrap(path, raw), "")
+	local body = rewriteForModuleEnv(path, raw)
+	local ok, result = tryCompiledBody(body, "")
 	if ok then
 		return result
 	end
 
-	local envOk, envResult = tryCompiledBody(rewriteForModuleEnv(path, raw), "#env")
-	if envOk then
-		return envResult
-	end
-
-	error(`{result}; {envResult}`, 0)
+	error(tostring(result), 0)
 end
 
 function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): any
