@@ -131,6 +131,13 @@ Core.Make = Make
 Core.Assets = Assets
 ]]
 
+local CORE_UI_EXPORT_BLOCK = [[
+Core.ToolChanged = ToolChanged
+Core.Mode = Mode
+Core.EquipTool = EquipTool
+Core.AssignHotkey = AssignHotkey
+]]
+
 local function patchCoreModuleExports(source: string): string
 	if source:find("Core%.Support = Support", 1, true) then
 		return source
@@ -140,6 +147,18 @@ local function patchCoreModuleExports(source: string): string
 		inserted = source:gsub("(Cryo = require%([^\n]+%)\n)", "%1" .. CORE_EXPORT_BLOCK .. "\n", 1)
 	end
 	return inserted
+end
+
+local function patchCoreUiExports(source: string): string
+	if source:find("Core%.ToolChanged = ToolChanged", 1, true) then
+		return source
+	end
+	local inserted = source:gsub("(ToolChanged = Signal%.new%(%)\n)", "%1" .. CORE_UI_EXPORT_BLOCK, 1)
+	return inserted
+end
+
+local function patchCoreReturn(source: string): string
+	return source:gsub("return getfenv%(0%)", "return (_G.Core or Core)")
 end
 
 local function patchCoreInitRequires(source: string): string
@@ -191,6 +210,8 @@ end]]
 		source = patchCoreSelfReference(source)
 		source = patchCoreInitRequires(source)
 		source = patchCoreModuleExports(source)
+		source = patchCoreUiExports(source)
+		source = patchCoreReturn(source)
 		if not source:find("UIRoot = UI", 1, true) then
 			source = source:gsub("Tools = ToolList;", "Tools = ToolList;\n\t\tUIRoot = UI;")
 		end
@@ -232,6 +253,17 @@ end]]
 				"%1Core.Targeting = Targeting\n"
 			)
 		end
+	end
+
+	if path == "Loader/init.lua" then
+		source = source:gsub(
+			"(local Core = require%(Tool:WaitForChild 'Core'%)%)\n",
+			"%1\nif Core and not Core.Support then\n\tCore.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))\nend\n"
+		)
+		source = source:gsub(
+			"(local Core = require%(Tool:WaitForChild%('Core'%)%)\n)",
+			"%1if Core and not Core.Support then\n\tCore.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))\nend\n"
+		)
 	end
 
 	return source
@@ -823,6 +855,9 @@ local function runModuleWithEnv(
 
 	local ok, result = tryEnvRun()
 	if ok then
+		if path == "Core/init.lua" then
+			return coreEnv
+		end
 		return result
 	end
 

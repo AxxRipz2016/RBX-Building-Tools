@@ -22,8 +22,9 @@ function ToolList:init()
         self:setState({
             CurrentTool = core.CurrentTool;
         })
-        if core.ToolChanged and core.ToolChanged.Connect then
-            self.Maid.CurrentTool = core.ToolChanged:Connect(function (Tool)
+        local toolChanged = core.ToolChanged
+        if type(toolChanged) == "table" and type(toolChanged.Connect) == "function" then
+            self.Maid.CurrentTool = toolChanged:Connect(function (Tool)
                 self:setState({
                     CurrentTool = Tool;
                 })
