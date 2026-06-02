@@ -1,9 +1,8 @@
 -- Автоматически сгенерированный UI-скрипт
 -- Элемент: BTAnchorToolGUI (Frame)
 
--- Внутри Tool.Interfaces переменная workspace должна указывать на папку Interfaces,
--- а не на Workspace-сервис.
-local workspace = script.Parent
+-- Внутри Tool.Interfaces workspace должен указывать на папку Interfaces.
+local workspace = (_G.__bt_interfaces_root or (script and script.Parent) or workspace)
 
 local ui_1 = Instance.new("Frame")
 ui_1.Style = Enum.FrameStyle.Custom
