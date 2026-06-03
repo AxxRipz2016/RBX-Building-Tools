@@ -729,28 +729,15 @@ local function patchToolsRuntime(path: string, source: string): string
 	if path == "Tools/Move/UIController.lua" then
 		source = source:gsub("#Selection%.Parts", "#(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
 		source = source:gsub("pairs%(Selection%.Parts%)", "pairs(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
-		source = source:gsub(
-			"(function UIController:UpdateUI%(%)\r?\n\t%-%- Updates information on the UI\r?\n\r?\n\t%-%- Make sure the UI's on\r?\n\tif not self%.UI then\r?\n\t\treturn\r?\n\tend\r?\n\r?\n\t%-%- Only show)",
-			[[function UIController:UpdateUI()
-	-- Updates information on the UI
 
-	if not self.UI then
-		return
+		if not source:find("function getSelectionParts", 1, true) then
+			source = source:gsub(
+				"(%-%- Create class\r?\nlocal UIController = %{%})",
+				[[local function getSelectionParts()
+	if type(Core.GetSelectionParts) == "function" then
+		return Core.GetSelectionParts()
 	end
-
-	local parts = (type(Core.GetSelectionParts) == "function" and Core.GetSelectionParts()) or {}
-
-	-- Only show]]
-		)
-		source = source:gsub("#getSelectionParts%(%)", "#parts")
-		source = source:gsub("pairs%(getSelectionParts%(%)%)", "pairs(parts)")
-	end
-
-	if path == "Tools/Move/UIController.lua" and not source:find("function getSelectionParts", 1, true) then
-		source = source:gsub(
-			"(%-%- Create class\r?\nlocal UIController = %{%})",
-			[[local function getSelectionParts()
-	local sel = (type(Core) == "table" and Core.Selection) or Selection
+	local sel = Core.Selection
 	if sel and type(sel.Parts) == "table" then
 		return sel.Parts
 	end
@@ -758,9 +745,31 @@ local function patchToolsRuntime(path: string, source: string): string
 end
 
 %1]]
-		)
-		source = source:gsub("#Selection%.Parts", "#getSelectionParts()")
-		source = source:gsub("pairs%(Selection%.Parts%)", "pairs(getSelectionParts())")
+			)
+			source = source:gsub("#Selection%.Parts", "#getSelectionParts()")
+			source = source:gsub("pairs%(Selection%.Parts%)", "pairs(getSelectionParts())")
+		end
+
+		if not source:find("local parts = getSelectionParts", 1, true)
+			and not source:find("local parts = %(type%(Core%.GetSelectionParts%)", 1, true)
+		then
+			source = source:gsub(
+				"([\t ]*%-%- Only show and calculate selection info if it's not empty\r?\n)([\t ]*)if #%s*getSelectionParts%(%)%s*==%s*0",
+				"%1%2local parts = getSelectionParts()\n%2if #parts == 0"
+			)
+			source = source:gsub(
+				"([\t ]*%-%- Only show and calculate selection info if it's not empty\r?\n)([\t ]*)if #%s*Selection%.Parts%s*==%s*0",
+				"%1%2local parts = (type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})\n%2if #parts == 0"
+			)
+			source = source:gsub(
+				"([\t ]*)for _%, Part in pairs%(getSelectionParts%(%)%)",
+				"%1for _, Part in pairs(parts)"
+			)
+			source = source:gsub(
+				"([\t ]*)for _%, Part in pairs%(Selection%.Parts%)",
+				"%1for _, Part in pairs(parts)"
+			)
+		end
 	end
 
 	if (path == "Tools/Rotate.lua" or path == "Tools/Move/init.lua")

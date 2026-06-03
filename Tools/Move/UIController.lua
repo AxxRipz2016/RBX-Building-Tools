@@ -3,7 +3,6 @@ local Libraries = Tool:WaitForChild('Libraries')
 
 -- API
 local Core = require(Tool.Core)
-local Selection = Core.Selection
 
 -- Libraries
 local Support = require(Libraries:WaitForChild 'SupportLibrary')
@@ -14,7 +13,7 @@ local function getSelectionParts()
 	if type(Core.GetSelectionParts) == "function" then
 		return Core.GetSelectionParts()
 	end
-	local sel = (type(Core) == "table" and Core.Selection) or Selection
+	local sel = Core.Selection
 	if sel and type(sel.Parts) == "table" then
 		return sel.Parts
 	end
@@ -152,7 +151,8 @@ function UIController:UpdateUI()
 	end
 
 	-- Only show and calculate selection info if it's not empty
-	if #getSelectionParts() == 0 then
+	local parts = getSelectionParts()
+	if #parts == 0 then
 		self.UI.Info.Visible = false
 		self.UI.Size = UDim2.new(0, 245, 0, 90)
 		return
@@ -167,7 +167,7 @@ function UIController:UpdateUI()
 
 	-- Identify common positions across axes
 	local XVariations, YVariations, ZVariations = {}, {}, {}
-	for _, Part in pairs(getSelectionParts()) do
+	for _, Part in pairs(parts) do
 		table.insert(XVariations, Support.Round(Part.Position.X, 3))
 		table.insert(YVariations, Support.Round(Part.Position.Y, 3))
 		table.insert(ZVariations, Support.Round(Part.Position.Z, 3))
