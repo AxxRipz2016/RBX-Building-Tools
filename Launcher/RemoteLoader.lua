@@ -8,6 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 local sourceCache: { [string]: string } = {}
+local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
 local registry: { [ModuleScript]: string } = {}
 local failedPaths: { [string]: string } = {}
@@ -700,16 +701,18 @@ local function isModernCoreInitSource(source: string): boolean
 		and source:find("IsBuildingToolModule", 1, true) ~= nil
 end
 
-local function applyModernCoreInitPatches(source: string): string
+-- Только для executor/remote: не трогать тело modern Core в patchRemoteSource (иначе лишние end)
+local function applyMinimalCoreInitRewrites(source: string): string
 	if not source:find("Core%.SyncAPI = SyncAPI", 1, true) then
 		source = source:gsub("SyncAPI = Tool%.SyncAPI;", "SyncAPI = Tool.SyncAPI;\nCore.SyncAPI = SyncAPI;", 1)
 	end
 	source = patchCoreReturn(source)
 	source = source:gsub(
 		"Tool%.Equipped:Connect%(Enable%);",
-		"Tool.Equipped:Connect(function()\n\t\tEnable(Player:GetMouse())\n\tend);"
+		"Tool.Equipped:Connect(function()\n\t\tEnable(Player:GetMouse())\n\tend);",
+		1
 	)
-	source = source:gsub("UI%.Parent = script;", "UI.Parent = nil; UI.Enabled = false;")
+	source = source:gsub("UI%.Parent = script;", "UI.Parent = nil; UI.Enabled = false;", 1)
 	if not source:find("Mode ~= 'Tool' or %(Player%.Character", 1, true) then
 		source = source:gsub(
 			"(UI%.Parent = UIContainer;)",
@@ -720,13 +723,22 @@ local function applyModernCoreInitPatches(source: string): string
 	if not source:find("Core%.UI = UI\n\tUI%.Parent = nil", 1, true) then
 		source = source:gsub(
 			"(Core%.UI = UI\n)",
-			"%1\tUI.Parent = nil;\n\tUI.Enabled = false;\n"
+			"%1\tUI.Parent = nil;\n\tUI.Enabled = false;\n",
+			1
 		)
 	end
 	source = applyCoreEquipSafetyPatches(source)
 	source = patchCoreUiExports(source)
 	source = patchCoreLateExports(source)
 	return source
+end
+
+local function getPatchedSource(path: string): string?
+	local raw = rawSourceCache[path] or sourceCache[path]
+	if not raw then
+		return nil
+	end
+	return patchRemoteSource(path, raw)
 end
 
 local function applyCoreEquipSafetyPatches(source: string): string
@@ -1414,8 +1426,9 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		-- Современный Core/init.lua уже содержит EnsureUI/Resolve — не гонять legacy-gsub
 		if isModernCoreInitSource(source) then
-			return applyModernCoreInitPatches(source)
+			return source
 		end
 		if not source:find("Core.GetBoundingBoxAPI", 1, true) then
 			source = source:gsub(
@@ -1936,11 +1949,11 @@ function RemoteLoader.setProgressCallback(cb: ((string, boolean, string?) -> ())
 end
 
 function RemoteLoader.hasSource(path: string): boolean
-	return sourceCache[path] ~= nil
+	return rawSourceCache[path] ~= nil or sourceCache[path] ~= nil
 end
 
 function RemoteLoader.getSource(path: string): string?
-	return sourceCache[path]
+	return getPatchedSource(path) or sourceCache[path]
 end
 
 function RemoteLoader.getFailed(): { [string]: string }
@@ -2004,8 +2017,13 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 	if loadCancelled then
 		return false, "отменено"
 	end
+	if rawSourceCache[path] then
+		return true, getPatchedSource(path) :: string
+	end
 	if sourceCache[path] then
-		return true, sourceCache[path]
+		rawSourceCache[path] = sourceCache[path]
+		sourceCache[path] = nil
+		return true, getPatchedSource(path) :: string
 	end
 
 	local lastErr: string? = nil
@@ -2029,8 +2047,9 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 				result = normalizeBody(result)
 			end
 			if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
+				rawSourceCache[path] = result
+				sourceCache[path] = nil
 				result = patchRemoteSource(path, result)
-				sourceCache[path] = result
 				failedPaths[path] = nil
 				fetchCount += 1
 				if progressCallback then
@@ -2067,7 +2086,7 @@ function RemoteLoader.preloadRemaining(
 	local hardFailures: { string } = {}
 	local pending: { string } = {}
 	for _, path in paths do
-		if not sourceCache[path] then
+		if not rawSourceCache[path] and not sourceCache[path] then
 			table.insert(pending, path)
 		end
 	end
@@ -2314,7 +2333,7 @@ local function rewriteForModuleEnv(path: string, source: string): string
 	if path == "Core/init.lua" then
 		source = patchCoreSelfReference(source)
 		if isModernCoreInitSource(source) then
-			source = applyCoreEquipSafetyPatches(source)
+			source = applyMinimalCoreInitRewrites(source)
 		else
 			source = patchCoreToolParamShadowing(source)
 			source = applyCoreEquipSafetyPatches(source)
@@ -2605,7 +2624,10 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	end
 
 	local btRequire = buildRequire(tool)
-	local raw = sourceCache[path]
+	local raw = getPatchedSource(path)
+	if not raw then
+		error(`[BT] run {path}: нет исходника в кэше`, 0)
+	end
 	local ok, result
 
 	if scriptInstance:IsA("ModuleScript") then
@@ -2638,6 +2660,7 @@ end
 
 function RemoteLoader.clear()
 	table.clear(sourceCache)
+	table.clear(rawSourceCache)
 	table.clear(moduleCache)
 	table.clear(registry)
 	table.clear(failedPaths)
