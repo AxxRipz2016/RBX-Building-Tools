@@ -20,6 +20,19 @@ local function getSelectionParts()
 	return {}
 end
 
+local function setGuiVisible(gui, visible)
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if type(Core.BT_SetGuiVisible) == "function" then
+		Core.BT_SetGuiVisible(gui, visible)
+	elseif gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	else
+		gui.Visible = visible and true or false
+	end
+end
+
 -- Create class
 local UIController = {}
 UIController.__index = UIController
@@ -135,7 +148,7 @@ function UIController:HideUI()
 	end
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(self.UI, false)
+	setGuiVisible(self.UI, false)
 
 	-- Stop updating the UI
     self.Maid:Destroy()
