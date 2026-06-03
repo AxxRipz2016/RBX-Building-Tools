@@ -733,14 +733,6 @@ local function applyMinimalCoreInitRewrites(source: string): string
 	return source
 end
 
-local function getPatchedSource(path: string): string?
-	local raw = rawSourceCache[path] or sourceCache[path]
-	if not raw then
-		return nil
-	end
-	return patchRemoteSource(path, raw)
-end
-
 local function applyCoreEquipSafetyPatches(source: string): string
 	source = source:gsub(
 		"BuildingToolModule:Equip%(%);",
@@ -1840,6 +1832,14 @@ end;]]
 	source = patchCoreAndToolRequires(path, source)
 
 	return source
+end
+
+local function getPatchedSource(path: string): string?
+	local raw = rawSourceCache[path] or sourceCache[path]
+	if not raw then
+		return nil
+	end
+	return patchRemoteSource(path, raw)
 end
 
 local function isLikelyLuaSource(body: string): boolean
