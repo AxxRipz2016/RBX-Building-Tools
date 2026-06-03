@@ -116,11 +116,21 @@ MoveTool.UIController = require(script:WaitForChild 'UIController')
 function MoveTool:Equip()
 	-- Enables the tool's equipped functionality
 
-	-- Set our current axis mode
-	self:SetAxes(self.Axes)
+	-- UI first: SetAxes may fail if BoundingBox is not ready yet
+	local okUi, errUi = pcall(function()
+		self.UIController:ShowUI()
+	end)
+	if not okUi then
+		warn("[BT] Move ShowUI:", errUi)
+	end
 
-	-- Start up our interface
-	self.UIController:ShowUI()
+	local okAxes, errAxes = pcall(function()
+		self:SetAxes(self.Axes)
+	end)
+	if not okAxes then
+		warn("[BT] Move SetAxes:", errAxes)
+	end
+
 	self:BindShortcutKeys()
 	self.FreeDragging:EnableDragging()
 
@@ -144,7 +154,9 @@ function MoveTool:Unequip()
 	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then
 		BoundingBoxAPI.ClearBoundingBox()
 	end
-	SnapTracking.StopTracking();
+	if type(SnapTracking) == "table" and type(SnapTracking.StopTracking) == "function" then
+		SnapTracking.StopTracking()
+	end
 
 end
 
@@ -162,9 +174,19 @@ function MoveTool:SetAxes(AxisMode)
 
 	-- For global mode, use bounding box handles
 	if AxisMode == 'Global' then
-		BoundingBoxAPI.StartBoundingBox(function (boxPart)
-			self.HandleDragging:AttachHandles(boxPart)
-		end)
+		local startBB = BoundingBoxAPI.StartBoundingBox
+		if type(startBB) == 'function' then
+			startBB(function(boxPart)
+				local okH, errH = pcall(function()
+					self.HandleDragging:AttachHandles(boxPart)
+				end)
+				if not okH then
+					warn("[BT] Move AttachHandles (bbox):", errH)
+				end
+			end)
+		else
+			self.HandleDragging:AttachHandles(Selection.Focus, true)
+		end
 
 	-- For local mode, use focused part handles
 	elseif AxisMode == 'Local' then

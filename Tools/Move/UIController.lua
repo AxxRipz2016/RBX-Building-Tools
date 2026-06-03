@@ -9,6 +9,17 @@ local Support = require(Libraries:WaitForChild 'SupportLibrary')
 local Maid = require(Libraries:WaitForChild 'Maid')
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 
+local function btSetGuiVisible(gui, visible)
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
+
 local function getSelectionParts()
 	if type(Core.GetSelectionParts) == "function" then
 		return Core.GetSelectionParts()
@@ -18,17 +29,6 @@ local function getSelectionParts()
 		return sel.Parts
 	end
 	return {}
-end
-
-local function setGuiVisible(gui, visible)
-	if gui == nil or typeof(gui) ~= "Instance" then
-		return
-	end
-	if gui:IsA("ScreenGui") then
-		gui.Enabled = visible and true or false
-	else
-		gui.Visible = visible and true or false
-	end
 end
 
 -- Create class
@@ -52,17 +52,24 @@ function UIController:ShowUI()
 
 	-- Reveal UI if already created
 	if self.UI then
-		self.UI.Visible = true
-        self.Maid.UIUpdater = Support.Loop(0.1, self.UpdateUI, self)
+		btSetGuiVisible(self.UI, true)
+		if type(Support.Loop) == "function" then
+			self.Maid.UIUpdater = Support.Loop(0.1, self.UpdateUI, self)
+		end
         self:AttachDragListener()
         self:AttachAxesListener()
 		return
 	end
 
 	-- Create the UI
+	local uiRoot = Core.UI
+	if not uiRoot then
+		warn("[BT] Move UI: Core.UI не инициализирован")
+		return
+	end
 	self.UI = (Core.Tool or Tool):WaitForChild('Interfaces'):WaitForChild('BTMoveToolGUI'):Clone()
-	self.UI.Parent = Core.UI
-	self.UI.Visible = true
+	self.UI.Parent = uiRoot
+	btSetGuiVisible(self.UI, true)
 
 	-- Add functionality to the axes option switch
 	local AxesSwitch = self.UI.AxesOption
@@ -111,7 +118,9 @@ function UIController:ShowUI()
 	ListenForManualWindowTrigger(self.Tool.ManualText, self.Tool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-    self.Maid.UIUpdater = Support.Loop(0.1, self.UpdateUI, self)
+	if type(Support.Loop) == "function" then
+		self.Maid.UIUpdater = Support.Loop(0.1, self.UpdateUI, self)
+	end
 
     -- Attach state listeners
     self:AttachDragListener()
@@ -146,7 +155,7 @@ function UIController:HideUI()
 	end
 
 	-- Hide the UI
-	setGuiVisible(self.UI, false)
+	btSetGuiVisible(self.UI, false)
 
 	-- Stop updating the UI
     self.Maid:Destroy()

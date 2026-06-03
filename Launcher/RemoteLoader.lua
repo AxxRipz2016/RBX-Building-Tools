@@ -889,8 +889,8 @@ end
 	if path == "Tools/Move/UIController.lua" then
 		local embedded = getEmbeddedUIControllerSource()
 		if embedded then
-			return embedded
-		end
+			source = embedded
+		else
 		source = source:gsub("local Selection = Core%.Selection\r?\n", "")
 		source = source:gsub("#Selection%.Parts", "#(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
 		source = source:gsub("pairs%(Selection%.Parts%)", "pairs(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
@@ -935,6 +935,48 @@ end
 				"%1for _, Part in pairs(parts)"
 			)
 		end
+		end
+	end
+
+	if path == "Tools/Move/init.lua" then
+		if not source:find("UIController:ShowUI", 1, true) or source:find("SetAxes%(self%.Axes%)", 1, true) then
+			source = source:gsub(
+				"function MoveTool:Equip%(%)\r?\n\t%-%- Enables the tool's equipped functionality\r?\n\r?\n\t%-%- Set our current axis mode\r?\n\tself:SetAxes%(self%.Axes%)\r?\n\r?\n\t%-%- Start up our interface\r?\n\tself%.UIController:ShowUI%(%)",
+				[[function MoveTool:Equip()
+	-- Enables the tool's equipped functionality
+
+	local okUi, errUi = pcall(function()
+		self.UIController:ShowUI()
+	end)
+	if not okUi then
+		warn("[BT] Move ShowUI:", errUi)
+	end
+
+	local okAxes, errAxes = pcall(function()
+		self:SetAxes(self.Axes)
+	end)
+	if not okAxes then
+		warn("[BT] Move SetAxes:", errAxes)
+	end]]
+			)
+		end
+		source = source:gsub(
+			"if AxisMode == 'Global' then\r?\n\t\tBoundingBoxAPI%.StartBoundingBox%(function %(boxPart%)\r?\n\t\t\tself%.HandleDragging:AttachHandles%(boxPart%)\r?\n\t\tend%)",
+			[[if AxisMode == 'Global' then
+		local startBB = BoundingBoxAPI.StartBoundingBox
+		if type(startBB) == "function" then
+			startBB(function(boxPart)
+				local okH, errH = pcall(function()
+					self.HandleDragging:AttachHandles(boxPart)
+				end)
+				if not okH then
+					warn("[BT] Move AttachHandles (bbox):", errH)
+				end
+			end)
+		else
+			self.HandleDragging:AttachHandles(Selection.Focus, true)
+		end]]
+		)
 	end
 
 	if (path == "Tools/Rotate.lua" or path == "Tools/Move/init.lua")
