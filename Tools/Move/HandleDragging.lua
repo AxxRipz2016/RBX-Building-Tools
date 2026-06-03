@@ -4,7 +4,27 @@ local Tool = script.Parent.Parent.Parent
 local Core = require(Tool.Core)
 local Selection = Core.Selection
 local Security = Core.Security
-local BoundingBoxAPI = Core.BoundingBox or require(Tool.Core.BoundingBox)
+local function GetBoundingBoxAPI()
+	if type(Core.GetBoundingBoxAPI) == "function" then
+		local api = Core.GetBoundingBoxAPI()
+		if api then return api end
+	end
+	return Core.BoundingBox
+end
+
+local BoundingBoxAPI = setmetatable({}, {
+	__index = function(_, key)
+		local api = GetBoundingBoxAPI()
+		if type(api) ~= "table" then return nil end
+		local v = api[key]
+		if type(v) == "function" then
+			return function(...)
+				return v(api, ...)
+			end
+		end
+		return v
+	end,
+})
 
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'

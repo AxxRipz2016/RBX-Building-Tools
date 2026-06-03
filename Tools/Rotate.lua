@@ -1,7 +1,40 @@
 Tool = script.Parent.Parent;
 Core = require(Tool.Core);
 SnapTracking = require(Tool.Core.Snapping);
-local BoundingBoxAPI = Core.BoundingBox or require(Tool.Core.BoundingBox);
+local function GetBoundingBoxAPI()
+	if type(Core.GetBoundingBoxAPI) == "function" then
+		local api = Core.GetBoundingBoxAPI()
+		if api then return api end
+	end
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = _G.__bt_tool or Tool
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			return mod
+		end
+	end
+	return nil
+end
+
+local BoundingBoxAPI = setmetatable({}, {
+	__index = function(_, key)
+		local api = GetBoundingBoxAPI()
+		if type(api) ~= "table" then return nil end
+		local v = api[key]
+		if type(v) == "function" then
+			return function(...)
+				return v(api, ...)
+			end
+		end
+		return v
+	end,
+})
 
 -- Services
 local ContextActionService = game:GetService 'ContextActionService'

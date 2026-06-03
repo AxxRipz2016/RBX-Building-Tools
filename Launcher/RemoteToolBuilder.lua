@@ -375,7 +375,7 @@ function RemoteToolBuilder.Build(
 
 	local paths = getManifest()
 	if onMessage then
-		onMessage("Загрузка обязательных файлов…")
+		onMessage(`Загрузка обязательных файлов (манифест: {#paths})…`)
 	end
 
 	local failed = RemoteLoader.preloadCritical(function(index, total, path, fileOk, fileErr)
@@ -403,6 +403,7 @@ function RemoteToolBuilder.Build(
 	tool.RequiresHandle = true
 	tool.CanBeDropped = true
 	tool:SetAttribute("BT_LocalOnly", true)
+	tool:SetAttribute("BT_ManifestCount", #paths)
 	-- Не кладём в ReplicatedStorage: иначе можно взять в руки до окончания StartRuntime
 	tool.Parent = nil
 
@@ -446,6 +447,13 @@ function RemoteToolBuilder.Build(
 		for _, prefix in warmPrefixes do
 			RemoteLoader.preloadByPrefixes(paths, { prefix }, onFile)
 			task.wait()
+		end
+		if onMessage then
+			onMessage("Предзагрузка остальных модулей (манифест)…")
+		end
+		local preloadFailed = RemoteLoader.preloadRemaining(paths, onFile)
+		if #preloadFailed > 0 then
+			warn(`[BT] не предзагружено: {table.concat(preloadFailed, ", ")}`)
 		end
 	else
 		if onMessage then
@@ -492,31 +500,6 @@ function RemoteToolBuilder.Build(
 
 	-- Tool в Backpack только после StartRuntime (см. RemoteEntry)
 	return tool
-end
-
-function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
-	player = player or Players.LocalPlayer
-	local character = player.Character
-	if character then
-		local humanoid = character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			humanoid:UnequipTools()
-		end
-	end
-	if not tool:GetAttribute("BT_EquipDockHook") then
-		tool:SetAttribute("BT_EquipDockHook", true)
-		tool.Equipped:Connect(function()
-			task.defer(function()
-				local core = _G.Core
-				if type(core) == "table" and type(core.RefreshToolDock) == "function" then
-					pcall(core.RefreshToolDock)
-				end
-				local count = waitAndSyncDock(tool, 30)
-				tool:SetAttribute("BT_DockButtonCount", count)
-			end)
-		end)
-	end
-	tool.Parent = player:WaitForChild("Backpack")
 end
 
 -- Fallback иконок (если Assets не в кэше); дублирует BT_DockIcons.lua
@@ -732,24 +715,6 @@ local function findToolListFrame(coreEnv: any): Frame?
 	return if dock then dock:FindFirstChild("ToolList") :: Frame? else nil
 end
 
--- Roact ToolList на GitHub часто без кнопок (4-й аргумент Children) — дублируем реальными ImageButton
-local function waitAndSyncDock(tool: Tool, maxAttempts: number?): number
-	maxAttempts = maxAttempts or 30
-	for attempt = 1, maxAttempts do
-		local core = _G.Core
-		if type(core) == "table" then
-			local n = syncDockButtonsNative(core, tool, getDockIconTable())
-			if n > 0 then
-				warn(`[BT] ToolList: {n} кнопок в UI (попытка {attempt})`)
-				return n
-			end
-		end
-		task.wait(0.2)
-	end
-	warn("[BT] ToolList: Frame не найден — проверь PlayerGui после экипировки")
-	return 0
-end
-
 local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]: string }): number
 	local toolListFrame = findToolListFrame(coreEnv)
 	if not toolListFrame then
@@ -757,7 +722,7 @@ local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]
 	end
 
 	for _, child in toolListFrame:GetChildren() do
-		if child:IsA("ImageButton") and child.Name:sub(1, 12) == "BT_ToolBtn_" then
+		if child:IsA("ImageButton") then
 			child:Destroy()
 		end
 	end
@@ -813,6 +778,48 @@ local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]
 	local rows = math.max(1, math.ceil(added / 2))
 	toolListFrame.Size = UDim2.fromOffset(70, 35 * rows)
 	return added
+end
+
+-- Roact ToolList на GitHub часто без кнопок (4-й аргумент Children) — дублируем реальными ImageButton
+local function waitAndSyncDock(tool: Tool, maxAttempts: number?): number
+	maxAttempts = maxAttempts or 30
+	for attempt = 1, maxAttempts do
+		local core = _G.Core
+		if type(core) == "table" then
+			local n = syncDockButtonsNative(core, tool, getDockIconTable())
+			if n > 0 then
+				warn(`[BT] ToolList: {n} кнопок в UI (попытка {attempt})`)
+				return n
+			end
+		end
+		task.wait(0.2)
+	end
+	warn("[BT] ToolList: Frame не найден — проверь PlayerGui после экипировки")
+	return 0
+end
+
+function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
+	player = player or Players.LocalPlayer
+	local character = player.Character
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid:UnequipTools()
+		end
+	end
+	if not tool:GetAttribute("BT_EquipDockHook") then
+		tool:SetAttribute("BT_EquipDockHook", true)
+		tool.Equipped:Connect(function()
+			task.defer(function()
+				local count = tool:GetAttribute("BT_DockButtonCount") or 0
+				if count == 0 then
+					count = waitAndSyncDock(tool, 30)
+					tool:SetAttribute("BT_DockButtonCount", count)
+				end
+			end)
+		end)
+	end
+	tool.Parent = player:WaitForChild("Backpack")
 end
 
 local function describeToolModules(tool: Tool): string
@@ -895,9 +902,10 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		toolsSnapshot = Cryo.List.join(toolList)
 	end
 
+	coreEnv.__bt_nativeDockOnly = true
 	local dockProps = {
 		Core = coreEnv,
-		Tools = toolsSnapshot,
+		Tools = {},
 		UIRoot = ui,
 	}
 	local dockElement = Roact.createElement(dockComponent, dockProps)
@@ -930,8 +938,15 @@ function RemoteToolBuilder.rebuildToolDock(tool: Tool): number
 	if type(core) ~= "table" then
 		return 0
 	end
-	local icons = getDockIconTable()
-	return math.max(registerDockDirect(core, tool), syncDockButtonsNative(core, tool, icons))
+	return syncDockButtonsNative(core, tool, getDockIconTable())
+end
+
+_G.__bt_rebuildToolDock = function()
+	local t = _G.__bt_tool
+	if t and t:IsA("Tool") then
+		return RemoteToolBuilder.rebuildToolDock(t)
+	end
+	return 0
 end
 
 local function preloadMoveModule(tool: Tool): any?

@@ -54,6 +54,34 @@ Core.Make = Make
 Core.Assets = Assets
 Core.Tool = Tool
 
+function Core.GetBoundingBoxAPI()
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = (_G.__bt_tool or Core.Tool or Tool)
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			if type(_G.Core) == "table" then
+				_G.Core.BoundingBox = mod
+			end
+			return mod
+		end
+	end
+	return nil
+end
+
+function Core.GetSelectionParts()
+	local sel = Core.Selection
+	if sel and type(sel.Parts) == "table" then
+		return sel.Parts
+	end
+	return {}
+end
+
 -- Core events
 ToolChanged = Signal.new()
 
@@ -516,6 +544,13 @@ function InitializeUI()
 	end
 	Core.AddToolButton = AddToolButton
 	function Core.RefreshToolDock()
+		if Core.__bt_nativeDockOnly then
+			local rebuild = _G.__bt_rebuildToolDock
+			if type(rebuild) == "function" then
+				pcall(rebuild)
+			end
+			return
+		end
 		if not (DockHandle and ToolList and DockComponent and UI) then
 			return
 		end

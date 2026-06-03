@@ -431,8 +431,13 @@ local ok, err = pcall(function()
 		local dockHint = if dockCount == 0
 			then " (Core.UI/ToolList — см. warn выше)"
 			else ""
+		local manifestTotal = tool:GetAttribute("BT_ManifestCount") or 0
+		local fetched = RemoteLoader.getFetchCount()
+		local filesLine = if manifestTotal > 0
+			then `{fetched}/{manifestTotal} файлов`
+			else `{fetched} файлов`
 		print(
-			`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · док {dockCount} кнопок · {RemoteLoader.getFetchCount()} файлов — готов{dockHint}`
+			`[BT] RemoteEntry r{Version.Launcher} · BT {Version.Tool} · док {dockCount} кнопок · {filesLine} — готов{dockHint}`
 		)
 	end)
 end)

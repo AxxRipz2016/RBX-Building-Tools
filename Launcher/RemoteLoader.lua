@@ -138,6 +138,34 @@ Core.Try = Try
 Core.Make = Make
 Core.Assets = Assets
 Core.Tool = Tool
+
+function Core.GetBoundingBoxAPI()
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = (_G.__bt_tool or Core.Tool or Tool)
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			if type(_G.Core) == "table" then
+				_G.Core.BoundingBox = mod
+			end
+			return mod
+		end
+	end
+	return nil
+end
+
+function Core.GetSelectionParts()
+	local sel = Core.Selection
+	if sel and type(sel.Parts) == "table" then
+		return sel.Parts
+	end
+	return {}
+end
 ]]
 
 local CORE_UI_EXPORT_BLOCK = [[
@@ -698,6 +726,26 @@ local function patchToolsRuntime(path: string, source: string): string
 		end
 	end
 
+	if path == "Tools/Move/UIController.lua" then
+		source = source:gsub("#Selection%.Parts", "#(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
+		source = source:gsub("pairs%(Selection%.Parts%)", "pairs(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
+		source = source:gsub(
+			"(function UIController:UpdateUI%(%)\r?\n\t%-%- Updates information on the UI\r?\n\r?\n\t%-%- Make sure the UI's on\r?\n\tif not self%.UI then\r?\n\t\treturn\r?\n\tend\r?\n\r?\n\t%-%- Only show)",
+			[[function UIController:UpdateUI()
+	-- Updates information on the UI
+
+	if not self.UI then
+		return
+	end
+
+	local parts = (type(Core.GetSelectionParts) == "function" and Core.GetSelectionParts()) or {}
+
+	-- Only show]]
+		)
+		source = source:gsub("#getSelectionParts%(%)", "#parts")
+		source = source:gsub("pairs%(getSelectionParts%(%)%)", "pairs(parts)")
+	end
+
 	if path == "Tools/Move/UIController.lua" and not source:find("function getSelectionParts", 1, true) then
 		source = source:gsub(
 			"(%-%- Create class\r?\nlocal UIController = %{%})",
@@ -1074,6 +1122,40 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		if not source:find("Core.GetBoundingBoxAPI", 1, true) then
+			source = source:gsub(
+				"(Core%.Tool = Tool\n)",
+				[[%1
+function Core.GetBoundingBoxAPI()
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = (_G.__bt_tool or Core.Tool or Tool)
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			if type(_G.Core) == "table" then
+				_G.Core.BoundingBox = mod
+			end
+			return mod
+		end
+	end
+	return nil
+end
+
+function Core.GetSelectionParts()
+	local sel = Core.Selection
+	if sel and type(sel.Parts) == "table" then
+		return sel.Parts
+	end
+	return {}
+end
+]]
+			)
+		end
 		if not source:find("Core.BT_SetGuiVisible", 1, true) then
 			source = source:gsub("(function EquipTool%()", CORE_BT_UI_HELPERS .. "%1", 1)
 		end
@@ -1239,6 +1321,20 @@ end;]]
 	Core.__bt_DockHandle = DockHandle
 	Core.__bt_DockComponent = DockComponent
 	Core.__bt_UI = UI]]
+			)
+		end
+		if not source:find("__bt_nativeDockOnly", 1, true) then
+			source = source:gsub(
+				"function Core%.RefreshToolDock%(%)\r?\n\t\tif not %(DockHandle",
+				[[function Core.RefreshToolDock()
+		if Core.__bt_nativeDockOnly then
+			local rebuild = _G.__bt_rebuildToolDock
+			if type(rebuild) == "function" then
+				pcall(rebuild)
+			end
+			return
+		end
+		if not (DockHandle]]
 			)
 		end
 		if not source:find("function Core.RefreshToolDock", 1, true) then
