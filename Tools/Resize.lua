@@ -18,6 +18,19 @@ Support = Core.Support;
 Security = Core.Security;
 Support.ImportServices();
 
+local function btSetGuiVisible(gui, visible)
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if type(Core.BT_SetGuiVisible) == "function" then
+		Core.BT_SetGuiVisible(gui, visible)
+	elseif gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
+
 -- Initialize the tool
 local ResizeTool = {
 	Name = 'Resize Tool';
@@ -106,7 +119,7 @@ local function ShowUI()
 	if ResizeTool.UI then
 
 		-- Reveal the UI
-		Core.BT_SetGuiVisible(ResizeTool.UI, true);
+		btSetGuiVisible(ResizeTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -119,7 +132,7 @@ local function ShowUI()
 	-- Create the UI
 	ResizeTool.UI = Core.Tool.Interfaces.BTResizeToolGUI:Clone();
 	ResizeTool.UI.Parent = Core.UI;
-	Core.BT_SetGuiVisible(ResizeTool.UI, true);
+	btSetGuiVisible(ResizeTool.UI, true);
 
 	-- Add functionality to the directions option switch
 	local DirectionsSwitch = ResizeTool.UI.DirectionsOption;
@@ -178,13 +191,11 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(ResizeTool.UI, false);
+	btSetGuiVisible(ResizeTool.UI, false);
 	if UIUpdater and type(UIUpdater.Stop) == "function" then
 		UIUpdater:Stop();
+		UIUpdater = nil;
 	end
-
-	-- Stop updating the UI
-	UIUpdater:Stop();
 
 end;
 

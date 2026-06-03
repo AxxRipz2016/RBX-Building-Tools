@@ -897,9 +897,12 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		end
 	end
 
-	local toolsSnapshot = toolList
+	local toolsSnapshot = table.clone(toolList)
 	if Cryo and type(Cryo.List) == "table" and type(Cryo.List.join) == "function" then
-		toolsSnapshot = Cryo.List.join(toolList)
+		local okJoin, joined = pcall(Cryo.List.join, toolList)
+		if okJoin and type(joined) == "table" then
+			toolsSnapshot = joined
+		end
 	end
 
 	coreEnv.__bt_nativeDockOnly = true
