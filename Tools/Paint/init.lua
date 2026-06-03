@@ -56,14 +56,14 @@ function PaintTool:Unequip()
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if PaintTool.UI then
 
 		-- Reveal the UI
-		PaintTool.UI.Visible = true;
+		Core.BT_SetGuiVisible(PaintTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -76,7 +76,7 @@ function ShowUI()
 	-- Create the UI
 	PaintTool.UI = Core.Tool.Interfaces.BTPaintToolGUI:Clone();
 	PaintTool.UI.Parent = Core.UI;
-	PaintTool.UI.Visible = true;
+	Core.BT_SetGuiVisible(PaintTool.UI, true);
 
 	-- Track palette buttons
 	PaletteButtons = {};
@@ -130,7 +130,7 @@ function ShowUI()
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -139,10 +139,12 @@ function HideUI()
 	end;
 
 	-- Hide the UI
-	PaintTool.UI.Visible = false;
+	Core.BT_SetGuiVisible(PaintTool.UI, false);
 
 	-- Stop updating the UI
-	UIUpdater:Stop();
+	if UIUpdater and type(UIUpdater.Stop) == "function" then
+		UIUpdater:Stop();
+	end
 
 end;
 

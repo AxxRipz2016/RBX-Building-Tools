@@ -127,6 +127,39 @@ function ResolveBuildingToolModule(BuildingToolModule)
 	return nil
 end
 
+local BT_PANEL_KEEP = { Dock = true, Notifications = true }
+
+function Core.BT_SetGuiVisible(gui, visible)
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
+
+function Core.BT_HideAllToolPanels()
+	local root = Core.UI
+	if root and root:IsA("ScreenGui") then
+		for _, child in ipairs(root:GetChildren()) do
+			if child:IsA("GuiObject") and not BT_PANEL_KEEP[child.Name] then
+				Core.BT_SetGuiVisible(child, false)
+			end
+		end
+	end
+	local toolList = Core.__bt_ToolList
+	if type(toolList) == "table" then
+		for _, entry in ipairs(toolList) do
+			local mod = entry and entry.Tool
+			if type(mod) == "table" and typeof(mod.UI) == "Instance" and mod.UI:IsA("GuiObject") then
+				Core.BT_SetGuiVisible(mod.UI, false)
+			end
+		end
+	end
+end
+
 function EquipTool(BuildingToolModule)
 	-- __bt_equip_guard
 	-- Equips and switches to the given tool
@@ -139,11 +172,19 @@ function EquipTool(BuildingToolModule)
 		return
 	end
 
+	Core.BT_HideAllToolPanels()
+
 	-- Unequip current tool
 	if CurrentTool then
 		local activeTool = ResolveBuildingToolModule(CurrentTool)
 		if IsBuildingToolModule(activeTool) and activeTool.Equipped then
-			activeTool:Unequip();
+			local ok, err = pcall(function()
+				activeTool:Unequip()
+			end)
+			if not ok then
+				warn("[BT] Unequip failed:", err)
+			end
+			Core.BT_HideAllToolPanels()
 			activeTool.Equipped = false;
 		end
 	end;

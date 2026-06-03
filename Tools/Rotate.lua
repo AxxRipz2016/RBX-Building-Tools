@@ -1,7 +1,7 @@
 Tool = script.Parent.Parent;
 Core = require(Tool.Core);
 SnapTracking = require(Tool.Core.Snapping);
-BoundingBox = Core.BoundingBox or require(Tool.Core.BoundingBox);
+local BoundingBoxAPI = Core.BoundingBox or require(Tool.Core.BoundingBox);
 
 -- Services
 local ContextActionService = game:GetService 'ContextActionService'
@@ -76,7 +76,9 @@ function RotateTool.Unequip()
 	HideUI();
 	HideHandles();
 	ClearConnections();
-	BoundingBox.ClearBoundingBox();
+	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then
+		BoundingBoxAPI.ClearBoundingBox();
+	end
 	SnapTracking.StopTracking();
 
 end;
@@ -186,7 +188,7 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	RotateTool.UI.Visible = false;
+	Core.BT_SetGuiVisible(RotateTool.UI, false);
 
 	-- Stop updating the UI
 	UIUpdater:Stop();
@@ -256,11 +258,13 @@ function SetPivot(PivotMode)
 	end;
 
 	-- Disable any unnecessary bounding boxes
-	BoundingBox.ClearBoundingBox();
+	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then
+		BoundingBoxAPI.ClearBoundingBox();
+	end
 
 	-- For center mode, use bounding box handles
 	if PivotMode == 'Center' then
-		BoundingBox.StartBoundingBox(AttachHandles);
+		BoundingBoxAPI.StartBoundingBox(AttachHandles);
 
 	-- For local mode, use focused part handles
 	elseif PivotMode == 'Local' then
@@ -292,7 +296,7 @@ function AttachHandles(Part, Autofocus)
 
 	-- Just attach and show the handles if they already exist
 	if RotateTool.Handles then
-		RotateTool.Handles:BlacklistObstacle(BoundingBox.GetBoundingBox())
+		RotateTool.Handles:BlacklistObstacle(BoundingBoxAPI.GetBoundingBox())
 		RotateTool.Handles:SetAdornee(Part)
 		return
 	end
@@ -308,9 +312,9 @@ function AttachHandles(Part, Autofocus)
 		HandleRotating = true;
 
 		-- Freeze bounding box extents while rotating
-		if BoundingBox.GetBoundingBox() then
-			InitialExtentsSize, InitialExtentsCFrame = BoundingBox.CalculateExtents(Selection.Parts, BoundingBox.StaticExtents)
-			BoundingBox.PauseMonitoring();
+		if BoundingBoxAPI.GetBoundingBox() then
+			InitialExtentsSize, InitialExtentsCFrame = BoundingBoxAPI.CalculateExtents(Selection.Parts, BoundingBoxAPI.StaticExtents)
+			BoundingBoxAPI.PauseMonitoring();
 		end;
 
 		-- Stop parts from moving, and capture the initial state of the parts
@@ -326,7 +330,7 @@ function AttachHandles(Part, Autofocus)
 
 		-- Set the pivot point to the center of the selection if in Center mode
 		if RotateTool.Pivot == 'Center' then
-			PivotPoint = BoundingBox.GetBoundingBox().CFrame;
+			PivotPoint = BoundingBoxAPI.GetBoundingBox().CFrame;
 
 		-- Set the pivot point to the center of the focused part if in Last mode
 		elseif RotateTool.Pivot == 'Last' and not CustomPivotPoint then
@@ -413,8 +417,8 @@ function AttachHandles(Part, Autofocus)
 		RegisterChange();
 
 		-- Resume normal bounding box updating
-		BoundingBox.RecalculateStaticExtents();
-		BoundingBox.ResumeMonitoring();
+		BoundingBoxAPI.RecalculateStaticExtents();
+		BoundingBoxAPI.ResumeMonitoring();
 
 	end
 
@@ -424,7 +428,7 @@ function AttachHandles(Part, Autofocus)
 		Color = RotateTool.Color.Color,
 		Parent = Core.UIContainer,
 		Adornee = Part,
-		ObstacleBlacklist = { BoundingBox.GetBoundingBox() },
+		ObstacleBlacklist = { BoundingBoxAPI.GetBoundingBox() },
 		OnDragStart = OnHandleDragStart,
 		OnDrag = OnHandleDrag,
 		OnDragEnd = OnHandleDragEnd
@@ -759,7 +763,7 @@ function NudgeSelectionByAxis(Axis, Direction)
 
 	-- Set the pivot point to the center of the selection if in Center mode
 	if RotateTool.Pivot == 'Center' then
-		local BoundingBoxSize, BoundingBoxCFrame = BoundingBox.CalculateExtents(Selection.Parts);
+		local BoundingBoxSize, BoundingBoxCFrame = BoundingBoxAPI.CalculateExtents(Selection.Parts);
 		PivotPoint = BoundingBoxCFrame;
 
 	-- Set the pivot point to the center of the focused part if in Last mode

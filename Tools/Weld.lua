@@ -90,7 +90,7 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	WeldTool.UI.Visible = false;
+	Core.BT_SetGuiVisible(WeldTool.UI, false);
 
 end;
 

@@ -71,7 +71,7 @@ function ClearConnections()
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	local self = SurfaceTool
@@ -80,7 +80,7 @@ function ShowUI()
 	if SurfaceTool.UI then
 
 		-- Reveal the UI
-		SurfaceTool.UI.Visible = true;
+		Core.BT_SetGuiVisible(SurfaceTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -93,7 +93,7 @@ function ShowUI()
 	-- Create the UI
 	SurfaceTool.UI = Core.Tool.Interfaces.BTSurfaceToolGUI:Clone();
 	SurfaceTool.UI.Parent = Core.UI;
-	SurfaceTool.UI.Visible = true;
+	Core.BT_SetGuiVisible(SurfaceTool.UI, true);
 
 	-- Create type dropdown
 	local Surfaces = {
@@ -163,7 +163,7 @@ function ShowUI()
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -172,7 +172,10 @@ function HideUI()
 	end;
 
 	-- Hide the UI
-	SurfaceTool.UI.Visible = false;
+	Core.BT_SetGuiVisible(SurfaceTool.UI, false);
+	if UIUpdater and type(UIUpdater.Stop) == "function" then
+		UIUpdater:Stop();
+	end
 
 	-- Stop updating the UI
 	UIUpdater:Stop();

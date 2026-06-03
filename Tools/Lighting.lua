@@ -237,10 +237,12 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	LightingTool.UI.Visible = false;
+	Core.BT_SetGuiVisible(LightingTool.UI, false);
 
 	-- Stop updating the UI
-	UIUpdater:Stop();
+	if UIUpdater and type(UIUpdater.Stop) == "function" then
+		UIUpdater:Stop();
+	end
 
 end;
 

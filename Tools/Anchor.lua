@@ -132,10 +132,12 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	AnchorTool.UI.Visible = false;
+	Core.BT_SetGuiVisible(AnchorTool.UI, false);
 
 	-- Stop updating the UI
-	UIUpdater:Stop();
+	if UIUpdater and type(UIUpdater.Stop) == "function" then
+		UIUpdater:Stop();
+	end
 
 end;
 

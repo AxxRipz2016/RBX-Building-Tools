@@ -66,14 +66,14 @@ function ClearConnections()
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if MeshTool.UI then
 
 		-- Reveal the UI
-		MeshTool.UI.Visible = true;
+		Core.BT_SetGuiVisible(MeshTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -86,7 +86,7 @@ function ShowUI()
 	-- Create the UI
 	MeshTool.UI = Core.Tool.Interfaces.BTMeshToolGUI:Clone();
 	MeshTool.UI.Parent = Core.UI;
-	MeshTool.UI.Visible = true;
+	Core.BT_SetGuiVisible(MeshTool.UI, true);
 
 	local AddButton = MeshTool.UI.AddButton;
 	local RemoveButton = MeshTool.UI.RemoveButton;
@@ -325,7 +325,7 @@ function UpdateUI()
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -334,10 +334,10 @@ function HideUI()
 	end;
 
 	-- Hide the UI
-	MeshTool.UI.Visible = false;
-
-	-- Stop updating the UI
-	UIUpdater:Stop();
+	Core.BT_SetGuiVisible(MeshTool.UI, false);
+	if UIUpdater and type(UIUpdater.Stop) == "function" then
+		UIUpdater:Stop();
+	end
 
 end;
 

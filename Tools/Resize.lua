@@ -99,14 +99,14 @@ function ClearConnection(ConnectionKey)
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if ResizeTool.UI then
 
 		-- Reveal the UI
-		ResizeTool.UI.Visible = true;
+		Core.BT_SetGuiVisible(ResizeTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -119,7 +119,7 @@ function ShowUI()
 	-- Create the UI
 	ResizeTool.UI = Core.Tool.Interfaces.BTResizeToolGUI:Clone();
 	ResizeTool.UI.Parent = Core.UI;
-	ResizeTool.UI.Visible = true;
+	Core.BT_SetGuiVisible(ResizeTool.UI, true);
 
 	-- Add functionality to the directions option switch
 	local DirectionsSwitch = ResizeTool.UI.DirectionsOption;
@@ -169,7 +169,7 @@ function ShowUI()
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -178,7 +178,10 @@ function HideUI()
 	end;
 
 	-- Hide the UI
-	ResizeTool.UI.Visible = false;
+	Core.BT_SetGuiVisible(ResizeTool.UI, false);
+	if UIUpdater and type(UIUpdater.Stop) == "function" then
+		UIUpdater:Stop();
+	end
 
 	-- Stop updating the UI
 	UIUpdater:Stop();

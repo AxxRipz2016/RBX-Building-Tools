@@ -4,7 +4,7 @@ local Tool = script.Parent.Parent.Parent
 local Core = require(Tool.Core)
 local Selection = Core.Selection
 local Security = Core.Security
-local BoundingBox = require(Tool.Core.BoundingBox)
+local BoundingBoxAPI = Core.BoundingBox or require(Tool.Core.BoundingBox)
 
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'
@@ -58,7 +58,7 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 
 	-- Just attach and show the handles if they already exist
 	if self.Handles then
-		self.Handles:BlacklistObstacle(BoundingBox.GetBoundingBox())
+		self.Handles:BlacklistObstacle(BoundingBoxAPI.GetBoundingBox())
 		self.Handles:SetAdornee(Part)
 		return
 	end
@@ -74,12 +74,12 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 		self.IsHandleDragging = true
 
 		-- Freeze bounding box extents while dragging
-		if BoundingBox.GetBoundingBox() then
+		if BoundingBoxAPI.GetBoundingBox() then
 			local InitialExtentsSize, InitialExtentsCFrame =
-				BoundingBox.CalculateExtents(Selection.Parts, BoundingBox.StaticExtents)
+				BoundingBoxAPI.CalculateExtents(Selection.Parts, BoundingBoxAPI.StaticExtents)
 			self.InitialExtentsSize = InitialExtentsSize
 			self.InitialExtentsCFrame = InitialExtentsCFrame
-			BoundingBox.PauseMonitoring()
+			BoundingBoxAPI.PauseMonitoring()
 		end
 
 		-- Stop parts from moving, and capture the initial state of the parts
@@ -124,8 +124,8 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 		self.Tool.DragChanged:Fire(Distance)
 
 		-- Update bounding box if enabled in global axes movements
-		if self.Tool.Axes == 'Global' and BoundingBox.GetBoundingBox() then
-			BoundingBox.GetBoundingBox().CFrame = self.InitialExtentsCFrame + (AxisMultipliers[Face] * Distance)
+		if self.Tool.Axes == 'Global' and BoundingBoxAPI.GetBoundingBox() then
+			BoundingBoxAPI.GetBoundingBox().CFrame = self.InitialExtentsCFrame + (AxisMultipliers[Face] * Distance)
 		end
 
 	end
@@ -150,8 +150,8 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 		self.Tool:RegisterChange()
 
 		-- Resume bounding box updates
-		BoundingBox.RecalculateStaticExtents()
-		BoundingBox.ResumeMonitoring()
+		BoundingBoxAPI.RecalculateStaticExtents()
+		BoundingBoxAPI.ResumeMonitoring()
 	end
 
 	-- Create the handles
@@ -160,7 +160,7 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 		Color = self.Tool.Color.Color,
 		Parent = Core.UIContainer,
 		Adornee = Part,
-		ObstacleBlacklist = { BoundingBox.GetBoundingBox() },
+		ObstacleBlacklist = { BoundingBoxAPI.GetBoundingBox() },
 		OnDragStart = OnHandleDragStart,
 		OnDrag = OnHandleDrag,
 		OnDragEnd = OnHandleDragEnd

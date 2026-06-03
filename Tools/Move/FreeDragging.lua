@@ -8,7 +8,7 @@ local Core = require(Tool.Core)
 local Selection = Core.Selection
 local Security = Core.Security
 local SnapTracking = require(Tool.Core.Snapping)
-local BoundingBox = require(Tool.Core.BoundingBox)
+local BoundingBoxAPI = Core.BoundingBox or require(Tool.Core.BoundingBox)
 
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'
@@ -97,7 +97,7 @@ function FreeDragging:EnableDragging()
 			if DragScreenDistance >= 2 then
 
 				-- Prepare for dragging
-				BoundingBox.ClearBoundingBox()
+				if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then BoundingBoxAPI.ClearBoundingBox() end
 				self:SetUpDragging(self.StartTarget, SnapTracking.Enabled and self.Tool.SnappedPoint or nil)
 
 				-- Stop watching for potential dragging
@@ -153,7 +153,7 @@ function FreeDragging:StartDragging(BasePart, InitialPartStates, InitialModelSta
 	self.Tool:TrackChange()
 
 	-- Disable bounding box calculation
-	BoundingBox.ClearBoundingBox()
+	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then BoundingBoxAPI.ClearBoundingBox() end
 
 	-- Cache area permissions information
 	local AreaPermissions

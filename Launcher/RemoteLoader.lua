@@ -146,6 +146,42 @@ Core.Mode = Mode
 ]]
 
 -- AssignHotkey/EquipTool объявляются позже — не экспортировать раньше (иначе Core.AssignHotkey = nil)
+local CORE_BT_UI_HELPERS = [[
+local BT_PANEL_KEEP = { Dock = true, Notifications = true }
+
+function Core.BT_SetGuiVisible(gui, visible)
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
+
+function Core.BT_HideAllToolPanels()
+	local root = Core.UI
+	if root and root:IsA("ScreenGui") then
+		for _, child in ipairs(root:GetChildren()) do
+			if child:IsA("GuiObject") and not BT_PANEL_KEEP[child.Name] then
+				Core.BT_SetGuiVisible(child, false)
+			end
+		end
+	end
+	local toolList = Core.__bt_ToolList
+	if type(toolList) == "table" then
+		for _, entry in ipairs(toolList) do
+			local mod = entry and entry.Tool
+			if type(mod) == "table" and typeof(mod.UI) == "Instance" and mod.UI:IsA("GuiObject") then
+				Core.BT_SetGuiVisible(mod.UI, false)
+			end
+		end
+	end
+end
+
+]]
+
 local CORE_RESOLVE_TOOL_BLOCK = [[
 local function IsBuildingToolModule(ToolModule)
 	return type(ToolModule) == "table"
@@ -397,7 +433,11 @@ end);]]
 
 	local coreToolPatchesNeeded = not source:find("ResolveBuildingToolModule", 1, true)
 	if coreToolPatchesNeeded then
-		source = source:gsub("(function EquipTool%()", CORE_RESOLVE_TOOL_BLOCK .. "\n\n%1", 1)
+		if not source:find("Core.BT_SetGuiVisible", 1, true) then
+			source = source:gsub("(function EquipTool%()", CORE_BT_UI_HELPERS .. CORE_RESOLVE_TOOL_BLOCK .. "\n\n%1", 1)
+		else
+			source = source:gsub("(function EquipTool%()", CORE_RESOLVE_TOOL_BLOCK .. "\n\n%1", 1)
+		end
 		source = source:gsub("function EquipTool%(Tool%)", "function EquipTool(BuildingToolModule)")
 		source = source:gsub(
 			"if CurrentTool and CurrentTool%.Equipped then\r?\n\t\tCurrentTool:Unequip%(%);\r?\n\t\tCurrentTool%.Equipped = false;\r?\n\tend;",
@@ -662,8 +702,9 @@ local function patchToolsRuntime(path: string, source: string): string
 		source = source:gsub(
 			"(%-%- Create class\r?\nlocal UIController = %{%})",
 			[[local function getSelectionParts()
-	if Selection and type(Selection.Parts) == "table" then
-		return Selection.Parts
+	local sel = (type(Core) == "table" and Core.Selection) or Selection
+	if sel and type(sel.Parts) == "table" then
+		return sel.Parts
 	end
 	return {}
 end
@@ -672,6 +713,35 @@ end
 		)
 		source = source:gsub("#Selection%.Parts", "#getSelectionParts()")
 		source = source:gsub("pairs%(Selection%.Parts%)", "pairs(getSelectionParts())")
+	end
+
+	if (path == "Tools/Rotate.lua" or path == "Tools/Move/init.lua")
+		and source:find("BoundingBox%.ClearBoundingBox", 1, true)
+		and not source:find("BoundingBoxAPI", 1, true)
+	then
+		source = source:gsub(
+			"BoundingBox = Core%.BoundingBox or require%([^\n]+%)",
+			"local BoundingBoxAPI = Core.BoundingBox or require(Tool:WaitForChild('Core'):WaitForChild('BoundingBox'))"
+		)
+		source = source:gsub(
+			"local BoundingBox = Core%.BoundingBox or require%([^\n]+%)",
+			"local BoundingBoxAPI = Core.BoundingBox or require(Tool:WaitForChild('Core'):WaitForChild('BoundingBox'))"
+		)
+		source = source:gsub("BoundingBox%.ClearBoundingBox", "BoundingBoxAPI.ClearBoundingBox")
+		source = source:gsub("BoundingBox%.StartBoundingBox", "BoundingBoxAPI.StartBoundingBox")
+		source = source:gsub("BoundingBox%.GetBoundingBox", "BoundingBoxAPI.GetBoundingBox")
+		source = source:gsub("BoundingBox%.CalculateExtents", "BoundingBoxAPI.CalculateExtents")
+		source = source:gsub("BoundingBox%.PauseMonitoring", "BoundingBoxAPI.PauseMonitoring")
+		source = source:gsub("BoundingBox%.ResumeMonitoring", "BoundingBoxAPI.ResumeMonitoring")
+		source = source:gsub("BoundingBox%.RecalculateStaticExtents", "BoundingBoxAPI.RecalculateStaticExtents")
+		source = source:gsub("BoundingBox%.StaticExtents", "BoundingBoxAPI.StaticExtents")
+	end
+
+	if source:find("[%w_]+%.UI%.Visible = false", 1, true) and not source:find("BT_SetGuiVisible", 1, true) then
+		source = source:gsub("([%w_]+)%.UI%.Visible = false", "Core.BT_SetGuiVisible(%1.UI, false)")
+	end
+	if source:find("[%w_]+%.UI%.Visible = true", 1, true) and not source:find("BT_SetGuiVisible", 1, true) then
+		source = source:gsub("([%w_]+)%.UI%.Visible = true", "Core.BT_SetGuiVisible(%1.UI, true)")
 	end
 
 	return source
@@ -1004,6 +1074,25 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		if not source:find("Core.BT_SetGuiVisible", 1, true) then
+			source = source:gsub("(function EquipTool%(", CORE_BT_UI_HELPERS .. "%1", 1)
+		end
+		if not source:find("Core.BT_HideAllToolPanels()", 1, true) then
+			source = source:gsub(
+				"(%-%- Unequip current tool\r?\n\tif CurrentTool then)",
+				"Core.BT_HideAllToolPanels()\n\n\t%1"
+			)
+			source = source:gsub(
+				"\t\t\tactiveTool:Unequip%(%);",
+				[[local __bt_uok, __bt_uerr = pcall(function()
+				activeTool:Unequip()
+			end)
+			if not __bt_uok then
+				warn("[BT] Unequip failed:", __bt_uerr)
+			end
+			Core.BT_HideAllToolPanels()]]
+			)
+		end
 		source = source:gsub(
 			"if UI then\r?\n\t\treturn;",
 			"if Core.UI then\n\t\treturn;"

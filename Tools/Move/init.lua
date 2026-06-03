@@ -1,7 +1,7 @@
 local Tool = script.Parent.Parent
 local Core = require(Tool.Core)
 local SnapTracking = require(Tool.Core.Snapping)
-local BoundingBox = Core.BoundingBox or require(Tool.Core.BoundingBox)
+local BoundingBoxAPI = Core.BoundingBox or require(Tool.Core.BoundingBox)
 
 -- Services
 local ContextActionService = game:GetService 'ContextActionService'
@@ -108,7 +108,9 @@ function MoveTool:Unequip()
 	self.UIController:HideUI()
 	self.HandleDragging:HideHandles()
 	self.Maid:Destroy()
-	BoundingBox.ClearBoundingBox();
+	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then
+		BoundingBoxAPI.ClearBoundingBox()
+	end
 	SnapTracking.StopTracking();
 
 end
@@ -121,12 +123,14 @@ function MoveTool:SetAxes(AxisMode)
 	self.AxesChanged:Fire(self.Axes)
 
 	-- Disable any unnecessary bounding boxes
-	BoundingBox.ClearBoundingBox();
+	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then
+		BoundingBoxAPI.ClearBoundingBox()
+	end
 
 	-- For global mode, use bounding box handles
 	if AxisMode == 'Global' then
-		BoundingBox.StartBoundingBox(function (BoundingBox)
-			self.HandleDragging:AttachHandles(BoundingBox)
+		BoundingBoxAPI.StartBoundingBox(function (boxPart)
+			self.HandleDragging:AttachHandles(boxPart)
 		end)
 
 	-- For local mode, use focused part handles
@@ -291,7 +295,9 @@ function MoveTool:StartSnapping()
 
 	-- Hide any handles or bounding boxes
 	self.HandleDragging:AttachHandles(nil, true)
-	BoundingBox.ClearBoundingBox();
+	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then
+		BoundingBoxAPI.ClearBoundingBox()
+	end
 
 	-- Avoid targeting snap points in selected parts while dragging
 	if self.FreeDragging.IsDragging then

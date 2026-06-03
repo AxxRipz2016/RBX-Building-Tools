@@ -11,8 +11,9 @@ local Maid = require(Libraries:WaitForChild 'Maid')
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 
 local function getSelectionParts()
-	if Selection and type(Selection.Parts) == 'table' then
-		return Selection.Parts
+	local sel = (type(Core) == "table" and Core.Selection) or Selection
+	if sel and type(sel.Parts) == "table" then
+		return sel.Parts
 	end
 	return {}
 end
@@ -132,7 +133,7 @@ function UIController:HideUI()
 	end
 
 	-- Hide the UI
-	self.UI.Visible = false
+	Core.BT_SetGuiVisible(self.UI, false)
 
 	-- Stop updating the UI
     self.Maid:Destroy()

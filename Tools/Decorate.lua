@@ -53,14 +53,14 @@ function ClearConnections()
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if DecorateTool.UI then
 
 		-- Reveal the UI
-		DecorateTool.UI.Visible = true;
+		Core.BT_SetGuiVisible(DecorateTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -73,7 +73,7 @@ function ShowUI()
 	-- Create the UI
 	DecorateTool.UI = Core.Tool.Interfaces.BTDecorateToolGUI:Clone();
 	DecorateTool.UI.Parent = Core.UI;
-	DecorateTool.UI.Visible = true;
+	Core.BT_SetGuiVisible(DecorateTool.UI, true);
 
 	-- Enable each decoration type UI
 	EnableOptionsUI(DecorateTool.UI.Smoke);
@@ -202,7 +202,7 @@ function UpdateUI()
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -211,7 +211,10 @@ function HideUI()
 	end;
 
 	-- Hide the UI
-	DecorateTool.UI.Visible = false;
+	Core.BT_SetGuiVisible(DecorateTool.UI, false);
+	if UIUpdater and type(UIUpdater.Stop) == "function" then
+		UIUpdater:Stop();
+	end
 
 	-- Stop updating the UI
 	UIUpdater:Stop();
