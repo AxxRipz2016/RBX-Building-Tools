@@ -188,9 +188,27 @@ function Core.BT_HideAllToolPanels()
 	end
 end
 
+function Core.EnsureUI()
+	if not UI or not Core.UI or (typeof(Core.UI) == "Instance" and not Core.UI.Parent) then
+		InitializeUI()
+	end
+	if not UIContainer then
+		UIContainer = Player:WaitForChild("PlayerGui")
+		Core.UIContainer = UIContainer
+	end
+	if UI and not UI.Parent then
+		UI.Parent = UIContainer
+		UI.Enabled = true
+	end
+	if not IsEnabled then
+		Enable(Player:GetMouse())
+	end
+end
+
 function EquipTool(BuildingToolModule)
 	-- __bt_equip_guard
 	-- Equips and switches to the given tool
+	Core.EnsureUI()
 	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
 	if not IsBuildingToolModule(BuildingToolModule) then
 		BuildingToolModule = DefaultBuildingToolModule()
@@ -499,10 +517,17 @@ end;
 function InitializeUI()
 	-- Sets up the UI
 
-	-- Ensure UI has not yet been initialized (не «if UI» — в executor глобаль UI может быть чужим)
-	if Core.UI then
-		return;
-	end;
+	-- Повторный запуск: старый ScreenGui мог быть уничтожен (purgeOldPlayerUI)
+	local existing = Core.UI
+	if existing and typeof(existing) == "Instance" and existing:IsA("ScreenGui") then
+		if existing.Parent then
+			UI = existing
+			return
+		end
+		existing:Destroy()
+	end
+	Core.UI = nil
+	UI = nil
 
 	-- Create the root UI
 	UI = Instance.new('ScreenGui')

@@ -64,10 +64,20 @@ function UIController:ShowUI()
 	end
 
 	-- Create the UI
+	if type(Core.EnsureUI) == "function" then
+		Core.EnsureUI()
+	end
 	local uiRoot = Core.UI
-	if not uiRoot then
+	if not uiRoot or not uiRoot:IsA("ScreenGui") then
 		warn("[BT] Move UI: Core.UI не инициализирован")
 		return
+	end
+	if not uiRoot.Parent then
+		local pg = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+		if pg then
+			uiRoot.Parent = pg
+			uiRoot.Enabled = true
+		end
 	end
 	self.UI = (Core.Tool or Tool):WaitForChild('Interfaces'):WaitForChild('BTMoveToolGUI'):Clone()
 	self.UI.Parent = uiRoot

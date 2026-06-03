@@ -764,6 +764,9 @@ local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]
 			if type(coreEnv.EquipTool) ~= "function" then
 				return
 			end
+			if type(coreEnv.EnsureUI) == "function" then
+				pcall(coreEnv.EnsureUI)
+			end
 			local mod = runBuildingToolModule(tool, moduleName)
 			if type(coreEnv.ResolveBuildingToolModule) == "function" then
 				mod = coreEnv.ResolveBuildingToolModule(mod) or mod
@@ -1008,12 +1011,12 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		end
 		_G.__bt_dock_icons = req("BT_DockIcons")
 
-		step("Move…")
-		local moveMod = preloadMoveModule(tool)
-
 		step("Core…")
 		local coreScript = tool:WaitForChild("Core") :: ModuleScript
 		local coreEnv = RemoteLoader.run("Core/init.lua", tool, coreScript)
+
+		step("Move…")
+		local moveMod = preloadMoveModule(tool)
 		if type(coreEnv) == "table" then
 			_G.Core = coreEnv
 			if moveMod then

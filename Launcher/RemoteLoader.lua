@@ -159,6 +159,26 @@ function Core.BT_HideAllToolPanels()
 	end
 end
 
+function Core.EnsureUI()
+	if not Core.UI or (typeof(Core.UI) == "Instance" and not Core.UI.Parent) then
+		if type(InitializeUI) == "function" then
+			InitializeUI()
+		end
+	end
+	if not UIContainer then
+		UIContainer = Player:WaitForChild("PlayerGui")
+		Core.UIContainer = UIContainer
+	end
+	local ui = Core.UI
+	if ui and typeof(ui) == "Instance" and not ui.Parent and UIContainer then
+		ui.Parent = UIContainer
+		ui.Enabled = true
+	end
+	if not IsEnabled and type(Enable) == "function" then
+		Enable(Player:GetMouse())
+	end
+end
+
 ]]
 
 -- Подставляется в Tools/*.lua, если Core.BT_SetGuiVisible ещё не на Core
@@ -1410,10 +1430,44 @@ end
 			Core.BT_HideAllToolPanels()]]
 			)
 		end
-		source = source:gsub(
-			"if UI then\r?\n\t\treturn;",
-			"if Core.UI then\n\t\treturn;"
-		)
+		if not source:find("existing:Destroy%(", 1, true) then
+			source = source:gsub(
+				"if UI then\r?\n\t\treturn;",
+				[[local existing = Core.UI
+	if existing and typeof(existing) == "Instance" and existing:IsA("ScreenGui") and existing.Parent then
+		UI = existing
+		return
+	end
+	if existing and typeof(existing) == "Instance" then
+		existing:Destroy()
+	end
+	Core.UI = nil
+	UI = nil]]
+			)
+			source = source:gsub(
+				"if Core%.UI then\r?\n\t\treturn;",
+				[[local existing = Core.UI
+	if existing and typeof(existing) == "Instance" and existing:IsA("ScreenGui") and existing.Parent then
+		UI = existing
+		return
+	end
+	if existing and typeof(existing) == "Instance" then
+		existing:Destroy()
+	end
+	Core.UI = nil
+	UI = nil]]
+			)
+		end
+		if not source:find("function Core%.EnsureUI", 1, true) then
+			source = source:gsub("(function EquipTool%()", CORE_BT_UI_HELPERS .. "%1", 1)
+		end
+		if not source:find("Core%.EnsureUI%(", 1, true) then
+			source = source:gsub(
+				"(function EquipTool%(BuildingToolModule%)\r?\n\t%-%-[^\n]*\n)",
+				"%1\tCore.EnsureUI()\n",
+				1
+			)
+		end
 		if not source:find("Player:GetMouse%(", 1, true) then
 			source = source:gsub(
 				"(%-%- Update the core mouse\r?\n\t)getfenv%(0%)%.Mouse = Mouse;",
