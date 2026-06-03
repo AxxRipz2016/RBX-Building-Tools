@@ -57,6 +57,8 @@ function ToolList:render()
     }
 
     local tools = self.props.Tools
+    print(tools)
+    print(type(tools))
     if type(tools) ~= 'table' then
         tools = {}
     end
