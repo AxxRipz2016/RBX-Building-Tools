@@ -511,7 +511,7 @@ function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 				if type(core) == "table" and type(core.RefreshToolDock) == "function" then
 					pcall(core.RefreshToolDock)
 				end
-				local count = RemoteToolBuilder.rebuildToolDock(tool)
+				local count = waitAndSyncDock(tool, 30)
 				tool:SetAttribute("BT_DockButtonCount", count)
 			end)
 		end)
@@ -733,6 +733,23 @@ local function findToolListFrame(coreEnv: any): Frame?
 end
 
 -- Roact ToolList на GitHub часто без кнопок (4-й аргумент Children) — дублируем реальными ImageButton
+local function waitAndSyncDock(tool: Tool, maxAttempts: number?): number
+	maxAttempts = maxAttempts or 30
+	for attempt = 1, maxAttempts do
+		local core = _G.Core
+		if type(core) == "table" then
+			local n = syncDockButtonsNative(core, tool, getDockIconTable())
+			if n > 0 then
+				warn(`[BT] ToolList: {n} кнопок в UI (попытка {attempt})`)
+				return n
+			end
+		end
+		task.wait(0.2)
+	end
+	warn("[BT] ToolList: Frame не найден — проверь PlayerGui после экипировки")
+	return 0
+end
+
 local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]: string }): number
 	local toolListFrame = findToolListFrame(coreEnv)
 	if not toolListFrame then
@@ -1018,6 +1035,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		step("Док…")
 		local dockCount = finishDockRegistration(coreEnv, tool)
 		tool:SetAttribute("BT_DockButtonCount", dockCount)
+		warn(`[BT] StartRuntime док: {dockCount} (нативные кнопки появятся после экипировки)`)
 
 		if tool:GetAttribute("BT_InterfacesPending") then
 			step("Интерфейсы (lol)…")

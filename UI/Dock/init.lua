@@ -11,7 +11,7 @@ local SelectionPane = require(script:WaitForChild('SelectionPane'))
 local AboutPane = require(script:WaitForChild('AboutPane'))
 
 -- Create component
-local Dock = Roact.PureComponent:extend(script.Name)
+local Dock = Roact.Component:extend(script.Name)
 
 function Dock:init()
     self.DockSize, self.SetDockSize = Roact.createBinding(UDim2.new())

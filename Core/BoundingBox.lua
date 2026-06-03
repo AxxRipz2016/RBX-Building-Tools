@@ -1,9 +1,12 @@
 local Core = require(script.Parent);
-local Support = Core.Support;
 local Tool = (_G.__bt_tool or Core.Tool)
 if Tool and type(Core.Make) ~= 'function' then
 	Core.Make = require(Tool.Libraries:WaitForChild('Make'))
 end
+if type(Core.Support) ~= 'table' and Tool then
+	Core.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))
+end
+local Support = Core.Support
 
 -- Initialize module
 local BoundingBoxModule = {};

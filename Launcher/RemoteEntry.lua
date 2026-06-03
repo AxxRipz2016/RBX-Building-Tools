@@ -301,6 +301,15 @@ local ok, err = pcall(function()
 
 	local RemoteLoader = loadFromGit("Launcher/RemoteLoader.lua")
 	_G.BT_RemoteLoader = RemoteLoader
+
+	do
+		local okTls, tlsSrc = pcall(function()
+			return loadFromGit("Launcher/BT_ToolListSource.lua")
+		end)
+		if okTls and type(tlsSrc) == "string" and #tlsSrc > 100 then
+			_G.BT_TOOL_LIST_SOURCE = tlsSrc
+		end
+	end
 	if type(RemoteLoader) ~= "table" or type(RemoteLoader.configure) ~= "function" then
 		local fallback = _G.BT_RemoteLoader
 		if type(fallback) == "table" and type(fallback.configure) == "function" then

@@ -574,7 +574,37 @@ local function applyCoreEquipSafetyPatches(source: string): string
 	return source
 end
 
+local function getEmbeddedToolListSource(): string?
+	if type(_G.BT_TOOL_LIST_SOURCE) == "string" and #_G.BT_TOOL_LIST_SOURCE > 100 then
+		return _G.BT_TOOL_LIST_SOURCE
+	end
+	local ok, mod = pcall(function()
+		if _G.BT_LAUNCHER_LOAD then
+			return _G.BT_LAUNCHER_LOAD("Launcher/BT_ToolListSource.lua")
+		end
+		return nil
+	end)
+	if ok and type(mod) == "string" and #mod > 100 then
+		_G.BT_TOOL_LIST_SOURCE = mod
+		return mod
+	end
+	return nil
+end
+
 local function patchRemoteSource(path: string, source: string): string
+	if path == "UI/Dock/ToolList.lua" then
+		local embedded = getEmbeddedToolListSource()
+		if embedded then
+			source = embedded
+		end
+	end
+
+	if path:find("^Tools/", 1, true) and not path:find("Libraries/", 1, true) then
+		if not source:find("\nlocal UI\n", 1, true) and not source:find("^local UI\n", 1, true) then
+			source = "local UI\n" .. source
+		end
+	end
+
 	if path:find("RobloxRenderer.lua", 1, true) then
 		source = source:gsub(
 			"function RobloxRenderer%.isHostObject%(target%)\n\treturn typeof%(target%) == \"Instance\"\nend",
@@ -669,6 +699,13 @@ end
 		end
 	end
 
+	if path == "UI/Dock/init.lua" then
+		source = source:gsub(
+			"Roact%.PureComponent:extend%(script%.Name%)",
+			"Roact.Component:extend(script.Name)"
+		)
+	end
+
 	if path == "UI/Dock/ToolList.lua" then
 		source = source:gsub(
 			"Roact%.PureComponent:extend%(script%.Name%)",
@@ -751,6 +788,10 @@ local Tool = (_G.__bt_tool or Core.Tool)
 if Tool and type(Core.Make) ~= 'function' then
 	Core.Make = require(Tool.Libraries:WaitForChild('Make'))
 end
+if type(Core.Support) ~= 'table' and Tool then
+	Core.Support = require(Tool.Libraries:WaitForChild('SupportLibrary'))
+end
+local Support = Core.Support
 ]]
 			)
 			source = source:gsub(
