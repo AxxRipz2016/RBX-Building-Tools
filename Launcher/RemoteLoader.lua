@@ -1075,7 +1075,7 @@ end
 
 	if path == "Core/init.lua" then
 		if not source:find("Core.BT_SetGuiVisible", 1, true) then
-			source = source:gsub("(function EquipTool%(", CORE_BT_UI_HELPERS .. "%1", 1)
+			source = source:gsub("(function EquipTool%()", CORE_BT_UI_HELPERS .. "%1", 1)
 		end
 		if not source:find("Core.BT_HideAllToolPanels()", 1, true) then
 			source = source:gsub(
