@@ -678,6 +678,21 @@ end
 			"CurrentTool = Tool;",
 			"CurrentTool = BuildingToolModule;"
 		)
+		if not source:find("local tools = self%.props%.Tools", 1, true) then
+			source = source:gsub(
+				"(%-%- Build buttons for each tool)\n",
+				[[%1
+    local tools = self.props.Tools
+    if type(tools) ~= 'table' then
+        tools = {}
+    end
+]]
+			)
+			source = source:gsub(
+				"for ToolIndex, ToolInfo in ipairs%(self%.props%.Tools%)",
+				"for ToolIndex, ToolInfo in ipairs(tools)"
+			)
+		end
 		if source:find("}, Children%)", 1, true) and not source:find("frameChildren", 1, true) then
 			source = source:gsub(
 				"(%s*%-%- Build buttons for each tool\r?\n%s*for ToolIndex, ToolInfo in ipairs%(self%.props%.Tools%) do[^\n]+\n[^\n]+\n[^\n]+\n[^\n]+\n[^\n]+\n[^\n]+\n[^\n]+\n%s*end)\r?\n\r?\n%s*return new%('Frame',",
@@ -709,6 +724,12 @@ end
 				"}, frameChildren)"
 			)
 		end
+		if not source:find("UDim2%.fromOffset%(70, math%.max%(245", 1, true) then
+			source = source:gsub(
+				"Size = self%.CanvasSize:map%b(function %[^(]*%([^)]*%).-end%);",
+				"Size = UDim2.fromOffset(70, math.max(245, 35 * math.ceil(#tools / 2)));"
+			)
+		end
 	end
 
 	if path == "Core/BoundingBox.lua" then
@@ -738,9 +759,31 @@ end
 		warn('[BT] BoundingBox: Core.Make недоступен')
 		return
 	end
-	BoundingBox = make 'Part' {]]
+			BoundingBox = make 'Part' {]]
 			)
 		end
+		if not source:find("Core%.Mouse and typeof", 1, true) then
+			source = source:gsub(
+				"Core%.Mouse%.TargetFilter = BoundingBox;",
+				"if Core.Mouse and typeof(Core.Mouse) == 'Instance' then Core.Mouse.TargetFilter = BoundingBox; end"
+			)
+		end
+		if not source:find("type%(BoundingBoxUpdater%.Stop%)", 1, true) then
+			source = source:gsub(
+				"if BoundingBoxUpdater then\r?\n\t\tBoundingBoxUpdater:Stop%(%);",
+				"if BoundingBoxUpdater then\n\t\tif type(BoundingBoxUpdater.Stop) == 'function' then BoundingBoxUpdater:Stop(); end"
+			)
+		end
+		if not source:find("type%(StopAggregatingStaticParts%)", 1, true) then
+			source = source:gsub(
+				"(%-%- Stop tracking static parts\r?\n\t)StopAggregatingStaticParts%(%);",
+				"%1if type(StopAggregatingStaticParts) == 'function' then StopAggregatingStaticParts(); end"
+			)
+		end
+		source = source:gsub(
+			"BoundingBoxHandleCallback%(BoundingBox%);",
+			"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(BoundingBox); end"
+		)
 	end
 
 	if path == "UI/Dock/ToolButton.lua" then
@@ -779,6 +822,27 @@ end
 		source = source:gsub(
 			"if UI then\r?\n\t\treturn;",
 			"if Core.UI then\n\t\treturn;"
+		)
+		if not source:find("Player:GetMouse%(", 1, true) then
+			source = source:gsub(
+				"(%-%- Update the core mouse\r?\n\t)getfenv%(0%)%.Mouse = Mouse;",
+				[[%1if Mouse == nil or typeof(Mouse) ~= "Instance" then
+		Mouse = Player:GetMouse()
+	end
+	Core.Mouse = Mouse
+	getfenv(0).Mouse = Mouse;]]
+			)
+		end
+		if not source:find("RefreshToolDock%(%)\r?\n\tend", 1, true) then
+			source = source:gsub(
+				"(UI%.Parent = UIContainer;)\r?\n",
+				"%1\n\tUI.Enabled = true;\n\tif type(Core.RefreshToolDock) == 'function' then\n\t\tCore.RefreshToolDock()\n\tend\n",
+				1
+			)
+		end
+		source = source:gsub(
+			"Tool%.Equipped:Connect%(Enable%);",
+			"Tool.Equipped:Connect(function()\n\t\tEnable(Player:GetMouse())\n\tend);"
 		)
 		if not source:find("Core.__bt_Roact", 1, true) then
 			source = source:gsub(

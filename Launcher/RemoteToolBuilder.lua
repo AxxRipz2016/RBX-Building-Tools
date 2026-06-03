@@ -507,10 +507,12 @@ function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 		tool:SetAttribute("BT_EquipDockHook", true)
 		tool.Equipped:Connect(function()
 			task.defer(function()
-				local count = tool:GetAttribute("BT_DockButtonCount") or 0
-				if count == 0 or (type(_G.Core) == "table" and (_G.Core.__bt_dockButtonCount or 0) == 0) then
-					RemoteToolBuilder.rebuildToolDock(tool)
+				local core = _G.Core
+				if type(core) == "table" and type(core.RefreshToolDock) == "function" then
+					pcall(core.RefreshToolDock)
 				end
+				local count = RemoteToolBuilder.rebuildToolDock(tool)
+				tool:SetAttribute("BT_DockButtonCount", count)
 			end)
 		end)
 	end
@@ -792,15 +794,24 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		end
 	end
 
-	local updateOk, updateErr = pcall(function()
-		Roact.update(dockHandle, Roact.createElement(dockComponent, {
-			Core = coreEnv,
-			Tools = toolList,
-			UIRoot = ui,
-		}))
+	local dockProps = {
+		Core = coreEnv,
+		Tools = toolList,
+		UIRoot = ui,
+	}
+	local dockElement = Roact.createElement(dockComponent, dockProps)
+	pcall(function()
+		if dockHandle then
+			Roact.unmount(dockHandle)
+		end
 	end)
-	if not updateOk then
-		warn(`[BT] Roact.update дока: {updateErr}`)
+	local mountOk, mountHandleOrErr = pcall(function()
+		return Roact.mount(dockElement, ui, "Dock")
+	end)
+	if mountOk and mountHandleOrErr then
+		coreEnv.__bt_DockHandle = mountHandleOrErr
+	else
+		warn(`[BT] Roact.mount дока: {mountHandleOrErr}`)
 	end
 
 	coreEnv.__bt_dockButtonCount = added

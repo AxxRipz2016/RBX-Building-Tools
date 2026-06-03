@@ -276,7 +276,11 @@ function Enable(Mouse)
 	IsEnabling = true;
 	Enabling:Fire();
 
-	-- Update the core mouse
+	-- Tool.Equipped не передаёт Mouse — в solo/executor берём GetMouse()
+	if Mouse == nil or typeof(Mouse) ~= "Instance" then
+		Mouse = Player:GetMouse()
+	end
+	Core.Mouse = Mouse
 	getfenv(0).Mouse = Mouse;
 
 	-- Use default mouse behavior
@@ -299,6 +303,11 @@ function Enable(Mouse)
 
 	-- Show UI
 	UI.Parent = UIContainer;
+	UI.Enabled = true;
+
+	if type(Core.RefreshToolDock) == "function" then
+		Core.RefreshToolDock()
+	end
 
 	-- Display startup notifications
 	if not Core.StartupNotificationsDisplayed then
@@ -452,12 +461,26 @@ function InitializeUI()
 	end
 	Core.AddToolButton = AddToolButton
 	function Core.RefreshToolDock()
-		if DockHandle and ToolList then
+		if not (DockHandle and ToolList and DockComponent and UI) then
+			return
+		end
+		local toolsForDock = Cryo.List.join(ToolList)
+		local ok, err = pcall(function()
 			Roact.update(DockHandle, Roact.createElement(DockComponent, {
 				Core = Core;
-				Tools = Cryo.List.join(ToolList);
+				Tools = toolsForDock;
 				UIRoot = UI;
 			}))
+		end)
+		if not ok then
+			warn("[BT] RefreshToolDock update:", err)
+			pcall(Roact.unmount, DockHandle)
+			DockHandle = Roact.mount(Roact.createElement(DockComponent, {
+				Core = Core;
+				Tools = toolsForDock;
+				UIRoot = UI;
+			}), UI, "Dock")
+			Core.__bt_DockHandle = DockHandle
 		end
 	end
 

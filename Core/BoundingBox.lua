@@ -56,7 +56,9 @@ function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 	};
 
 	-- Make the mouse ignore it
-	Core.Mouse.TargetFilter = BoundingBox;
+	if Core.Mouse and typeof(Core.Mouse) == "Instance" then
+		Core.Mouse.TargetFilter = BoundingBox;
+	end
 
 	-- Make sure to calculate our static extents
 	RecalculateStaticExtents = true;
@@ -109,13 +111,17 @@ function BoundingBoxModule.UpdateBoundingBox()
 	if InactiveBoundingBox and #Core.Selection.Parts > 0 then
 		BoundingBox = InactiveBoundingBox;
 		InactiveBoundingBox = nil;
-		BoundingBoxHandleCallback(BoundingBox);
+		if BoundingBoxHandleCallback then
+			BoundingBoxHandleCallback(BoundingBox);
+		end
 
 	-- If the bounding box is active, and there are no parts, disable it
 	elseif BoundingBox and #Core.Selection.Parts == 0 then
 		InactiveBoundingBox = BoundingBox;
 		BoundingBox = nil;
-		BoundingBoxHandleCallback(BoundingBox);
+		if BoundingBoxHandleCallback then
+			BoundingBoxHandleCallback(BoundingBox);
+		end
 		return;
 
 	-- Don't try to update the bounding box if there are no parts
@@ -146,12 +152,16 @@ function BoundingBoxModule.ClearBoundingBox()
 
 	-- If there's a bounding box updater, stop it
 	if BoundingBoxUpdater then
-		BoundingBoxUpdater:Stop();
+		if type(BoundingBoxUpdater.Stop) == "function" then
+			BoundingBoxUpdater:Stop();
+		end
 		BoundingBoxUpdater = nil;
 	end;
 
 	-- Stop tracking static parts
-	StopAggregatingStaticParts();
+	if type(StopAggregatingStaticParts) == "function" then
+		StopAggregatingStaticParts();
+	end
 
 	-- Delete the bounding box
 	if BoundingBox then

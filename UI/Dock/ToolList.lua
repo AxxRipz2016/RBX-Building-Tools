@@ -55,8 +55,13 @@ function ToolList:render()
         });
     }
 
+    local tools = self.props.Tools
+    if type(tools) ~= 'table' then
+        tools = {}
+    end
+
     -- Build buttons for each tool
-    for ToolIndex, ToolInfo in ipairs(self.props.Tools) do
+    for ToolIndex, ToolInfo in ipairs(tools) do
         Children[tostring(ToolIndex)] = new(ToolButton, {
             CurrentTool = self.state.CurrentTool;
             IconAssetId = ToolInfo.IconAssetId;
@@ -86,10 +91,7 @@ function ToolList:render()
         BackgroundColor3 = Color3.fromRGB(0, 0, 0);
         BorderSizePixel = 0;
         LayoutOrder = self.props.LayoutOrder;
-        Size = self.CanvasSize:map(function (CanvasSize)
-            local gridH = math.max(35, CanvasSize.Y.Offset)
-            return UDim2.fromOffset(math.max(70, CanvasSize.X.Offset), gridH)
-        end);
+        Size = UDim2.fromOffset(70, math.max(245, 35 * math.ceil(#tools / 2)));
     }, frameChildren)
 end
 
