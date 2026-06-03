@@ -188,6 +188,7 @@ function Core.BT_HideAllToolPanels()
 	end
 end
 
+-- BT remote Core (launcher не гоняет legacy-gsub по этому файлу)
 function Core.EnsureUI()
 	if not UI or not Core.UI or (typeof(Core.UI) == "Instance" and not Core.UI.Parent) then
 		InitializeUI()
@@ -402,9 +403,11 @@ function Enable(Mouse)
 		task.wait(0.05);
 	end;
 
-	-- Show UI
-	UI.Parent = UIContainer;
-	UI.Enabled = true;
+	-- Show UI (remote/solo: только когда Tool в Character)
+	if Mode ~= 'Tool' or (Player.Character and Tool.Parent == Player.Character) then
+		UI.Parent = UIContainer;
+		UI.Enabled = true;
+	end;
 
 	if type(Core.RefreshToolDock) == "function" then
 		Core.RefreshToolDock()
@@ -480,7 +483,8 @@ function Disable()
 
 	-- Hide UI
 	if UI then
-		UI.Parent = script;
+		UI.Parent = nil;
+		UI.Enabled = false;
 	end;
 
 	-- Unequip current tool
@@ -766,7 +770,9 @@ elseif Mode == 'Tool' then
 	Core.UIContainer = UIContainer
 
 	-- Connect the tool to the system
-	Tool.Equipped:Connect(Enable);
+	Tool.Equipped:Connect(function()
+		Enable(Player:GetMouse())
+	end);
 	Tool.Unequipped:Connect(Disable);
 
 	-- Disable the tool if not parented
@@ -1478,5 +1484,5 @@ pcall(function()
 	Core.__bt_defaultMove = DefaultBuildingToolModule()
 end)
 
--- Return core
-return getfenv(0);
+-- Return core (remote executor: _G.Core env)
+return (_G.Core or Core);

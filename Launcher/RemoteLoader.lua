@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 115
+local SOURCE_CACHE_REV = 116
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -114,6 +114,8 @@ local function normalizeBody(body: string): string
 	if body:sub(1, 3) == string.char(0xEF, 0xBB, 0xBF) then
 		body = body:sub(4)
 	end
+	body = body:gsub("\r\n", "\n")
+	body = body:gsub("\r", "\n")
 	return body
 end
 
@@ -695,20 +697,84 @@ local function patchCoreInitRequires(source: string): string
 	return source
 end
 
--- Core/init.lua с EnsureUI — legacy-gsub (patchCoreLateExports, while not UI…) ломают синтаксис
+-- Core/init.lua с EnsureUI / BT remote — legacy-gsub ломают синтаксис
 local function isModernCoreInitSource(source: string): boolean
 	return source:find("function Core%.EnsureUI", 1, true) ~= nil
+		or source:find("BT remote Core", 1, true) ~= nil
 end
 
-local function validateCoreInitCompileBody(source: string): (boolean, string?)
+local function getSourceLine(source: string, lineNo: number): string?
+	local from = 1
+	for _ = 2, lineNo do
+		local nl = source:find("\n", from, true)
+		if not nl then
+			return nil
+		end
+		from = nl + 1
+	end
+	local nl = source:find("\n", from, true)
+	if nl then
+		return source:sub(from, nl - 1)
+	end
+	return source:sub(from)
+end
+
+local function formatSourceExcerpt(source: string, centerLine: number, radius: number): string
+	local lines: { string } = {}
+	for i = centerLine - radius, centerLine + radius do
+		if i >= 1 then
+			local text = getSourceLine(source, i)
+			if text then
+				table.insert(lines, `{i}: {text}`)
+			end
+		end
+	end
+	return table.concat(lines, "\n")
+end
+
+local function validateCoreInitPatterns(source: string): (boolean, string?)
+	source = normalizeBody(source)
 	if not isModernCoreInitSource(source) then
 		return true
 	end
 	if source:find("\nend\nAssignHotkey%(%{ ['\"]LeftShift", 1, true) then
-		return false, "лишний end перед AssignHotkey (битый кэш или старый RemoteLoader — перезапусти paste / обнови r115+)"
+		return false, "лишний end перед AssignHotkey (битый кэш — новый paste r116+)"
 	end
 	if source:find("\nend\nend\nAssignHotkey", 1, true) then
 		return false, "двойной end перед AssignHotkey (битый кэш Core/init)"
+	end
+	if source:find("%);\r?\n%s*end%s*;%s*\r?\n%s*%-%- Connect the button", 1, true) then
+		return false, "лишний end после Plugin CreateButton (legacy-патч — обнови paste r116+)"
+	end
+	for lineNo = 704, 712 do
+		local line = getSourceLine(source, lineNo)
+		if line then
+			local trimmed = line:match("^%s*(.-)%s*$") or line
+			if trimmed == "end" or trimmed == "end;" then
+				return false, `лишний end на строке {lineNo}`
+			end
+		end
+	end
+	return true
+end
+
+local function validateCoreInitCompileBody(source: string): (boolean, string?)
+	local ok, err = validateCoreInitPatterns(source)
+	if not ok then
+		return false, err
+	end
+	if not isModernCoreInitSource(source) then
+		return true
+	end
+	if not source:find("local require = %(_G%.__bt_require", 1, true) then
+		return true
+	end
+	local compileFn = RemoteLoader.compile or defaultCompile
+	local fn, compileErr = compileFn(source, "@Core/init.lua#validate", nil)
+	if not fn and compileErr then
+		local errLine = tonumber(tostring(compileErr):match(":(%d+):"))
+		local excerpt = if errLine then formatSourceExcerpt(source, errLine, 4) else ""
+		return false, `{compileErr}{if #excerpt > 0 then "\n" .. excerpt else "" end}`
 	end
 	return true
 end
@@ -723,36 +789,9 @@ local function syncSourceCacheRevision()
 	RemoteLoader.__sourceCacheRev = SOURCE_CACHE_REV
 end
 
--- Только для executor/remote: не трогать тело modern Core в patchRemoteSource (иначе лишние end)
+-- Modern Core уже содержит remote-правки в репозитории — только return, без gsub по телу
 local function applyMinimalCoreInitRewrites(source: string): string
-	if not source:find("Core%.SyncAPI = SyncAPI", 1, true) then
-		source = source:gsub("SyncAPI = Tool%.SyncAPI;", "SyncAPI = Tool.SyncAPI;\nCore.SyncAPI = SyncAPI;", 1)
-	end
-	source = patchCoreReturn(source)
-	source = source:gsub(
-		"Tool%.Equipped:Connect%(Enable%);",
-		"Tool.Equipped:Connect(function()\n\t\tEnable(Player:GetMouse())\n\tend);",
-		1
-	)
-	source = source:gsub("UI%.Parent = script;", "UI.Parent = nil; UI.Enabled = false;", 1)
-	if not source:find("Mode ~= 'Tool' or %(Player%.Character", 1, true) then
-		source = source:gsub(
-			"(UI%.Parent = UIContainer;)",
-			"if Mode ~= 'Tool' or (Player.Character and Tool.Parent == Player.Character) then\n\t\tUI.Parent = UIContainer;\n\t\tUI.Enabled = true;\n\tend;",
-			1
-		)
-	end
-	if not source:find("Core%.UI = UI\n\tUI%.Parent = nil", 1, true) then
-		source = source:gsub(
-			"(Core%.UI = UI\n)",
-			"%1\tUI.Parent = nil;\n\tUI.Enabled = false;\n",
-			1
-		)
-	end
-	source = applyCoreEquipSafetyPatches(source)
-	source = patchCoreUiExports(source)
-	-- patchCoreLateExports не вызываем: ломает EnsureUI (RegisterDockTools после каждого InitializeUI)
-	return source
+	return patchCoreReturn(source)
 end
 
 local function applyCoreEquipSafetyPatches(source: string): string
@@ -1867,7 +1906,7 @@ local function getPatchedSource(path: string): string?
 	end
 	local patched = patchRemoteSource(path, raw)
 	if path == "Core/init.lua" then
-		local okVal, valErr = validateCoreInitCompileBody(patched)
+		local okVal, valErr = validateCoreInitPatterns(patched)
 		if not okVal then
 			rawSourceCache[path] = nil
 			return nil
@@ -2091,7 +2130,7 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 				result = getPatchedSource(path)
 				if not result then
 					rawSourceCache[path] = nil
-					lastErr = "Core/init.lua: патч дал битый синтаксис (обнови paste до r115+)"
+					lastErr = "Core/init.lua: патч/compile validate failed (обнови paste до r116+)"
 					continue
 				end
 				failedPaths[path] = nil
@@ -2615,6 +2654,13 @@ local function runModuleWithEnv(
 	local function tryEnvRun(): (boolean, any)
 		local fn, compileError = compileFn(body, "@" .. path, coreEnv)
 		if not fn then
+			local errLine = tonumber(tostring(compileError):match(":(%d+):"))
+			local excerpt = if path == "Core/init.lua" and errLine
+				then formatSourceExcerpt(body, errLine, 4)
+				else ""
+			if #excerpt > 0 then
+				return false, `compile: {compileError}\n{excerpt}`
+			end
 			return false, `compile: {compileError}`
 		end
 		return runWithPinnedGlobals(function()
