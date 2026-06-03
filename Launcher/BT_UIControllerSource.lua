@@ -1,3 +1,5 @@
+--[[ Встроенный Tools/Move/UIController.lua для remote (без Selection.Parts на nil) ]]
+return [[
 local Tool = script.Parent.Parent.Parent
 local Libraries = Tool:WaitForChild('Libraries')
 
@@ -199,3 +201,4 @@ function UIController:FocusIncrementInput()
 end
 
 return UIController
+]]

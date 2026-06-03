@@ -664,6 +664,23 @@ local function getEmbeddedToolListSource(): string?
 	return nil
 end
 
+local function getEmbeddedUIControllerSource(): string?
+	if type(_G.BT_UI_CONTROLLER_SOURCE) == "string" and #_G.BT_UI_CONTROLLER_SOURCE > 200 then
+		return _G.BT_UI_CONTROLLER_SOURCE
+	end
+	local ok, mod = pcall(function()
+		if _G.BT_LAUNCHER_LOAD then
+			return _G.BT_LAUNCHER_LOAD("Launcher/BT_UIControllerSource.lua")
+		end
+		return nil
+	end)
+	if ok and type(mod) == "string" and #mod > 200 then
+		_G.BT_UI_CONTROLLER_SOURCE = mod
+		return mod
+	end
+	return nil
+end
+
 local function patchToolsRuntime(path: string, source: string): string
 	if not path:find("^Tools/", 1, true) or path:find("Libraries/", 1, true) then
 		return source
@@ -727,6 +744,11 @@ local function patchToolsRuntime(path: string, source: string): string
 	end
 
 	if path == "Tools/Move/UIController.lua" then
+		local embedded = getEmbeddedUIControllerSource()
+		if embedded then
+			return embedded
+		end
+		source = source:gsub("local Selection = Core%.Selection\r?\n", "")
 		source = source:gsub("#Selection%.Parts", "#(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
 		source = source:gsub("pairs%(Selection%.Parts%)", "pairs(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
 
@@ -807,6 +829,13 @@ end
 local function patchRemoteSource(path: string, source: string): string
 	if path == "UI/Dock/ToolList.lua" then
 		local embedded = getEmbeddedToolListSource()
+		if embedded then
+			source = embedded
+		end
+	end
+
+	if path == "Tools/Move/UIController.lua" then
+		local embedded = getEmbeddedUIControllerSource()
 		if embedded then
 			source = embedded
 		end

@@ -310,6 +310,14 @@ local ok, err = pcall(function()
 			_G.BT_TOOL_LIST_SOURCE = tlsSrc
 		end
 	end
+	do
+		local okUic, uicSrc = pcall(function()
+			return loadFromGit("Launcher/BT_UIControllerSource.lua")
+		end)
+		if okUic and type(uicSrc) == "string" and #uicSrc > 200 then
+			_G.BT_UI_CONTROLLER_SOURCE = uicSrc
+		end
+	end
 	if type(RemoteLoader) ~= "table" or type(RemoteLoader.configure) ~= "function" then
 		local fallback = _G.BT_RemoteLoader
 		if type(fallback) == "table" and type(fallback.configure) == "function" then
