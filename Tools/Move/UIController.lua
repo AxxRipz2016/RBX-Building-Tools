@@ -11,6 +11,9 @@ local Maid = require(Libraries:WaitForChild 'Maid')
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 
 local function getSelectionParts()
+	if type(Core.GetSelectionParts) == "function" then
+		return Core.GetSelectionParts()
+	end
 	local sel = (type(Core) == "table" and Core.Selection) or Selection
 	if sel and type(sel.Parts) == "table" then
 		return sel.Parts

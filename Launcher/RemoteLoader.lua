@@ -138,6 +138,34 @@ Core.Try = Try
 Core.Make = Make
 Core.Assets = Assets
 Core.Tool = Tool
+
+function Core.GetBoundingBoxAPI()
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = (_G.__bt_tool or Core.Tool or Tool)
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			if type(_G.Core) == "table" then
+				_G.Core.BoundingBox = mod
+			end
+			return mod
+		end
+	end
+	return nil
+end
+
+function Core.GetSelectionParts()
+	local sel = Core.Selection
+	if sel and type(sel.Parts) == "table" then
+		return sel.Parts
+	end
+	return {}
+end
 ]]
 
 local CORE_UI_EXPORT_BLOCK = [[
@@ -698,6 +726,11 @@ local function patchToolsRuntime(path: string, source: string): string
 		end
 	end
 
+	if path == "Tools/Move/UIController.lua" then
+		source = source:gsub("#Selection%.Parts", "#(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
+		source = source:gsub("pairs%(Selection%.Parts%)", "pairs(type(Core.GetSelectionParts) == 'function' and Core.GetSelectionParts() or {})")
+	end
+
 	if path == "Tools/Move/UIController.lua" and not source:find("function getSelectionParts", 1, true) then
 		source = source:gsub(
 			"(%-%- Create class\r?\nlocal UIController = %{%})",
@@ -1074,6 +1107,40 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		if not source:find("Core.GetBoundingBoxAPI", 1, true) then
+			source = source:gsub(
+				"(Core%.Tool = Tool\n)",
+				[[%1
+function Core.GetBoundingBoxAPI()
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = (_G.__bt_tool or Core.Tool or Tool)
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			if type(_G.Core) == "table" then
+				_G.Core.BoundingBox = mod
+			end
+			return mod
+		end
+	end
+	return nil
+end
+
+function Core.GetSelectionParts()
+	local sel = Core.Selection
+	if sel and type(sel.Parts) == "table" then
+		return sel.Parts
+	end
+	return {}
+end
+]]
+			)
+		end
 		if not source:find("Core.BT_SetGuiVisible", 1, true) then
 			source = source:gsub("(function EquipTool%()", CORE_BT_UI_HELPERS .. "%1", 1)
 		end
