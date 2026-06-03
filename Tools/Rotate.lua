@@ -1,7 +1,7 @@
 Tool = script.Parent.Parent;
 Core = require(Tool.Core);
 SnapTracking = require(Tool.Core.Snapping);
-BoundingBox = require(Tool.Core.BoundingBox);
+BoundingBox = Core.BoundingBox or require(Tool.Core.BoundingBox);
 
 -- Services
 local ContextActionService = game:GetService 'ContextActionService'
@@ -104,7 +104,7 @@ function ClearConnection(ConnectionKey)
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
@@ -177,7 +177,7 @@ function ShowUI()
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI

@@ -52,14 +52,14 @@ function ClearConnections()
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
-	if UI then
+	if WeldTool.UI then
 
 		-- Reveal the UI
-		UI.Visible = true;
+		WeldTool.UI.Visible = true;
 
 		-- Skip UI creation
 		return;
@@ -67,30 +67,30 @@ function ShowUI()
 	end;
 
 	-- Create the UI
-	UI = Core.Tool.Interfaces.BTWeldToolGUI:Clone();
-	UI.Parent = Core.UI;
-	UI.Visible = true;
+	WeldTool.UI = Core.Tool.Interfaces.BTWeldToolGUI:Clone();
+	WeldTool.UI.Parent = Core.UI;
+	WeldTool.UI.Visible = true;
 
 	-- Hook up the buttons
-	UI.Interface.WeldButton.MouseButton1Click:Connect(CreateWelds);
-	UI.Interface.BreakWeldsButton.MouseButton1Click:Connect(BreakWelds);
+	WeldTool.UI.Interface.WeldButton.MouseButton1Click:Connect(CreateWelds);
+	WeldTool.UI.Interface.BreakWeldsButton.MouseButton1Click:Connect(BreakWelds);
 
 	-- Hook up manual triggering
-	local SignatureButton = UI:WaitForChild('Title'):WaitForChild('Signature')
+	local SignatureButton = WeldTool.UI:WaitForChild('Title'):WaitForChild('Signature')
 	ListenForManualWindowTrigger(WeldTool.ManualText, WeldTool.Color.Color, SignatureButton)
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
-	if not UI then
+	if not WeldTool.UI then
 		return;
 	end;
 
 	-- Hide the UI
-	UI.Visible = false;
+	WeldTool.UI.Visible = false;
 
 end;
 
@@ -156,7 +156,9 @@ function CreateWelds()
 	local Welds = Core.SyncAPI:Invoke('CreateWelds', Selection.Parts, WeldTarget)
 
 	-- Update the UI with the number of welds created
-	UI.Changes.Text.Text = ('created %s weld%s'):format(#Welds, #Welds == 1 and '' or 's');
+	if WeldTool.UI then
+		WeldTool.UI.Changes.Text.Text = ('created %s weld%s'):format(#Welds, #Welds == 1 and '' or 's');
+	end
 
 	-- Put together the history record
 	local HistoryRecord = {
@@ -204,7 +206,9 @@ function BreakWelds()
 	local WeldsRemoved = Core.SyncAPI:Invoke('RemoveWelds', Welds);
 
 	-- Update the UI with the number of welds removed
-	UI.Changes.Text.Text = ('removed %s weld%s'):format(WeldsRemoved, WeldsRemoved == 1 and '' or 's');
+	if WeldTool.UI then
+		WeldTool.UI.Changes.Text.Text = ('removed %s weld%s'):format(WeldsRemoved, WeldsRemoved == 1 and '' or 's');
+	end
 
 	-- Put together the history record
 	local HistoryRecord = {

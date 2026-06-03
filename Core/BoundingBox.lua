@@ -19,6 +19,8 @@ local RecalculateStaticExtents = true;
 local AggregatingStaticParts = false;
 local StaticPartAggregators = {};
 local PotentialPartMonitors = {};
+local BoxPart
+local InactiveBoxPart
 
 local function getSelectionParts()
 	if Core.Selection and type(Core.Selection.Parts) == "table" then
@@ -56,7 +58,7 @@ function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 		warn('[BT] BoundingBox: Core.Make недоступен')
 		return
 	end
-	BoundingBox = make 'Part' {
+	BoxPart = make 'Part' {
 		Name = 'BTBoundingBox';
 		CanCollide = false;
 		Transparency = 1;
@@ -67,7 +69,7 @@ function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 
 	-- Make the mouse ignore it
 	if Core.Mouse and typeof(Core.Mouse) == "Instance" then
-		Core.Mouse.TargetFilter = BoundingBox;
+		Core.Mouse.TargetFilter = BoxPart;
 	end
 
 	-- Make sure to calculate our static extents
@@ -83,7 +85,7 @@ function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 
 	-- Attach handles if requested
 	if BoundingBoxHandleCallback then
-		BoundingBoxHandleCallback(BoundingBox);
+		BoundingBoxHandleCallback(BoxPart);
 	end;
 
 end;
@@ -92,7 +94,7 @@ function BoundingBoxModule.GetBoundingBox()
 	-- Returns the current bounding box
 
 	-- Get and return bounding box
-	return BoundingBox;
+	return BoxPart;
 
 end;
 
@@ -119,19 +121,19 @@ function BoundingBoxModule.UpdateBoundingBox()
 
 	-- If the bounding box is inactive, and should now be active, update it
 	local selectionParts = getSelectionParts()
-	if InactiveBoundingBox and #selectionParts > 0 then
-		BoundingBox = InactiveBoundingBox;
-		InactiveBoundingBox = nil;
+	if InactiveBoxPart and #selectionParts > 0 then
+		BoxPart = InactiveBoxPart;
+		InactiveBoxPart = nil;
 		if BoundingBoxHandleCallback then
-			BoundingBoxHandleCallback(BoundingBox);
+			BoundingBoxHandleCallback(BoxPart);
 		end
 
 	-- If the bounding box is active, and there are no parts, disable it
-	elseif BoundingBox and #selectionParts == 0 then
-		InactiveBoundingBox = BoundingBox;
-		BoundingBox = nil;
+	elseif BoxPart and #selectionParts == 0 then
+		InactiveBoxPart = BoxPart;
+		BoxPart = nil;
 		if BoundingBoxHandleCallback then
-			BoundingBoxHandleCallback(BoundingBox);
+			BoundingBoxHandleCallback(BoxPart);
 		end
 		return;
 
@@ -148,8 +150,8 @@ function BoundingBoxModule.UpdateBoundingBox()
 
 	-- Update the bounding box
 	local BoundingBoxSize, BoundingBoxCFrame = BoundingBoxModule.CalculateExtents(selectionParts, BoundingBoxModule.StaticExtents);
-	BoundingBox.Size = BoundingBoxSize;
-	BoundingBox.CFrame = BoundingBoxCFrame;
+	BoxPart.Size = BoundingBoxSize;
+	BoxPart.CFrame = BoundingBoxCFrame;
 
 end;
 
@@ -175,12 +177,12 @@ function BoundingBoxModule.ClearBoundingBox()
 	end
 
 	-- Delete the bounding box
-	if BoundingBox then
-		safeDestroyBox(BoundingBox);
-		BoundingBox = nil;
-	elseif InactiveBoundingBox then
-		safeDestroyBox(InactiveBoundingBox);
-		InactiveBoundingBox = nil;
+	if BoxPart then
+		safeDestroyBox(BoxPart);
+		BoxPart = nil;
+	elseif InactiveBoxPart then
+		safeDestroyBox(InactiveBoxPart);
+		InactiveBoxPart = nil;
 	end;
 
 	-- Mark the bounding box as disabled

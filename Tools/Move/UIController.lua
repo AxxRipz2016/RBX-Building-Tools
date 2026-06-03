@@ -10,6 +10,13 @@ local Support = require(Libraries:WaitForChild 'SupportLibrary')
 local Maid = require(Libraries:WaitForChild 'Maid')
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 
+local function getSelectionParts()
+	if Selection and type(Selection.Parts) == 'table' then
+		return Selection.Parts
+	end
+	return {}
+end
+
 -- Create class
 local UIController = {}
 UIController.__index = UIController
@@ -141,7 +148,7 @@ function UIController:UpdateUI()
 	end
 
 	-- Only show and calculate selection info if it's not empty
-	if #Selection.Parts == 0 then
+	if #getSelectionParts() == 0 then
 		self.UI.Info.Visible = false
 		self.UI.Size = UDim2.new(0, 245, 0, 90)
 		return
@@ -156,7 +163,7 @@ function UIController:UpdateUI()
 
 	-- Identify common positions across axes
 	local XVariations, YVariations, ZVariations = {}, {}, {}
-	for _, Part in pairs(Selection.Parts) do
+	for _, Part in pairs(getSelectionParts()) do
 		table.insert(XVariations, Support.Round(Part.Position.X, 3))
 		table.insert(YVariations, Support.Round(Part.Position.Y, 3))
 		table.insert(ZVariations, Support.Round(Part.Position.Z, 3))

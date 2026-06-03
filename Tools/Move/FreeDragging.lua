@@ -59,6 +59,10 @@ function FreeDragging:EnableDragging()
 			return Enum.ContextActionResult.Pass
 		end
 
+		if not Core.Mouse or typeof(Core.Mouse) ~= 'Instance' then
+			return Enum.ContextActionResult.Pass
+		end
+
 		-- Get mouse target
 		local TargetPart = Core.Mouse.Target
 		if (not TargetPart) or Selection.Multiselecting then

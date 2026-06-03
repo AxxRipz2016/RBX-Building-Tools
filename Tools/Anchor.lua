@@ -54,14 +54,14 @@ function ClearConnections()
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
-	if UI then
+	if AnchorTool.UI then
 
 		-- Reveal the UI
-		UI.Visible = true;
+		AnchorTool.UI.Visible = true;
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -72,13 +72,13 @@ function ShowUI()
 	end;
 
 	-- Create the UI
-	UI = Core.Tool.Interfaces.BTAnchorToolGUI:Clone();
-	UI.Parent = Core.UI;
-	UI.Visible = true;
+	AnchorTool.UI = Core.Tool.Interfaces.BTAnchorToolGUI:Clone();
+	AnchorTool.UI.Parent = Core.UI;
+	AnchorTool.UI.Visible = true;
 
 	-- References to UI elements
-	local AnchorButton = UI.Status.Anchored.Button;
-	local UnanchorButton = UI.Status.Unanchored.Button;
+	local AnchorButton = AnchorTool.UI.Status.Anchored.Button;
+	local UnanchorButton = AnchorTool.UI.Status.Unanchored.Button;
 
 	-- Enable the anchor status switch
 	AnchorButton.MouseButton1Click:Connect(function ()
@@ -89,7 +89,7 @@ function ShowUI()
 	end);
 
 	-- Hook up manual triggering
-	local SignatureButton = UI:WaitForChild('Title'):WaitForChild('Signature')
+	local SignatureButton = AnchorTool.UI:WaitForChild('Title'):WaitForChild('Signature')
 	ListenForManualWindowTrigger(AnchorTool.ManualText, AnchorTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
@@ -101,7 +101,7 @@ function UpdateUI()
 	-- Updates information on the UI
 
 	-- Make sure the UI's on
-	if not UI then
+	if not AnchorTool.UI then
 		return;
 	end;
 
@@ -110,29 +110,29 @@ function UpdateUI()
 
 	-- Update the anchor option switch
 	if Anchored == true then
-		Core.ToggleSwitch('Anchored', UI.Status);
+		Core.ToggleSwitch('Anchored', AnchorTool.UI.Status);
 
 	-- If the selection is unanchored
 	elseif Anchored == false then
-		Core.ToggleSwitch('Unanchored', UI.Status);
+		Core.ToggleSwitch('Unanchored', AnchorTool.UI.Status);
 
 	-- If the anchor status varies, don't select a current switch
 	elseif Anchored == nil then
-		Core.ToggleSwitch(nil, UI.Status);
+		Core.ToggleSwitch(nil, AnchorTool.UI.Status);
 	end;
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
-	if not UI then
+	if not AnchorTool.UI then
 		return;
 	end;
 
 	-- Hide the UI
-	UI.Visible = false;
+	AnchorTool.UI.Visible = false;
 
 	-- Stop updating the UI
 	UIUpdater:Stop();

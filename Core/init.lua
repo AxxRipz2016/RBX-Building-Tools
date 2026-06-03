@@ -16,6 +16,7 @@ Security = require(script.Security)
 History = require(script.History)
 Selection = require(script.Selection)
 Targeting = require(script.Targeting)
+local BoundingBoxModule = require(script:WaitForChild('BoundingBox'))
 
 -- Libraries
 Region = require(Tool.Libraries.Region)
@@ -39,6 +40,19 @@ local RunService = game:GetService('RunService')
 
 -- Preload assets
 Assets = require(Tool.Assets)
+
+Core.Security = Security
+Core.History = History
+Core.Selection = Selection
+Core.Targeting = Targeting
+Core.BoundingBox = BoundingBoxModule
+Core.Region = Region
+Core.Signal = Signal
+Core.Support = Support
+Core.Try = Try
+Core.Make = Make
+Core.Assets = Assets
+Core.Tool = Tool
 
 -- Core events
 ToolChanged = Signal.new()

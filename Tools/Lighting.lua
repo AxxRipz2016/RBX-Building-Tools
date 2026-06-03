@@ -1,14 +1,14 @@
 Tool = script.Parent.Parent;
 Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
-local UI = Tool:WaitForChild('UI')
+local UITree = Tool:WaitForChild('UI')
 local Libraries = Tool:WaitForChild('Libraries')
 
 -- Libraries
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 local Roact = require(Vendor:WaitForChild('Roact'))
-local ColorPicker = require(UI:WaitForChild('ColorPicker'))
-local Dropdown = require(UI:WaitForChild('Dropdown'))
+local ColorPicker = require(UITree:WaitForChild('ColorPicker'))
+local Dropdown = require(UITree:WaitForChild('Dropdown'))
 local Signal = require(Libraries:WaitForChild('Signal'))
 
 -- Import relevant references
@@ -62,7 +62,7 @@ function ClearConnections()
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
@@ -228,7 +228,7 @@ function EnableLightSettingsUI(LightSettingsUI)
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -485,12 +485,13 @@ function UpdateUI()
 
 		-- Update the special shadows input
 		local ShadowsEnabled = Support.IdentifyCommonProperty(Lights, 'Shadows');
+		local assets = Core.Assets or {}
 		if ShadowsEnabled == true then
-			ShadowsCheckbox.Image = Core.Assets.CheckedCheckbox;
+			ShadowsCheckbox.Image = assets.CheckedCheckbox or 'rbxassetid://401518893';
 		elseif ShadowsEnabled == false then
-			ShadowsCheckbox.Image = Core.Assets.UncheckedCheckbox;
+			ShadowsCheckbox.Image = assets.UncheckedCheckbox or 'rbxassetid://401518903';
 		elseif ShadowsEnabled == nil then
-			ShadowsCheckbox.Image = Core.Assets.SemicheckedCheckbox;
+			ShadowsCheckbox.Image = assets.SemicheckedCheckbox or 'rbxassetid://404298168';
 		end;
 
 	end;

@@ -130,6 +130,7 @@ Core.Security = Security
 Core.History = History
 Core.Selection = Selection
 Core.Targeting = Targeting
+Core.BoundingBox = BoundingBoxModule
 Core.Region = Region
 Core.Signal = Signal
 Core.Support = Support
@@ -518,8 +519,12 @@ end
 			"local Core = _G.Core or require(Tool.Core)" .. toolCoreBootstrap
 		)
 		source = source:gsub(
+			"local BoundingBox = require%(Tool%.Core%.BoundingBox%)",
+			"local BoundingBox = Core.BoundingBox or require(Tool:WaitForChild('Core'):WaitForChild('BoundingBox'))"
+		)
+		source = source:gsub(
 			"BoundingBox = require%(Tool%.Core%.BoundingBox%)",
-			"BoundingBox = require(Tool:WaitForChild('Core'):WaitForChild('BoundingBox'))"
+			"BoundingBox = Core.BoundingBox or require(Tool:WaitForChild('Core'):WaitForChild('BoundingBox'))"
 		)
 		source = source:gsub(
 			"SnapTracking = require%(Tool%.Core%.Snapping%)",
@@ -591,6 +596,87 @@ local function getEmbeddedToolListSource(): string?
 	return nil
 end
 
+local function patchToolsRuntime(path: string, source: string): string
+	if not path:find("^Tools/", 1, true) or path:find("Libraries/", 1, true) then
+		return source
+	end
+
+	if source:find("\nfunction ShowUI%(", 1, true) and not source:find("\nlocal function ShowUI%(", 1, true) then
+		source = source:gsub("\nfunction ShowUI%(", "\nlocal function ShowUI(")
+	end
+	if source:find("\nfunction HideUI%(", 1, true) and not source:find("\nlocal function HideUI%(", 1, true) then
+		source = source:gsub("\nfunction HideUI%(", "\nlocal function HideUI(")
+	end
+
+	if path == "Tools/Weld.lua" and source:find("if UI then", 1, true) and not source:find("WeldTool%.UI", 1, true) then
+		source = source:gsub("if UI then", "if WeldTool.UI then")
+		source = source:gsub("if not UI then", "if not WeldTool.UI then")
+		source = source:gsub("UI = Core%.Tool%.Interfaces%.BTWeldToolGUI", "WeldTool.UI = Core.Tool.Interfaces.BTWeldToolGUI")
+		source = source:gsub("UI%.Parent = Core%.UI", "WeldTool.UI.Parent = Core.UI")
+		source = source:gsub("UI%.Visible", "WeldTool.UI.Visible")
+		source = source:gsub("UI%.Interface", "WeldTool.UI.Interface")
+		source = source:gsub("UI:WaitForChild", "WeldTool.UI:WaitForChild")
+		source = source:gsub("UI%.Changes", "WeldTool.UI.Changes")
+	end
+
+	if path == "Tools/Anchor.lua" and source:find("if UI then", 1, true) and not source:find("AnchorTool%.UI", 1, true) then
+		source = source:gsub("if UI then", "if AnchorTool.UI then")
+		source = source:gsub("if not UI then", "if not AnchorTool.UI then")
+		source = source:gsub("UI = Core%.Tool%.Interfaces%.BTAnchorToolGUI", "AnchorTool.UI = Core.Tool.Interfaces.BTAnchorToolGUI")
+		source = source:gsub("UI%.Parent = Core%.UI", "AnchorTool.UI.Parent = Core.UI")
+		source = source:gsub("UI%.Visible", "AnchorTool.UI.Visible")
+		source = source:gsub("UI%.Status", "AnchorTool.UI.Status")
+		source = source:gsub("UI:WaitForChild", "AnchorTool.UI:WaitForChild")
+	end
+
+	if path == "Tools/Collision.lua" and source:find("if UI then", 1, true) and not source:find("CollisionTool%.UI", 1, true) then
+		source = source:gsub("if UI then", "if CollisionTool.UI then")
+		source = source:gsub("if not UI then", "if not CollisionTool.UI then")
+		source = source:gsub("UI = Core%.Tool%.Interfaces%.BTCollisionToolGUI", "CollisionTool.UI = Core.Tool.Interfaces.BTCollisionToolGUI")
+		source = source:gsub("UI%.Parent = Core%.UI", "CollisionTool.UI.Parent = Core.UI")
+		source = source:gsub("UI%.Visible", "CollisionTool.UI.Visible")
+		source = source:gsub("UI%.Status", "CollisionTool.UI.Status")
+		source = source:gsub("UI:WaitForChild", "CollisionTool.UI:WaitForChild")
+	end
+
+	if path == "Tools/Lighting.lua" then
+		source = source:gsub("local UI = Tool:WaitForChild%('UI'%)", "local UITree = Tool:WaitForChild('UI')")
+		source = source:gsub("require%(UI:", "require(UITree:")
+		if not source:find("assets%.CheckedCheckbox", 1, true) then
+			source = source:gsub(
+				"ShadowsCheckbox%.Image = Core%.Assets%.CheckedCheckbox;",
+				"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.CheckedCheckbox) or 'rbxassetid://401518893';"
+			)
+			source = source:gsub(
+				"ShadowsCheckbox%.Image = Core%.Assets%.UncheckedCheckbox;",
+				"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.UncheckedCheckbox) or 'rbxassetid://401518903';"
+			)
+			source = source:gsub(
+				"ShadowsCheckbox%.Image = Core%.Assets%.SemicheckedCheckbox;",
+				"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.SemicheckedCheckbox) or 'rbxassetid://404298168';"
+			)
+		end
+	end
+
+	if path == "Tools/Move/UIController.lua" and not source:find("function getSelectionParts", 1, true) then
+		source = source:gsub(
+			"(%-%- Create class\r?\nlocal UIController = %{%})",
+			[[local function getSelectionParts()
+	if Selection and type(Selection.Parts) == "table" then
+		return Selection.Parts
+	end
+	return {}
+end
+
+%1]]
+		)
+		source = source:gsub("#Selection%.Parts", "#getSelectionParts()")
+		source = source:gsub("pairs%(Selection%.Parts%)", "pairs(getSelectionParts())")
+	end
+
+	return source
+end
+
 local function patchRemoteSource(path: string, source: string): string
 	if path == "UI/Dock/ToolList.lua" then
 		local embedded = getEmbeddedToolListSource()
@@ -599,11 +685,7 @@ local function patchRemoteSource(path: string, source: string): string
 		end
 	end
 
-	if path:find("^Tools/", 1, true) and not path:find("Libraries/", 1, true) then
-		if not source:find("\nlocal UI\n", 1, true) and not source:find("^local UI\n", 1, true) then
-			source = "local UI\n" .. source
-		end
-	end
+	source = patchToolsRuntime(path, source)
 
 	if path:find("RobloxRenderer.lua", 1, true) then
 		source = source:gsub(
@@ -804,13 +886,39 @@ local Support = Core.Support
 		warn('[BT] BoundingBox: Core.Make недоступен')
 		return
 	end
-			BoundingBox = make 'Part' {]]
+			BoxPart = make 'Part' {]]
 			)
+		end
+		if not source:find("local BoxPart", 1, true) and source:find("BoundingBox = make", 1, true) then
+			source = source:gsub(
+				"(local PotentialPartMonitors = %{%};)\n",
+				[[%1
+local BoxPart
+local InactiveBoxPart
+]]
+			)
+			source = source:gsub("BoundingBox = make 'Part'", "BoxPart = make 'Part'")
+			source = source:gsub("InactiveBoundingBox", "InactiveBoxPart")
+			source = source:gsub("elseif BoundingBox and", "elseif BoxPart and")
+			source = source:gsub("if BoundingBox then", "if BoxPart then")
+			source = source:gsub("BoundingBox = InactiveBoxPart", "BoxPart = InactiveBoxPart")
+			source = source:gsub("InactiveBoxPart = BoundingBox", "InactiveBoxPart = BoxPart")
+			source = source:gsub("BoundingBox = InactiveBoxPart", "BoxPart = InactiveBoxPart")
+			source = source:gsub("BoundingBox = nil", "BoxPart = nil")
+			source = source:gsub("BoundingBox%.Size", "BoxPart.Size")
+			source = source:gsub("BoundingBox%.CFrame", "BoxPart.CFrame")
+			source = source:gsub("BoundingBoxHandleCallback%(BoundingBox%)", "BoundingBoxHandleCallback(BoxPart)")
+			source = source:gsub("return BoundingBox;", "return BoxPart;")
+			source = source:gsub("safeDestroyBox%(BoundingBox%)", "safeDestroyBox(BoxPart)")
 		end
 		if not source:find("Core%.Mouse and typeof", 1, true) then
 			source = source:gsub(
 				"Core%.Mouse%.TargetFilter = BoundingBox;",
-				"if Core.Mouse and typeof(Core.Mouse) == 'Instance' then Core.Mouse.TargetFilter = BoundingBox; end"
+				"if Core.Mouse and typeof(Core.Mouse) == 'Instance' then Core.Mouse.TargetFilter = BoxPart; end"
+			)
+			source = source:gsub(
+				"Core%.Mouse%.TargetFilter = BoxPart;",
+				"if Core.Mouse and typeof(Core.Mouse) == 'Instance' then Core.Mouse.TargetFilter = BoxPart; end"
 			)
 		end
 		if not source:find("type%(BoundingBoxUpdater%.Stop%)", 1, true) then
@@ -828,6 +936,10 @@ local Support = Core.Support
 		source = source:gsub(
 			"BoundingBoxHandleCallback%(BoundingBox%);",
 			"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(BoundingBox); end"
+		)
+		source = source:gsub(
+			"BoundingBoxHandleCallback%(BoxPart%);",
+			"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(BoxPart); end"
 		)
 		if not source:find("getSelectionParts", 1, true) then
 			source = source:gsub(
@@ -1128,6 +1240,14 @@ end;]]
 				"(Targeting = require%(Tool:WaitForChild%('Core'%):WaitForChild%('Targeting')%)\n)",
 				"%1Core.Targeting = Targeting\n"
 			)
+			source = source:gsub(
+				"(local BoundingBoxModule = require%(script:WaitForChild%('BoundingBox')%)\n)",
+				"%1Core.BoundingBox = BoundingBoxModule\n"
+			)
+			source = source:gsub(
+				"(local BoundingBoxModule = require%(__bt_script:WaitForChild%('BoundingBox')%)\n)",
+				"%1Core.BoundingBox = BoundingBoxModule\n"
+			)
 		end
 	end
 
@@ -1140,6 +1260,17 @@ end;]]
 			"if not Core%.IsSelectable%(%{ TargetPart %}%) and not IsSnapping then",
 			"if not (type(Core.IsSelectable) == 'function' and Core.IsSelectable({ TargetPart })) and not IsSnapping then"
 		)
+		if not source:find("typeof%(Core%.Mouse%)", 1, true) then
+			source = source:gsub(
+				"(%-%- Get mouse target\r?\n\t\t)local TargetPart = Core%.Mouse%.Target",
+				[[if not Core.Mouse or typeof(Core.Mouse) ~= 'Instance' then
+			return Enum.ContextActionResult.Pass
+		end
+
+		-- Get mouse target
+		local TargetPart = Core.Mouse.Target]]
+			)
+		end
 	end
 
 	if path:find("^Tools/", 1, true) or path == "Core/Snapping.lua" then

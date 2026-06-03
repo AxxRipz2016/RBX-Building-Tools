@@ -52,14 +52,14 @@ function ClearConnections()
 
 end;
 
-function ShowUI()
+local function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
-	if UI then
+	if CollisionTool.UI then
 
 		-- Reveal the UI
-		UI.Visible = true;
+		CollisionTool.UI.Visible = true;
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -70,13 +70,13 @@ function ShowUI()
 	end;
 
 	-- Create the UI
-	UI = Core.Tool.Interfaces.BTCollisionToolGUI:Clone();
-	UI.Parent = Core.UI;
-	UI.Visible = true;
+	CollisionTool.UI = Core.Tool.Interfaces.BTCollisionToolGUI:Clone();
+	CollisionTool.UI.Parent = Core.UI;
+	CollisionTool.UI.Visible = true;
 
 	-- References to UI elements
-	local OnButton = UI.Status.On.Button;
-	local OffButton = UI.Status.Off.Button;
+	local OnButton = CollisionTool.UI.Status.On.Button;
+	local OffButton = CollisionTool.UI.Status.Off.Button;
 
 	-- Enable the collision status switch
 	OnButton.MouseButton1Click:Connect(function ()
@@ -87,7 +87,7 @@ function ShowUI()
 	end);
 
 	-- Hook up manual triggering
-	local SignatureButton = UI:WaitForChild('Title'):WaitForChild('Signature')
+	local SignatureButton = CollisionTool.UI:WaitForChild('Title'):WaitForChild('Signature')
 	ListenForManualWindowTrigger(CollisionTool.ManualText, CollisionTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
@@ -99,7 +99,7 @@ function UpdateUI()
 	-- Updates information on the UI
 
 	-- Make sure the UI's on
-	if not UI then
+	if not CollisionTool.UI then
 		return;
 	end;
 
@@ -108,29 +108,29 @@ function UpdateUI()
 
 	-- Update the collision option switch
 	if Collision == true then
-		Core.ToggleSwitch('On', UI.Status);
+		Core.ToggleSwitch('On', CollisionTool.UI.Status);
 
 	-- If the selection has collision disabled
 	elseif Collision == false then
-		Core.ToggleSwitch('Off', UI.Status);
+		Core.ToggleSwitch('Off', CollisionTool.UI.Status);
 
 	-- If the collision status varies, don't select a current switch
 	elseif Collision == nil then
-		Core.ToggleSwitch(nil, UI.Status);
+		Core.ToggleSwitch(nil, CollisionTool.UI.Status);
 	end;
 
 end;
 
-function HideUI()
+local function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
-	if not UI then
+	if not CollisionTool.UI then
 		return;
 	end;
 
 	-- Hide the UI
-	UI.Visible = false;
+	CollisionTool.UI.Visible = false;
 
 	-- Stop updating the UI
 	UIUpdater:Stop();

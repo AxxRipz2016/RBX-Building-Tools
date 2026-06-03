@@ -1,7 +1,7 @@
 local Tool = script.Parent.Parent
 local Core = require(Tool.Core)
 local SnapTracking = require(Tool.Core.Snapping)
-local BoundingBox = require(Tool.Core.BoundingBox)
+local BoundingBox = Core.BoundingBox or require(Tool.Core.BoundingBox)
 
 -- Services
 local ContextActionService = game:GetService 'ContextActionService'
