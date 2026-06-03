@@ -167,14 +167,50 @@ local function btSetGuiVisible(gui, visible)
 	if gui == nil or typeof(gui) ~= "Instance" then
 		return
 	end
-	if type(Core) == "table" and type(Core.BT_SetGuiVisible) == "function" then
-		Core.BT_SetGuiVisible(gui, visible)
-	elseif gui:IsA("ScreenGui") then
+	if gui:IsA("ScreenGui") then
 		gui.Enabled = visible and true or false
 	elseif gui:IsA("GuiObject") then
 		gui.Visible = visible and true or false
 	end
 end
+
+]]
+
+local BT_BOUNDING_BOX_API_HELPER = [[
+local function GetBoundingBoxAPI()
+	if type(Core.GetBoundingBoxAPI) == "function" then
+		local api = Core.GetBoundingBoxAPI()
+		if api then return api end
+	end
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = _G.__bt_tool or Tool
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			return mod
+		end
+	end
+	return nil
+end
+
+local BoundingBoxAPI = setmetatable({}, {
+	__index = function(_, key)
+		local api = GetBoundingBoxAPI()
+		if type(api) ~= "table" then return nil end
+		local v = api[key]
+		if type(v) == "function" then
+			return function(...)
+				return v(api, ...)
+			end
+		end
+		return v
+	end,
+})
 
 ]]
 
@@ -719,6 +755,29 @@ local function patchToolBtGuiHelper(path: string, source: string): string
 	return source
 end
 
+local function patchToolBoundingBoxApi(path: string, source: string): string
+	if not path:find("^Tools/", 1, true) or path:find("Libraries/", 1, true) then
+		return source
+	end
+	if source:find("GetBoundingBoxAPI", 1, true) then
+		return source
+	end
+	if not source:find("BoundingBoxAPI%.ClearBoundingBox", 1, true)
+		and not source:find("BoundingBox%.ClearBoundingBox", 1, true)
+	then
+		return source
+	end
+	source = source:gsub("\r?\nlocal BoundingBoxAPI = Core%.BoundingBox or require[^\n]+\r?\n", "\n")
+	source = source:gsub("\r?\nBoundingBoxAPI = Core%.BoundingBox or require[^\n]+\r?\n", "\n")
+	source = source:gsub("\r?\nlocal BoundingBox = Core%.BoundingBox or require[^\n]+\r?\n", "\n")
+	source = source:gsub("\r?\nBoundingBox = Core%.BoundingBox or require[^\n]+\r?\n", "\n")
+	local inserted = source:gsub("(SnapTracking = require%([^\n]+%)[;\n])", "%1\n" .. BT_BOUNDING_BOX_API_HELPER .. "\n", 1)
+	if inserted == source then
+		inserted = source:gsub("(Core = require%([^\n]+%)[;\n])", "%1\n" .. BT_BOUNDING_BOX_API_HELPER .. "\n", 1)
+	end
+	return inserted
+end
+
 local function patchToolsRuntime(path: string, source: string): string
 	if not path:find("^Tools/", 1, true) or path:find("Libraries/", 1, true) then
 		return source
@@ -765,20 +824,30 @@ local function patchToolsRuntime(path: string, source: string): string
 	if path == "Tools/Lighting.lua" then
 		source = source:gsub("local UI = Tool:WaitForChild%('UI'%)", "local UITree = Tool:WaitForChild('UI')")
 		source = source:gsub("require%(UI:", "require(UITree:")
-		if not source:find("assets%.CheckedCheckbox", 1, true) then
-			source = source:gsub(
-				"ShadowsCheckbox%.Image = Core%.Assets%.CheckedCheckbox;",
-				"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.CheckedCheckbox) or 'rbxassetid://401518893';"
-			)
-			source = source:gsub(
-				"ShadowsCheckbox%.Image = Core%.Assets%.UncheckedCheckbox;",
-				"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.UncheckedCheckbox) or 'rbxassetid://401518903';"
-			)
-			source = source:gsub(
-				"ShadowsCheckbox%.Image = Core%.Assets%.SemicheckedCheckbox;",
-				"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.SemicheckedCheckbox) or 'rbxassetid://404298168';"
-			)
-		end
+		source = source:gsub(
+			"ShadowsCheckbox%.Image = Core%.Assets%.CheckedCheckbox;",
+			"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.CheckedCheckbox) or 'rbxassetid://401518893';"
+		)
+		source = source:gsub(
+			"ShadowsCheckbox%.Image = Core%.Assets%.UncheckedCheckbox;",
+			"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.UncheckedCheckbox) or 'rbxassetid://401518903';"
+		)
+		source = source:gsub(
+			"ShadowsCheckbox%.Image = Core%.Assets%.SemicheckedCheckbox;",
+			"ShadowsCheckbox.Image = (Core.Assets and Core.Assets.SemicheckedCheckbox) or 'rbxassetid://404298168';"
+		)
+		source = source:gsub(
+			"ShadowsCheckbox%.Image = assets%.CheckedCheckbox or ([^;]+);",
+			"ShadowsCheckbox.Image = (type(assets.CheckedCheckbox) == 'string' and assets.CheckedCheckbox ~= '' and assets.CheckedCheckbox) or %1;"
+		)
+		source = source:gsub(
+			"ShadowsCheckbox%.Image = assets%.UncheckedCheckbox or ([^;]+);",
+			"ShadowsCheckbox.Image = (type(assets.UncheckedCheckbox) == 'string' and assets.UncheckedCheckbox ~= '' and assets.UncheckedCheckbox) or %1;"
+		)
+		source = source:gsub(
+			"ShadowsCheckbox%.Image = assets%.SemicheckedCheckbox or ([^;]+);",
+			"ShadowsCheckbox.Image = (type(assets.SemicheckedCheckbox) == 'string' and assets.SemicheckedCheckbox ~= '' and assets.SemicheckedCheckbox) or %1;"
+		)
 	end
 
 	if path == "Tools/Move/UIController.lua" then
@@ -855,12 +924,23 @@ end
 	end
 
 	if source:find("[%w_]+%.UI%.Visible = false", 1, true) and not source:find("btSetGuiVisible", 1, true) then
-		source = source:gsub("([%w_]+)%.UI%.Visible = false", "btSetGuiVisible(%1.UI, false)")
+		source = source:gsub("([%w_]+)%.UI%.Visible = false", function(prefix: string)
+			if prefix == "Core" then
+				return "Core.UI.Visible = false"
+			end
+			return `btSetGuiVisible({prefix}.UI, false)`
+		end)
 	end
 	if source:find("[%w_]+%.UI%.Visible = true", 1, true) and not source:find("btSetGuiVisible", 1, true) then
-		source = source:gsub("([%w_]+)%.UI%.Visible = true", "btSetGuiVisible(%1.UI, true)")
+		source = source:gsub("([%w_]+)%.UI%.Visible = true", function(prefix: string)
+			if prefix == "Core" then
+				return "Core.UI.Visible = true"
+			end
+			return `btSetGuiVisible({prefix}.UI, true)`
+		end)
 	end
 
+	source = patchToolBoundingBoxApi(path, source)
 	source = patchToolBtGuiHelper(path, source)
 	return source
 end

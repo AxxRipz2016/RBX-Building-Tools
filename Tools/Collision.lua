@@ -10,6 +10,17 @@ Support = Core.Support;
 Security = Core.Security;
 Support.ImportServices();
 
+local function btSetGuiVisible(gui, visible)
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
+
 -- Initialize the tool
 local CollisionTool = {
 	Name = 'Collision Tool';
@@ -59,7 +70,7 @@ local function ShowUI()
 	if CollisionTool.UI then
 
 		-- Reveal the UI
-		CollisionTool.UI.Visible = true;
+		btSetGuiVisible(CollisionTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
 		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
@@ -72,7 +83,7 @@ local function ShowUI()
 	-- Create the UI
 	CollisionTool.UI = Core.Tool.Interfaces.BTCollisionToolGUI:Clone();
 	CollisionTool.UI.Parent = Core.UI;
-	CollisionTool.UI.Visible = true;
+	btSetGuiVisible(CollisionTool.UI, true);
 
 	-- References to UI elements
 	local OnButton = CollisionTool.UI.Status.On.Button;
@@ -130,7 +141,7 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(CollisionTool.UI, false);
+	btSetGuiVisible(CollisionTool.UI, false);
 
 	-- Stop updating the UI
 	if UIUpdater and type(UIUpdater.Stop) == "function" then

@@ -24,9 +24,7 @@ local function setGuiVisible(gui, visible)
 	if gui == nil or typeof(gui) ~= "Instance" then
 		return
 	end
-	if type(Core.BT_SetGuiVisible) == "function" then
-		Core.BT_SetGuiVisible(gui, visible)
-	elseif gui:IsA("ScreenGui") then
+	if gui:IsA("ScreenGui") then
 		gui.Enabled = visible and true or false
 	else
 		gui.Visible = visible and true or false

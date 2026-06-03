@@ -489,11 +489,11 @@ function UpdateUI()
 		local ShadowsEnabled = Support.IdentifyCommonProperty(Lights, 'Shadows');
 		local assets = Core.Assets or {}
 		if ShadowsEnabled == true then
-			ShadowsCheckbox.Image = assets.CheckedCheckbox or 'rbxassetid://401518893';
+			ShadowsCheckbox.Image = (type(assets.CheckedCheckbox) == 'string' and assets.CheckedCheckbox ~= '' and assets.CheckedCheckbox) or 'rbxassetid://401518893';
 		elseif ShadowsEnabled == false then
-			ShadowsCheckbox.Image = assets.UncheckedCheckbox or 'rbxassetid://401518903';
+			ShadowsCheckbox.Image = (type(assets.UncheckedCheckbox) == 'string' and assets.UncheckedCheckbox ~= '' and assets.UncheckedCheckbox) or 'rbxassetid://401518903';
 		elseif ShadowsEnabled == nil then
-			ShadowsCheckbox.Image = assets.SemicheckedCheckbox or 'rbxassetid://404298168';
+			ShadowsCheckbox.Image = (type(assets.SemicheckedCheckbox) == 'string' and assets.SemicheckedCheckbox ~= '' and assets.SemicheckedCheckbox) or 'rbxassetid://404298168';
 		end;
 
 	end;
