@@ -7,6 +7,8 @@ local HttpService = game:GetService("HttpService")
 local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoader else {}
 _G.BT_RemoteLoader = RemoteLoader
 
+-- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
+local SOURCE_CACHE_REV = 115
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -693,12 +695,32 @@ local function patchCoreInitRequires(source: string): string
 	return source
 end
 
--- Core/init.lua на development уже с EnsureUI / existing:Destroy — legacy-gsub ломают синтаксис
+-- Core/init.lua с EnsureUI — legacy-gsub (patchCoreLateExports, while not UI…) ломают синтаксис
 local function isModernCoreInitSource(source: string): boolean
-	return source:find("existing:Destroy%(", 1, true) ~= nil
-		and source:find("function Core%.EnsureUI", 1, true) ~= nil
-		and source:find("__bt_equip_guard", 1, true) ~= nil
-		and source:find("IsBuildingToolModule", 1, true) ~= nil
+	return source:find("function Core%.EnsureUI", 1, true) ~= nil
+end
+
+local function validateCoreInitCompileBody(source: string): (boolean, string?)
+	if not isModernCoreInitSource(source) then
+		return true
+	end
+	if source:find("\nend\nAssignHotkey%(%{ ['\"]LeftShift", 1, true) then
+		return false, "лишний end перед AssignHotkey (битый кэш или старый RemoteLoader — перезапусти paste / обнови r115+)"
+	end
+	if source:find("\nend\nend\nAssignHotkey", 1, true) then
+		return false, "двойной end перед AssignHotkey (битый кэш Core/init)"
+	end
+	return true
+end
+
+local function syncSourceCacheRevision()
+	if RemoteLoader.__sourceCacheRev == SOURCE_CACHE_REV then
+		return
+	end
+	table.clear(sourceCache)
+	table.clear(rawSourceCache)
+	table.clear(moduleCache)
+	RemoteLoader.__sourceCacheRev = SOURCE_CACHE_REV
 end
 
 -- Только для executor/remote: не трогать тело modern Core в patchRemoteSource (иначе лишние end)
@@ -1834,12 +1856,24 @@ end;]]
 	return source
 end
 
+local function getRawSource(path: string): string?
+	return rawSourceCache[path]
+end
+
 local function getPatchedSource(path: string): string?
-	local raw = rawSourceCache[path] or sourceCache[path]
+	local raw = getRawSource(path)
 	if not raw then
 		return nil
 	end
-	return patchRemoteSource(path, raw)
+	local patched = patchRemoteSource(path, raw)
+	if path == "Core/init.lua" then
+		local okVal, valErr = validateCoreInitCompileBody(patched)
+		if not okVal then
+			rawSourceCache[path] = nil
+			return nil
+		end
+	end
+	return patched
 end
 
 local function isLikelyLuaSource(body: string): boolean
@@ -1949,11 +1983,11 @@ function RemoteLoader.setProgressCallback(cb: ((string, boolean, string?) -> ())
 end
 
 function RemoteLoader.hasSource(path: string): boolean
-	return rawSourceCache[path] ~= nil or sourceCache[path] ~= nil
+	return rawSourceCache[path] ~= nil
 end
 
 function RemoteLoader.getSource(path: string): string?
-	return getPatchedSource(path) or sourceCache[path]
+	return getPatchedSource(path)
 end
 
 function RemoteLoader.getFailed(): { [string]: string }
@@ -2002,6 +2036,8 @@ end
 
 function RemoteLoader.invalidateModule(path: string)
 	moduleCache[path] = nil
+	rawSourceCache[path] = nil
+	sourceCache[path] = nil
 end
 
 function RemoteLoader.getCachedModule(path: string): any
@@ -2021,13 +2057,12 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 	if loadCancelled then
 		return false, "отменено"
 	end
+	syncSourceCacheRevision()
 	if rawSourceCache[path] then
-		return true, getPatchedSource(path) :: string
-	end
-	if sourceCache[path] then
-		rawSourceCache[path] = sourceCache[path]
-		sourceCache[path] = nil
-		return true, getPatchedSource(path) :: string
+		local patched = getPatchedSource(path)
+		if patched then
+			return true, patched
+		end
 	end
 
 	local lastErr: string? = nil
@@ -2053,7 +2088,12 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 			if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
 				rawSourceCache[path] = result
 				sourceCache[path] = nil
-				result = patchRemoteSource(path, result)
+				result = getPatchedSource(path)
+				if not result then
+					rawSourceCache[path] = nil
+					lastErr = "Core/init.lua: патч дал битый синтаксис (обнови paste до r115+)"
+					continue
+				end
 				failedPaths[path] = nil
 				fetchCount += 1
 				if progressCallback then
@@ -2090,7 +2130,7 @@ function RemoteLoader.preloadRemaining(
 	local hardFailures: { string } = {}
 	local pending: { string } = {}
 	for _, path in paths do
-		if not rawSourceCache[path] and not sourceCache[path] then
+		if not rawSourceCache[path] then
 			table.insert(pending, path)
 		end
 	end
@@ -2495,12 +2535,13 @@ end
 
 local function runModuleWithEnv(
 	path: string,
-	raw: string,
+	_rawFallback: string,
 	tool: Tool,
 	scriptInstance: Instance,
 	btRequire: any
 ): any
 	local compileFn = RemoteLoader.compile or defaultCompile
+	local raw = getRawSource(path) or _rawFallback
 
 	-- Огромный auto-generated UI (lol.lua) не компилируется одним чанком
 	-- из-за лимита локальных регистров (200). Выполняем по секциям "Элемент:".
@@ -2559,7 +2600,17 @@ local function runModuleWithEnv(
 	if path == "Core/init.lua" then
 		_G.Core = coreEnv
 	end
-	local body = rewriteForModuleEnv(path, raw)
+	if not raw or #raw == 0 then
+		error(`[BT] run {path}: нет сырого исходника в кэше`, 0)
+	end
+	local body = rewriteForModuleEnv(path, patchRemoteSource(path, raw))
+	if path == "Core/init.lua" then
+		local okVal, valErr = validateCoreInitCompileBody(body)
+		if not okVal then
+			rawSourceCache[path] = nil
+			error(`[BT] {path}: {valErr}`, 0)
+		end
+	end
 
 	local function tryEnvRun(): (boolean, any)
 		local fn, compileError = compileFn(body, "@" .. path, coreEnv)
@@ -2628,16 +2679,19 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	end
 
 	local btRequire = buildRequire(tool)
-	local raw = getPatchedSource(path)
-	if not raw then
+	if not getRawSource(path) then
 		error(`[BT] run {path}: нет исходника в кэше`, 0)
 	end
 	local ok, result
 
 	if scriptInstance:IsA("ModuleScript") then
-		ok, result = pcall(runModuleWithEnv, path, raw, tool, scriptInstance, btRequire)
+		ok, result = pcall(runModuleWithEnv, path, getRawSource(path) or "", tool, scriptInstance, btRequire)
 	else
-		local wrapped = wrapChunkSource(raw)
+		local patched = getPatchedSource(path)
+		if not patched then
+			error(`[BT] run {path}: не удалось подготовить исходник`, 0)
+		end
+		local wrapped = wrapChunkSource(patched)
 		local fn, compileError = RemoteLoader.compile(wrapped, "@" .. path, nil)
 		if not fn then
 			error(`[BT] compile {path}: {compileError}`, 0)
@@ -2663,6 +2717,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 end
 
 function RemoteLoader.clear()
+	syncSourceCacheRevision()
 	table.clear(sourceCache)
 	table.clear(rawSourceCache)
 	table.clear(moduleCache)
@@ -2676,6 +2731,8 @@ function RemoteLoader.clear()
 	lastFetchAt = 0
 	progressCallback = nil
 end
+
+syncSourceCacheRevision()
 
 _G.BT_RemoteLoader = RemoteLoader
 
