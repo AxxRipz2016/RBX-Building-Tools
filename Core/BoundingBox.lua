@@ -1,5 +1,9 @@
 local Core = require(script.Parent);
 local Support = Core.Support;
+local Tool = (_G.__bt_tool or Core.Tool)
+if Tool and type(Core.Make) ~= 'function' then
+	Core.Make = require(Tool.Libraries:WaitForChild('Make'))
+end
 
 -- Initialize module
 local BoundingBoxModule = {};
@@ -34,7 +38,15 @@ function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 	BoundingBoxEnabled = true;
 
 	-- Create the box
-	BoundingBox = Core.Make 'Part' {
+	local make = Core.Make
+	if type(make) ~= 'function' and Tool then
+		make = require(Tool.Libraries:WaitForChild('Make'))
+	end
+	if type(make) ~= 'function' then
+		warn('[BT] BoundingBox: Core.Make недоступен')
+		return
+	end
+	BoundingBox = make 'Part' {
 		Name = 'BTBoundingBox';
 		CanCollide = false;
 		Transparency = 1;
@@ -154,7 +166,9 @@ function BoundingBoxModule.ClearBoundingBox()
 	BoundingBoxEnabled = false;
 
 	-- Clear the bounding box handle callback
-	BoundingBoxHandleCallback(nil);
+	if BoundingBoxHandleCallback then
+		BoundingBoxHandleCallback(nil);
+	end
 	BoundingBoxHandleCallback = nil;
 
 end;

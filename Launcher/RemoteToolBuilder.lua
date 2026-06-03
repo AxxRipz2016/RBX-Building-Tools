@@ -795,7 +795,7 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 	local updateOk, updateErr = pcall(function()
 		Roact.update(dockHandle, Roact.createElement(dockComponent, {
 			Core = coreEnv,
-			Tools = Cryo.List.join(toolList),
+			Tools = toolList,
 			UIRoot = ui,
 		}))
 	end)

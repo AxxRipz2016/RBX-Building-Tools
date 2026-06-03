@@ -66,15 +66,7 @@ function ToolList:render()
         })
     end
 
-    return new('Frame', {
-        BackgroundTransparency = 0.8;
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0);
-        BorderSizePixel = 0;
-        LayoutOrder = self.props.LayoutOrder;
-        Size = self.CanvasSize:map(function (CanvasSize)
-            return UDim2.fromOffset(CanvasSize.X.Offset, (35) * 7)
-        end);
-    }, {
+    local frameChildren = {
         Corners = new('UICorner', {
             CornerRadius = UDim.new(0, 3);
         });
@@ -82,7 +74,23 @@ function ToolList:render()
             MinSize = Vector2.new(70, 0);
         });
         Layout = Children.Layout;
-    }, Children)
+    }
+    for key, element in Children do
+        if key ~= 'Layout' then
+            frameChildren[key] = element
+        end
+    end
+
+    return new('Frame', {
+        BackgroundTransparency = 0.8;
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+        BorderSizePixel = 0;
+        LayoutOrder = self.props.LayoutOrder;
+        Size = self.CanvasSize:map(function (CanvasSize)
+            local gridH = math.max(35, CanvasSize.Y.Offset)
+            return UDim2.fromOffset(math.max(70, CanvasSize.X.Offset), gridH)
+        end);
+    }, frameChildren)
 end
 
 return ToolList

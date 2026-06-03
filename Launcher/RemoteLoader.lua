@@ -678,6 +678,69 @@ end
 			"CurrentTool = Tool;",
 			"CurrentTool = BuildingToolModule;"
 		)
+		if source:find("}, Children%)", 1, true) and not source:find("frameChildren", 1, true) then
+			source = source:gsub(
+				"(%s*%-%- Build buttons for each tool\r?\n%s*for ToolIndex, ToolInfo in ipairs%(self%.props%.Tools%) do[^\n]+\n[^\n]+\n[^\n]+\n[^\n]+\n[^\n]+\n[^\n]+\n[^\n]+\n%s*end)\r?\n\r?\n%s*return new%('Frame',",
+				[[%1
+
+    local frameChildren = {
+        Corners = new('UICorner', {
+            CornerRadius = UDim.new(0, 3);
+        });
+        SizeConstraint = new('UISizeConstraint', {
+            MinSize = Vector2.new(70, 0);
+        });
+        Layout = Children.Layout;
+    }
+    for key, element in Children do
+        if key ~= 'Layout' then
+            frameChildren[key] = element
+        end
+    end
+
+    return new('Frame',]]
+			)
+			source = source:gsub(
+				"return UDim2%.fromOffset%(CanvasSize%.X%.Offset, %(35%) %* 7%)",
+				"return UDim2.fromOffset(math.max(70, CanvasSize.X.Offset), math.max(35, CanvasSize.Y.Offset))"
+			)
+			source = source:gsub(
+				"Layout = Children%.Layout;\r?\n%s*}, Children%)",
+				"}, frameChildren)"
+			)
+		end
+	end
+
+	if path == "Core/BoundingBox.lua" then
+		if not source:find("if BoundingBoxHandleCallback then", 1, true) then
+			source = source:gsub(
+				"BoundingBoxHandleCallback%(nil%);",
+				"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(nil); end"
+			)
+		end
+		if not source:find("Core.Make недоступен", 1, true) then
+			source = source:gsub(
+				"(local Core = require%(script%.Parent%);)\n",
+				[[%1
+local Tool = (_G.__bt_tool or Core.Tool)
+if Tool and type(Core.Make) ~= 'function' then
+	Core.Make = require(Tool.Libraries:WaitForChild('Make'))
+end
+]]
+			)
+			source = source:gsub(
+				"BoundingBox = Core%.Make 'Part' %{",
+				[[local make = Core.Make
+	if type(make) ~= 'function' and Tool then
+		make = require(Tool.Libraries:WaitForChild('Make'))
+	end
+	if type(make) ~= 'function' then
+		warn('[BT] BoundingBox: Core.Make недоступен')
+		return
+	end
+	BoundingBox = make 'Part' {]]
+			)
+		end
 	end
 
 	if path == "UI/Dock/ToolButton.lua" then
