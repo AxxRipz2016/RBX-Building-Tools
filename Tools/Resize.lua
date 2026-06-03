@@ -17,6 +17,17 @@ Selection = Core.Selection;
 Support = Core.Support;
 Security = Core.Security;
 Support.ImportServices();
+local UserInputService = game:GetService("UserInputService")
+
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
 
 local function btSetGuiVisible(gui, visible)
 	if gui == nil or typeof(gui) ~= "Instance" then
@@ -70,7 +81,10 @@ function ResizeTool.Equip()
 
 	-- Start up our interface
 	ShowUI();
-	ShowHandles();
+	local okHandles, errHandles = pcall(ShowHandles)
+	if not okHandles then
+		warn("[BT] Resize ShowHandles:", errHandles)
+	end
 	BindShortcutKeys();
 
 end;
@@ -82,8 +96,12 @@ function ResizeTool.Unequip()
 	HideUI();
 	HideHandles();
 	ClearConnections();
-	SnapTracking.StopTracking();
-	FinishSnapping();
+	if type(SnapTracking) == "table" and type(SnapTracking.StopTracking) == "function" then
+		SnapTracking.StopTracking();
+	end
+	if type(FinishSnapping) == "function" then
+		FinishSnapping();
+	end
 
 end;
 
@@ -120,7 +138,7 @@ local function ShowUI()
 		btSetGuiVisible(ResizeTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
-		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+		UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 		-- Skip UI creation
 		return;
@@ -176,7 +194,7 @@ local function ShowUI()
 	ListenForManualWindowTrigger(ResizeTool.ManualText, ResizeTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-	UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+	UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 end;
 

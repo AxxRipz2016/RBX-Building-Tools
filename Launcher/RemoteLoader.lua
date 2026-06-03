@@ -821,6 +821,42 @@ local function patchToolsRuntime(path: string, source: string): string
 		source = source:gsub("UI:WaitForChild", "CollisionTool.UI:WaitForChild")
 	end
 
+	if path == "Tools/Resize.lua" then
+		if not source:find("local UserInputService = game:GetService", 1, true) then
+			source = source:gsub(
+				"(Support%.ImportServices%(%)[;\n])",
+				[[%1
+local UserInputService = game:GetService("UserInputService")
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
+]]
+			)
+		end
+		source = source:gsub(
+			"Support%.ScheduleRecurringTask%(UpdateUI, 0%.1%)",
+			"btScheduleUI(UpdateUI, 0.1)"
+		)
+		source = source:gsub(
+			"SnapTracking%.StopTracking%(%)%;",
+			"if type(SnapTracking) == 'table' and type(SnapTracking.StopTracking) == 'function' then SnapTracking.StopTracking() end"
+		)
+		source = source:gsub(
+			"FinishSnapping%(%)%;",
+			"if type(FinishSnapping) == 'function' then FinishSnapping() end"
+		)
+		source = source:gsub(
+			"ShowHandles%(%)%;",
+			"do local __ok, __err = pcall(ShowHandles) if not __ok then warn('[BT] Resize ShowHandles:', __err) end end"
+		)
+	end
+
 	if path == "Tools/Lighting.lua" then
 		source = source:gsub("local UI = Tool:WaitForChild%('UI'%)", "local UITree = Tool:WaitForChild('UI')")
 		source = source:gsub("require%(UI:", "require(UITree:")
