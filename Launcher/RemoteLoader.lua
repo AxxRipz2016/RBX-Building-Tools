@@ -671,6 +671,10 @@ end
 
 	if path == "UI/Dock/ToolList.lua" then
 		source = source:gsub(
+			"Roact%.PureComponent:extend%(script%.Name%)",
+			"Roact.Component:extend(script.Name)"
+		)
+		source = source:gsub(
 			"toolChanged:Connect%(function %(Tool%)",
 			"toolChanged:Connect(function (BuildingToolModule)"
 		)
@@ -784,6 +788,34 @@ end
 			"BoundingBoxHandleCallback%(BoundingBox%);",
 			"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(BoundingBox); end"
 		)
+		if not source:find("getSelectionParts", 1, true) then
+			source = source:gsub(
+				"(local function safeDestroyBox)",
+				[[local function getSelectionParts()
+	if Core.Selection and type(Core.Selection.Parts) == "table" then
+		return Core.Selection.Parts
+	end
+	return {}
+end
+
+%1]]
+			)
+			source = source:gsub("#Core%.Selection%.Parts", "#getSelectionParts()")
+			source = source:gsub("ipairs%(Core%.Selection%.Parts%)", "ipairs(getSelectionParts())")
+			source = source:gsub("AddStaticParts%(Core%.Selection%.Parts%)", "AddStaticParts(getSelectionParts())")
+			source = source:gsub(
+				"CalculateExtents%(Core%.Selection%.Parts,",
+				"CalculateExtents(getSelectionParts(),"
+			)
+			source = source:gsub(
+				"(function StartAggregatingStaticParts%(%)\r?\n\t%-%- Begins)",
+				[[function StartAggregatingStaticParts()
+	if not Core.Selection then
+		return
+	end
+	-- Begins]]
+			)
+		end
 	end
 
 	if path == "UI/Dock/ToolButton.lua" then

@@ -11,7 +11,8 @@ local new = Roact.createElement
 local ToolButton = require(script.Parent:WaitForChild('ToolButton'))
 
 -- Create component
-local ToolList = Roact.PureComponent:extend(script.Name)
+-- Component (не PureComponent): Tools обновляется той же таблицей после table.insert
+local ToolList = Roact.Component:extend(script.Name)
 
 function ToolList:init()
     self.Maid = Maid.new()

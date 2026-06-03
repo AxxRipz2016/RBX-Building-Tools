@@ -719,6 +719,85 @@ local function ensureDockHotkeys(coreEnv: any, tool: Tool, icons: { [string]: st
 	coreEnv.__bt_dockHotkeysDone = true
 end
 
+local function findToolListFrame(coreEnv: any): Frame?
+	local ui = (type(coreEnv) == "table" and (coreEnv.UI or coreEnv.__bt_UI)) or nil
+	if not ui or not ui:IsA("ScreenGui") then
+		local pg = Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")
+		ui = pg and pg:FindFirstChild("Building Tools by F3X (UI)")
+	end
+	if not ui then
+		return nil
+	end
+	local dock = ui:FindFirstChild("Dock")
+	return if dock then dock:FindFirstChild("ToolList") :: Frame? else nil
+end
+
+-- Roact ToolList на GitHub часто без кнопок (4-й аргумент Children) — дублируем реальными ImageButton
+local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]: string }): number
+	local toolListFrame = findToolListFrame(coreEnv)
+	if not toolListFrame then
+		return 0
+	end
+
+	for _, child in toolListFrame:GetChildren() do
+		if child:IsA("ImageButton") and child.Name:sub(1, 12) == "BT_ToolBtn_" then
+			child:Destroy()
+		end
+	end
+
+	local added = 0
+	for index, row in DOCK_TOOL_ROWS do
+		local iconKey, hotkey, moduleName = row[1], row[2], row[3]
+		local iconId = icons[iconKey]
+		if type(iconId) == "string" and findDockToolModule(tool, moduleName) then
+		local btn = Instance.new("ImageButton")
+		btn.Name = "BT_ToolBtn_" .. moduleName
+		btn.LayoutOrder = index
+		btn.Size = UDim2.fromOffset(35, 35)
+		btn.BackgroundColor3 = Color3.fromRGB(255, 140, 60)
+		btn.BackgroundTransparency = 1
+		btn.BorderSizePixel = 0
+		btn.Image = iconId
+		btn.AutoButtonColor = false
+		btn.Parent = toolListFrame
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 3)
+		corner.Parent = btn
+
+		local hotkeyLabel = Instance.new("TextLabel")
+		hotkeyLabel.Name = "Hotkey"
+		hotkeyLabel.BackgroundTransparency = 1
+		hotkeyLabel.Position = UDim2.fromOffset(3, 3)
+		hotkeyLabel.Size = UDim2.fromOffset(12, 12)
+		hotkeyLabel.Font = Enum.Font.Gotham
+		hotkeyLabel.Text = hotkey
+		hotkeyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		hotkeyLabel.TextSize = 9
+		hotkeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+		hotkeyLabel.TextYAlignment = Enum.TextYAlignment.Top
+		hotkeyLabel.Parent = btn
+
+		btn.Activated:Connect(function()
+			if type(coreEnv.EquipTool) ~= "function" then
+				return
+			end
+			local mod = runBuildingToolModule(tool, moduleName)
+			if type(coreEnv.ResolveBuildingToolModule) == "function" then
+				mod = coreEnv.ResolveBuildingToolModule(mod) or mod
+			end
+			coreEnv.EquipTool(mod)
+		end)
+
+		added = added + 1
+		end
+	end
+
+	local rows = math.max(1, math.ceil(added / 2))
+	toolListFrame.Size = UDim2.fromOffset(70, 35 * rows)
+	return added
+end
+
 local function describeToolModules(tool: Tool): string
 	local tools = tool:FindFirstChild("Tools")
 	if not tools then
@@ -794,9 +873,14 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		end
 	end
 
+	local toolsSnapshot = toolList
+	if Cryo and type(Cryo.List) == "table" and type(Cryo.List.join) == "function" then
+		toolsSnapshot = Cryo.List.join(toolList)
+	end
+
 	local dockProps = {
 		Core = coreEnv,
-		Tools = toolList,
+		Tools = toolsSnapshot,
 		UIRoot = ui,
 	}
 	local dockElement = Roact.createElement(dockComponent, dockProps)
@@ -814,13 +898,23 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		warn(`[BT] Roact.mount дока: {mountHandleOrErr}`)
 	end
 
+	local nativeCount = syncDockButtonsNative(coreEnv, tool, icons)
+	if nativeCount > 0 then
+		added = nativeCount
+	end
+
 	coreEnv.__bt_dockButtonCount = added
 	coreEnv.__dockToolsRegistered = true
 	return added
 end
 
 function RemoteToolBuilder.rebuildToolDock(tool: Tool): number
-	return registerDockDirect(_G.Core, tool)
+	local core = _G.Core
+	if type(core) ~= "table" then
+		return 0
+	end
+	local icons = getDockIconTable()
+	return math.max(registerDockDirect(core, tool), syncDockButtonsNative(core, tool, icons))
 end
 
 local function preloadMoveModule(tool: Tool): any?

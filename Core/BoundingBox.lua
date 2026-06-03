@@ -17,6 +17,13 @@ local AggregatingStaticParts = false;
 local StaticPartAggregators = {};
 local PotentialPartMonitors = {};
 
+local function getSelectionParts()
+	if Core.Selection and type(Core.Selection.Parts) == "table" then
+		return Core.Selection.Parts
+	end
+	return {}
+end
+
 local function safeDestroyBox(box)
 	if box == nil then
 		return
@@ -108,7 +115,8 @@ function BoundingBoxModule.UpdateBoundingBox()
 	end;
 
 	-- If the bounding box is inactive, and should now be active, update it
-	if InactiveBoundingBox and #Core.Selection.Parts > 0 then
+	local selectionParts = getSelectionParts()
+	if InactiveBoundingBox and #selectionParts > 0 then
 		BoundingBox = InactiveBoundingBox;
 		InactiveBoundingBox = nil;
 		if BoundingBoxHandleCallback then
@@ -116,7 +124,7 @@ function BoundingBoxModule.UpdateBoundingBox()
 		end
 
 	-- If the bounding box is active, and there are no parts, disable it
-	elseif BoundingBox and #Core.Selection.Parts == 0 then
+	elseif BoundingBox and #selectionParts == 0 then
 		InactiveBoundingBox = BoundingBox;
 		BoundingBox = nil;
 		if BoundingBoxHandleCallback then
@@ -125,7 +133,7 @@ function BoundingBoxModule.UpdateBoundingBox()
 		return;
 
 	-- Don't try to update the bounding box if there are no parts
-	elseif #Core.Selection.Parts == 0 then
+	elseif #selectionParts == 0 then
 		return;
 	end;
 
@@ -136,7 +144,7 @@ function BoundingBoxModule.UpdateBoundingBox()
 	end;
 
 	-- Update the bounding box
-	local BoundingBoxSize, BoundingBoxCFrame = BoundingBoxModule.CalculateExtents(Core.Selection.Parts, BoundingBoxModule.StaticExtents);
+	local BoundingBoxSize, BoundingBoxCFrame = BoundingBoxModule.CalculateExtents(selectionParts, BoundingBoxModule.StaticExtents);
 	BoundingBox.Size = BoundingBoxSize;
 	BoundingBox.CFrame = BoundingBoxCFrame;
 
@@ -261,12 +269,15 @@ end;
 
 function StartAggregatingStaticParts()
 	-- Begins to look for and identify static parts
+	if not Core.Selection then
+		return
+	end
 
 	-- Add current qualifying parts to static parts index
-	AddStaticParts(Core.Selection.Parts);
+	AddStaticParts(getSelectionParts());
 
 	-- Watch for parts that become static
-	for _, Part in ipairs(Core.Selection.Parts) do
+	for _, Part in ipairs(getSelectionParts()) do
 		AddPotentialPartMonitor(Part);
 	end;
 
@@ -358,7 +369,7 @@ function BoundingBoxModule.ResumeMonitoring()
 	end;
 
 	-- Start potential part monitors
-	for _, Part in ipairs(Core.Selection.Parts) do
+	for _, Part in ipairs(getSelectionParts()) do
 		AddPotentialPartMonitor(Part);
 	end;
 
