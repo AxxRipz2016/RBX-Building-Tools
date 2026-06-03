@@ -647,6 +647,44 @@ local function purgeOldPlayerUI()
 		old:Destroy()
 	end
 	_G.UI = nil
+	local core = _G.Core
+	if type(core) == "table" then
+		core.UI = nil
+		core.__bt_UI = nil
+		core.__bt_ToolList = nil
+		core.__bt_DockHandle = nil
+		core.__bt_DockComponent = nil
+		core.AddToolButton = nil
+		core.__dockToolsRegistered = nil
+		core.__bt_dockButtonCount = 0
+	end
+end
+
+local function ensureCoreDockReady(coreEnv: any): boolean
+	coreEnv = (type(coreEnv) == "table" and coreEnv) or _G.Core
+	if type(coreEnv) ~= "table" then
+		warn("[BT] ensureCoreDockReady: Core nil")
+		return false
+	end
+	if type(coreEnv.EnsureUI) == "function" then
+		local ok, err = pcall(coreEnv.EnsureUI)
+		if not ok then
+			warn("[BT] EnsureUI:", err)
+		end
+	end
+	if type(coreEnv.AddToolButton) ~= "function" and type(coreEnv.InitializeUI) == "function" then
+		local ok, err = pcall(coreEnv.InitializeUI)
+		if not ok then
+			warn("[BT] InitializeUI:", err)
+		end
+	end
+	if type(coreEnv.AddToolButton) ~= "function" then
+		warn(
+			`[BT] док API не создан (Core.UI={coreEnv.UI ~= nil}, ToolList={type(coreEnv.__bt_ToolList) == "table"}, AddToolButton={type(coreEnv.AddToolButton)})`
+		)
+		return false
+	end
+	return true
 end
 
 local function makeLazyBuildingTool(tool: Tool, moduleName: string, displayName: string, themeColor: Color3): any
@@ -843,6 +881,7 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		warn("[BT] док: Core не загружен (_G.Core nil)")
 		return 0
 	end
+	ensureCoreDockReady(coreEnv)
 
 	local icons = getDockIconTable()
 	_G.__bt_dock_icons = icons
@@ -975,6 +1014,7 @@ local function preloadMoveModule(tool: Tool): any?
 end
 
 local function finishDockRegistration(coreEnv: any, tool: Tool): number
+	ensureCoreDockReady(coreEnv)
 	local assetsScript = tool:FindFirstChild("Assets")
 	if assetsScript and assetsScript:IsA("ModuleScript") then
 		pcall(RemoteLoader.run, "Support/Assets.lua", tool, assetsScript)
@@ -1012,8 +1052,12 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		_G.__bt_dock_icons = req("BT_DockIcons")
 
 		step("Core…")
+		if type(RemoteLoader.invalidateModule) == "function" then
+			RemoteLoader.invalidateModule("Core/init.lua")
+		end
 		local coreScript = tool:WaitForChild("Core") :: ModuleScript
 		local coreEnv = RemoteLoader.run("Core/init.lua", tool, coreScript)
+		ensureCoreDockReady(coreEnv)
 
 		step("Move…")
 		local moveMod = preloadMoveModule(tool)

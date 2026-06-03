@@ -522,9 +522,20 @@ function InitializeUI()
 	if existing and typeof(existing) == "Instance" and existing:IsA("ScreenGui") then
 		if existing.Parent then
 			UI = existing
-			return
+			Core.__bt_UI = UI
+			if type(Core.__bt_ToolList) ~= "table" then
+				Core.__bt_ToolList = {}
+			end
+			if type(Core.AddToolButton) ~= "function" then
+				-- ScreenGui жив, но API дока могло не создаться (повторный запуск / purge)
+				existing:Destroy()
+			else
+				return
+			end
 		end
-		existing:Destroy()
+		if existing.Parent == nil then
+			existing:Destroy()
+		end
 	end
 	Core.UI = nil
 	UI = nil
@@ -1452,8 +1463,8 @@ end
 
 -- Initialize the UI
 InitializeUI();
-RegisterDockTools();
 
+Core.InitializeUI = InitializeUI
 Core.ResolveBuildingToolModule = ResolveBuildingToolModule
 Core.RegisterDockTools = RegisterDockTools
 Core.EquipTool = EquipTool

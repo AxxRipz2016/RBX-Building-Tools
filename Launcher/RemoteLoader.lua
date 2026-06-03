@@ -729,7 +729,7 @@ local function applyMinimalCoreInitRewrites(source: string): string
 	end
 	source = applyCoreEquipSafetyPatches(source)
 	source = patchCoreUiExports(source)
-	source = patchCoreLateExports(source)
+	-- patchCoreLateExports не вызываем: ломает EnsureUI (RegisterDockTools после каждого InitializeUI)
 	return source
 end
 
@@ -1998,6 +1998,10 @@ end
 
 function RemoteLoader.getFetchCount(): number
 	return fetchCount
+end
+
+function RemoteLoader.invalidateModule(path: string)
+	moduleCache[path] = nil
 end
 
 function RemoteLoader.getCachedModule(path: string): any
