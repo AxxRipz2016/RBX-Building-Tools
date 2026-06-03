@@ -692,6 +692,43 @@ local function patchCoreInitRequires(source: string): string
 	return source
 end
 
+-- Core/init.lua на development уже с EnsureUI / existing:Destroy — legacy-gsub ломают синтаксис
+local function isModernCoreInitSource(source: string): boolean
+	return source:find("existing:Destroy%(", 1, true) ~= nil
+		and source:find("function Core%.EnsureUI", 1, true) ~= nil
+		and source:find("__bt_equip_guard", 1, true) ~= nil
+		and source:find("IsBuildingToolModule", 1, true) ~= nil
+end
+
+local function applyModernCoreInitPatches(source: string): string
+	if not source:find("Core%.SyncAPI = SyncAPI", 1, true) then
+		source = source:gsub("SyncAPI = Tool%.SyncAPI;", "SyncAPI = Tool.SyncAPI;\nCore.SyncAPI = SyncAPI;", 1)
+	end
+	source = patchCoreReturn(source)
+	source = source:gsub(
+		"Tool%.Equipped:Connect%(Enable%);",
+		"Tool.Equipped:Connect(function()\n\t\tEnable(Player:GetMouse())\n\tend);"
+	)
+	source = source:gsub("UI%.Parent = script;", "UI.Parent = nil; UI.Enabled = false;")
+	if not source:find("Mode ~= 'Tool' or %(Player%.Character", 1, true) then
+		source = source:gsub(
+			"(UI%.Parent = UIContainer;)",
+			"if Mode ~= 'Tool' or (Player.Character and Tool.Parent == Player.Character) then\n\t\tUI.Parent = UIContainer;\n\t\tUI.Enabled = true;\n\tend;",
+			1
+		)
+	end
+	if not source:find("Core%.UI = UI\n\tUI%.Parent = nil", 1, true) then
+		source = source:gsub(
+			"(Core%.UI = UI\n)",
+			"%1\tUI.Parent = nil;\n\tUI.Enabled = false;\n"
+		)
+	end
+	source = applyCoreEquipSafetyPatches(source)
+	source = patchCoreUiExports(source)
+	source = patchCoreLateExports(source)
+	return source
+end
+
 local function applyCoreEquipSafetyPatches(source: string): string
 	source = source:gsub(
 		"BuildingToolModule:Equip%(%);",
@@ -1377,6 +1414,9 @@ end
 	end
 
 	if path == "Core/init.lua" then
+		if isModernCoreInitSource(source) then
+			return applyModernCoreInitPatches(source)
+		end
 		if not source:find("Core.GetBoundingBoxAPI", 1, true) then
 			source = source:gsub(
 				"(Core%.Tool = Tool\n)",
@@ -1580,8 +1620,9 @@ end;]]
 			"pcall(function()\n\t\tTargeting:EnableTargeting();\n\tend)\n\tSelection.EnableOutlines();"
 		)
 		source = source:gsub(
-			"while not UI do\n\t\twait%(0%.1%);",
-			"for __bt_ui = 1, 300 do\n\t\tif UI then break end\n\t\ttask.wait(0.05);"
+			"while not UI do\r?\n\t+wait%(0%.1%);?%s*\r?\n\t*end;?",
+			"for __bt_ui = 1, 300 do\n\t\tif UI then break end\n\t\ttask.wait(0.05);\n\tend",
+			1
 		)
 		source = source:gsub(
 			"while not Indicator%.Value do\r?\n\tIndicator%.Changed:Wait%(%);\r?\nend;",
@@ -2272,8 +2313,12 @@ local function rewriteForModuleEnv(path: string, source: string): string
 	source = source:gsub("getfenv%(%s*0%s*%)", "Core")
 	if path == "Core/init.lua" then
 		source = patchCoreSelfReference(source)
-		source = patchCoreToolParamShadowing(source)
-		source = applyCoreEquipSafetyPatches(source)
+		if isModernCoreInitSource(source) then
+			source = applyCoreEquipSafetyPatches(source)
+		else
+			source = patchCoreToolParamShadowing(source)
+			source = applyCoreEquipSafetyPatches(source)
+		end
 	end
 	if path == "Core/Targeting.lua" or path == "Core/Selection.lua" then
 		source = source:gsub("function GetCore%(%).-end;", BT_GET_CORE_BODY, 1)
