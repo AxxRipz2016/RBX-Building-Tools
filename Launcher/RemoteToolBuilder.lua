@@ -861,13 +861,21 @@ function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 	if not tool:GetAttribute("BT_EquipDockHook") then
 		tool:SetAttribute("BT_EquipDockHook", true)
 		tool.Equipped:Connect(function()
+			_G.__bt_hide_ui_until_equip = false
 			task.defer(function()
 				local count = tool:GetAttribute("BT_DockButtonCount") or 0
-				if count == 0 then
-					count = waitAndSyncDock(tool, 30)
+				count = waitAndSyncDock(tool, 30)
+				if count > 0 then
 					tool:SetAttribute("BT_DockButtonCount", count)
 				end
 			end)
+		end)
+		tool.Unequipped:Connect(function()
+			_G.__bt_hide_ui_until_equip = true
+			local core = _G.Core
+			if type(core) == "table" and type(core.HideRootUI) == "function" then
+				pcall(core.HideRootUI)
+			end
 		end)
 	end
 	tool.Parent = player:WaitForChild("Backpack")
@@ -926,6 +934,9 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		if type(coreEnv.RefreshToolDock) == "function" then
 			coreEnv.RefreshToolDock()
 		end
+		if type(coreEnv.HideRootUI) == "function" then
+			pcall(coreEnv.HideRootUI)
+		end
 		return added
 	end
 
@@ -978,9 +989,12 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 		warn(`[BT] Roact.mount дока: {mountHandleOrErr}`)
 	end
 
-	local nativeCount = syncDockButtonsNative(coreEnv, tool, icons)
-	if nativeCount > 0 then
-		added = nativeCount
+	-- Кнопки дока — только после экипировки (waitAndSyncDock / Equipped)
+	if type(coreEnv.HideRootUI) == "function" then
+		pcall(coreEnv.HideRootUI)
+	elseif ui then
+		ui.Parent = tool
+		ui.Enabled = false
 	end
 
 	coreEnv.__bt_dockButtonCount = added
@@ -1052,6 +1066,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 
 	if tool:GetAttribute("BT_LocalOnly") then
 		_G.__bt_tool = tool
+		_G.__bt_hide_ui_until_equip = true
 		purgeOldPlayerUI()
 
 		step("Assets…")
@@ -1109,8 +1124,11 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 
 		step("Док…")
 		local dockCount = finishDockRegistration(coreEnv, tool)
+		if type(coreEnv) == "table" and type(coreEnv.HideRootUI) == "function" then
+			pcall(coreEnv.HideRootUI)
+		end
 		tool:SetAttribute("BT_DockButtonCount", dockCount)
-		warn(`[BT] StartRuntime док: {dockCount} (нативные кнопки появятся после экипировки)`)
+		warn(`[BT] StartRuntime док: {dockCount} (UI и кнопки — после экипировки Tool)`)
 
 		if tool:GetAttribute("BT_InterfacesPending") then
 			step("Интерфейсы (lol)…")

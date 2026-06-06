@@ -188,24 +188,40 @@ function Core.BT_HideAllToolPanels()
 	end
 end
 
-local function isRobloxToolEquippedInCharacter()
-	if Mode ~= 'Tool' then
-		return true
-	end
+local function getRobloxTool(): Tool?
 	local rbxTool = (_G.__bt_tool or Tool)
+	if typeof(rbxTool) == "Instance" and rbxTool:IsA("Tool") then
+		return rbxTool
+	end
+	return nil
+end
+
+local function isRobloxToolEquippedInCharacter(): boolean
+	if Mode ~= 'Tool' then
+		return Mode == 'Plugin'
+	end
+	if _G.__bt_hide_ui_until_equip then
+		return false
+	end
+	local rbxTool = getRobloxTool()
 	local character = Player and Player.Character
 	return character ~= nil
 		and rbxTool ~= nil
-		and typeof(rbxTool) == "Instance"
-		and rbxTool:IsA("Tool")
 		and rbxTool.Parent == character
 end
 
-local function hideRootUI()
-	if UI and typeof(UI) == "Instance" and UI:IsA("ScreenGui") then
-		UI.Parent = nil
-		UI.Enabled = false
+-- ScreenGui в PlayerGui виден всегда; в Tool (Backpack) — нет
+function Core.HideRootUI()
+	if not UI or typeof(UI) ~= "Instance" or not UI:IsA("ScreenGui") then
+		return
 	end
+	local rbxTool = getRobloxTool()
+	UI.Parent = rbxTool or nil
+	UI.Enabled = false
+end
+
+local function hideRootUI()
+	Core.HideRootUI()
 end
 
 local function needsUIInit(): boolean
@@ -250,7 +266,11 @@ end
 function EquipTool(BuildingToolModule)
 	-- __bt_equip_guard
 	-- Equips and switches to the given tool
-	Core.EnsureUI()
+	if isRobloxToolEquippedInCharacter() then
+		Core.EnsureUI()
+	else
+		Core.EnsureDockReady()
+	end
 	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
 	if not IsBuildingToolModule(BuildingToolModule) then
 		BuildingToolModule = DefaultBuildingToolModule()
@@ -405,6 +425,16 @@ Disabled = Signal.new()
 
 function Enable(Mouse)
 
+	if Mode == 'Tool' then
+		local rbxTool = getRobloxTool()
+		local character = Player and Player.Character
+		if not rbxTool or not character or rbxTool.Parent ~= character then
+			hideRootUI()
+			return
+		end
+		_G.__bt_hide_ui_until_equip = false
+	end
+
 	-- Ensure tool is disabled or disabling, and not already enabling
 	if (IsEnabled and not IsDisabling) or IsEnabling then
 		return;
@@ -522,11 +552,8 @@ function Disable()
 		end))
 	end
 
-	-- Hide UI
-	if UI then
-		UI.Parent = nil;
-		UI.Enabled = false;
-	end;
+	-- Hide UI (в Tool, не в PlayerGui)
+	hideRootUI()
 
 	-- Unequip current tool
 	if CurrentTool then
@@ -575,6 +602,9 @@ function InitializeUI()
 				-- ScreenGui жив, но API дока могло не создаться (повторный запуск / purge)
 				existing:Destroy()
 			else
+				if Mode == 'Tool' and not isRobloxToolEquippedInCharacter() then
+					hideRootUI()
+				end
 				return
 			end
 		end
@@ -815,9 +845,13 @@ elseif Mode == 'Tool' then
 
 	-- Connect the tool to the system
 	Tool.Equipped:Connect(function()
+		_G.__bt_hide_ui_until_equip = false
 		Enable(Player:GetMouse())
 	end);
-	Tool.Unequipped:Connect(Disable);
+	Tool.Unequipped:Connect(function()
+		_G.__bt_hide_ui_until_equip = true
+		Disable()
+	end);
 
 	-- Disable the tool if not parented
 	if not Tool.Parent then
@@ -1511,9 +1545,7 @@ function RegisterDockTools()
 	end
 end
 
--- Initialize the UI
-InitializeUI();
-
+-- UI создаётся через EnsureDockReady (StartRuntime), не при require Core
 Core.InitializeUI = InitializeUI
 Core.ResolveBuildingToolModule = ResolveBuildingToolModule
 Core.RegisterDockTools = RegisterDockTools
