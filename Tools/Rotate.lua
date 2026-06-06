@@ -29,7 +29,7 @@ local BoundingBoxAPI = setmetatable({}, {
 		local v = api[key]
 		if type(v) == "function" then
 			return function(...)
-				return v(api, ...)
+				return v(...)
 			end
 		end
 		return v

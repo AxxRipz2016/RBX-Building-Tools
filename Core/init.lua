@@ -561,6 +561,10 @@ Enabling = Signal.new()
 Disabling = Signal.new()
 Enabled = Signal.new()
 Disabled = Signal.new()
+Core.Enabling = Enabling
+Core.Disabling = Disabling
+Core.Enabled = Enabled
+Core.Disabled = Disabled
 
 function Enable(Mouse)
 
@@ -664,9 +668,24 @@ function Enable(Mouse)
 
 	-- Start systems
 	EnableHotkeys();
-	Targeting:EnableTargeting()
-	Selection.EnableOutlines();
-	Selection.EnableMultiselectionHotkeys();
+	local okTgt, errTgt = pcall(function()
+		Targeting:EnableTargeting()
+	end)
+	if not okTgt then
+		warn("[BT] EnableTargeting:", errTgt)
+	end
+	local okOut, errOut = pcall(function()
+		Selection.EnableOutlines()
+	end)
+	if not okOut then
+		warn("[BT] EnableOutlines:", errOut)
+	end
+	local okMs, errMs = pcall(function()
+		Selection.EnableMultiselectionHotkeys()
+	end)
+	if not okMs then
+		warn("[BT] EnableMultiselectionHotkeys:", errMs)
+	end
 
 	-- Sync studio selection in
 	if Mode == 'Plugin' then
@@ -745,6 +764,7 @@ end;
 
 -- Core connections
 Connections = {};
+Core.Connections = Connections
 
 function ClearConnections()
 	-- Clears and disconnects temporary connections

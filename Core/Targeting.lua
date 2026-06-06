@@ -724,7 +724,15 @@ function TargetingModule:BindTargetingModeHotkeys()
 end
 
 function GetCore()
-	return require(script.Parent);
+	if type(_G.Core) == "table" then
+		return _G.Core
+	end
+	local rbxTool = _G.__bt_tool or Tool
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	if coreInst and coreInst:IsA("ModuleScript") then
+		return require(coreInst)
+	end
+	return require(script.Parent)
 end;
 
 return TargetingModule;

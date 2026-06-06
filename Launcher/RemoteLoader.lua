@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 121
+local SOURCE_CACHE_REV = 122
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -230,7 +230,7 @@ local BoundingBoxAPI = setmetatable({}, {
 		local v = api[key]
 		if type(v) == "function" then
 			return function(...)
-				return v(api, ...)
+				return v(...)
 			end
 		end
 		return v
@@ -980,6 +980,13 @@ end
 		source = source:gsub(
 			"ShowHandles%(%)%;",
 			"do local __ok, __err = pcall(ShowHandles) if not __ok then warn('[BT] Resize ShowHandles:', __err) end end"
+		)
+	end
+
+	if path == "Tools/Rotate.lua" then
+		source = source:gsub(
+			"SnapTracking%.StopTracking%(%)%;",
+			"if type(SnapTracking) == 'table' and type(SnapTracking.StopTracking) == 'function' then SnapTracking.StopTracking() end"
 		)
 	end
 

@@ -354,7 +354,9 @@ function BoundingBoxModule.PauseMonitoring()
 
 	-- Stop update loop
 	if BoundingBoxUpdater then
-		BoundingBoxUpdater:Stop();
+		if type(BoundingBoxUpdater.Stop) == "function" then
+			BoundingBoxUpdater:Stop();
+		end
 		BoundingBoxUpdater = nil;
 	end;
 
