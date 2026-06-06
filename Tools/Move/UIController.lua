@@ -61,17 +61,30 @@ function UIController:ShowUI()
 		return
 	end
 
-	-- Create the UI
+	-- Create the UI (только когда куб в руках — иначе EnsureUI/HideRootUI в Core)
+	if _G.__bt_hide_ui_until_equip then
+		if type(Core.BT_TraceUI) == "function" then
+			Core.BT_TraceUI("Move:ShowUI:blocked", "hide until equip")
+		end
+		return
+	end
 	if type(Core.EnsureUI) == "function" then
-		Core.EnsureUI()
+		local okUi, errUi = pcall(function()
+			Core.EnsureUI()
+		end)
+		if not okUi then
+			warn("[BT] Move EnsureUI:", errUi)
+			return
+		end
 	end
 	local uiRoot = Core.UI
 	if not uiRoot or not uiRoot:IsA("ScreenGui") then
 		warn("[BT] Move UI: Core.UI не инициализирован")
 		return
 	end
-	if not uiRoot.Parent then
-		local pg = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+	if not uiRoot.Parent and not _G.__bt_hide_ui_until_equip then
+		local plr = game:GetService("Players").LocalPlayer
+		local pg = plr and plr:FindFirstChild("PlayerGui")
 		if pg then
 			uiRoot.Parent = pg
 			uiRoot.Enabled = true

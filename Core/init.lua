@@ -196,6 +196,48 @@ local function getRobloxTool(): Tool?
 	return nil
 end
 
+local function describeUiState(): string
+	local ui = UI or Core.UI
+	if not ui or typeof(ui) ~= "Instance" or not ui:IsA("ScreenGui") then
+		return "ui=nil"
+	end
+	local parent = ui.Parent
+	local parentPath = if parent then parent:GetFullName() else "nil"
+	local rbx = getRobloxTool()
+	local rbxParent = if rbx and rbx.Parent then rbx.Parent:GetFullName() else "nil"
+	return string.format(
+		"hide=%s en=%s parent=%s rbx=%s",
+		tostring(_G.__bt_hide_ui_until_equip),
+		tostring(ui.Enabled),
+		parentPath,
+		rbxParent
+	)
+end
+
+local function btTraceUI(verb: string, detail: string?)
+	if _G.__bt_ui_trace == false then
+		return
+	end
+	local where = debug.info(2, "sl") or "?"
+	warn(string.format("[BT_UI] %s | %s | %s @ %s", verb, describeUiState(), detail or "", where))
+end
+
+local function attachUIWatchdog(root: ScreenGui)
+	if Core.__bt_uiWatchAttached or not root then
+		return
+	end
+	Core.__bt_uiWatchAttached = true
+	root:GetPropertyChangedSignal("Parent"):Connect(function()
+		local p = root.Parent
+		btTraceUI("watch:Parent", if p then p:GetFullName() else "nil")
+	end)
+	root:GetPropertyChangedSignal("Enabled"):Connect(function()
+		btTraceUI("watch:Enabled", tostring(root.Enabled))
+	end)
+end
+
+Core.BT_TraceUI = btTraceUI
+
 local function isRobloxToolEquippedInCharacter(): boolean
 	if Mode ~= 'Tool' then
 		return Mode == 'Plugin'
@@ -234,6 +276,7 @@ local function scrubBtUiFromPlayerGui()
 		return
 	end
 	leaked.Enabled = false
+	btTraceUI("scrub:PlayerGui", leaked:GetFullName())
 	local holder = getUiHiddenHolder()
 	leaked.Parent = holder or nil
 	if UI == leaked then
@@ -247,16 +290,19 @@ end
 Core.ScrubBtUiFromPlayerGui = scrubBtUiFromPlayerGui
 
 function Core.HideRootUI()
+	btTraceUI("HideRootUI", "enter")
 	scrubBtUiFromPlayerGui()
 	if not UI or typeof(UI) ~= "Instance" or not UI:IsA("ScreenGui") then
 		return
 	end
 	UI.Enabled = false
 	UI.Parent = getUiHiddenHolder()
+	btTraceUI("HideRootUI", "done")
 end
 
 local function mountDockIfNeeded(): boolean
 	if _G.__bt_hide_ui_until_equip then
+		btTraceUI("mountDock:skip", "hide until equip")
 		return false
 	end
 	if Core.__bt_dockMounted and Core.__bt_DockHandle then
@@ -281,8 +327,10 @@ local function mountDockIfNeeded(): boolean
 	if ok and handle then
 		Core.__bt_DockHandle = handle
 		Core.__bt_dockMounted = true
+		btTraceUI("mountDock:ok", "Roact dock mounted")
 		return true
 	end
+	btTraceUI("mountDock:fail", tostring(handle))
 	return false
 end
 
@@ -311,12 +359,18 @@ function Core.EnsureDockReady()
 end
 
 function Core.EnsureUI()
+	btTraceUI("EnsureUI", "enter")
 	if needsUIInit() then
 		InitializeUI()
 	end
 	-- Solo/remote: ScreenGui только когда Roblox Tool в Character (не в Backpack)
 	if Mode == 'Tool' and not isRobloxToolEquippedInCharacter() then
+		btTraceUI("EnsureUI", "suppressed (no rbx tool in character)")
 		hideRootUI()
+		return
+	end
+	if not Player then
+		btTraceUI("EnsureUI", "aborted (Player nil)")
 		return
 	end
 	if not UIContainer then
@@ -325,6 +379,7 @@ function Core.EnsureUI()
 	end
 	if UI then
 		mountDockIfNeeded()
+		btTraceUI("EnsureUI", "show PlayerGui")
 		UI.Parent = UIContainer
 		UI.Enabled = true
 	end
@@ -333,11 +388,6 @@ end
 function EquipTool(BuildingToolModule)
 	-- __bt_equip_guard
 	-- Equips and switches to the given tool
-	if isRobloxToolEquippedInCharacter() then
-		Core.EnsureUI()
-	else
-		Core.EnsureDockReady()
-	end
 	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
 	if not IsBuildingToolModule(BuildingToolModule) then
 		BuildingToolModule = DefaultBuildingToolModule()
@@ -345,6 +395,28 @@ function EquipTool(BuildingToolModule)
 	if not IsBuildingToolModule(BuildingToolModule) then
 		warn("[BT] EquipTool: не удалось загрузить Move")
 		return
+	end
+
+	if Mode == 'Tool' and not isRobloxToolEquippedInCharacter() then
+		btTraceUI("EquipTool:blocked", BuildingToolModule.Name or "?")
+		_G.__bt_pending_equip_module = BuildingToolModule
+		local rbxTool = getRobloxTool()
+		if Player and Player.Character and rbxTool and rbxTool.Parent == Player.Backpack then
+			local hum = Player.Character:FindFirstChildOfClass("Humanoid")
+			if hum then
+				btTraceUI("EquipTool:autoEquipRbx", rbxTool.Name)
+				hum:EquipTool(rbxTool)
+			end
+		end
+		Core.EnsureDockReady()
+		hideRootUI()
+		return
+	end
+
+	if isRobloxToolEquippedInCharacter() then
+		Core.EnsureUI()
+	else
+		Core.EnsureDockReady()
 	end
 
 	Core.BT_HideAllToolPanels()
@@ -496,9 +568,11 @@ function Enable(Mouse)
 		local rbxTool = getRobloxTool()
 		local character = Player and Player.Character
 		if not rbxTool or not character or rbxTool.Parent ~= character then
+			btTraceUI("Enable:abort", "rbx tool not in character")
 			hideRootUI()
 			return
 		end
+		btTraceUI("Enable", "rbx tool equipped")
 		_G.__bt_hide_ui_until_equip = false
 		Core.__bt_deferDockMount = false
 	end
@@ -518,7 +592,7 @@ function Enable(Mouse)
 	Enabling:Fire();
 
 	-- Tool.Equipped не передаёт Mouse — в solo/executor берём GetMouse()
-	if Mouse == nil or typeof(Mouse) ~= "Instance" then
+	if (Mouse == nil or typeof(Mouse) ~= "Instance") and Player then
 		Mouse = Player:GetMouse()
 	end
 	Core.Mouse = Mouse
@@ -542,6 +616,11 @@ function Enable(Mouse)
 		task.wait(0.05);
 	end;
 
+	if not Player then
+		btTraceUI("Enable:abort", "Player nil")
+		IsEnabling = false
+		return
+	end
 	if not UIContainer then
 		UIContainer = Player:WaitForChild("PlayerGui")
 		Core.UIContainer = UIContainer
@@ -549,18 +628,28 @@ function Enable(Mouse)
 
 	-- Show UI (remote/solo: только когда Tool в Character)
 	local rbxTool = getRobloxTool()
-	if Mode ~= 'Tool' or (Player.Character and rbxTool and rbxTool.Parent == Player.Character) then
+	local character = Player.Character
+	if Mode ~= 'Tool' or (character and rbxTool and rbxTool.Parent == character) then
 		mountDockIfNeeded()
 		local rebuild = _G.__bt_rebuildToolDock
 		if type(rebuild) == "function" then
 			pcall(rebuild)
 		end
+		btTraceUI("Enable:show", "PlayerGui")
 		UI.Parent = UIContainer;
 		UI.Enabled = true;
 	end;
 
 	if type(Core.RefreshToolDock) == "function" then
 		Core.RefreshToolDock()
+	end
+
+	local pending = _G.__bt_pending_equip_module
+	if pending then
+		_G.__bt_pending_equip_module = nil
+		task.defer(function()
+			EquipTool(pending)
+		end)
 	end
 
 	-- Display startup notifications
@@ -697,7 +786,10 @@ function InitializeUI()
 	-- Create the root UI
 	UI = Instance.new('ScreenGui')
 	UI.Name = 'Building Tools by F3X (UI)'
+	UI.Enabled = false
 	Core.UI = UI
+	attachUIWatchdog(UI)
+	btTraceUI("InitializeUI", "ScreenGui created")
 
 	-- Create dock
 	local ToolList = {}
@@ -941,8 +1033,11 @@ elseif Mode == 'Tool' then
 
 	-- Connect the tool to the system
 	Tool.Equipped:Connect(function()
+		btTraceUI("Tool.Equipped", Tool:GetFullName())
 		_G.__bt_hide_ui_until_equip = false
-		Enable(Player:GetMouse())
+		Core.__bt_deferDockMount = false
+		local mouse = if Player then Player:GetMouse() else nil
+		Enable(mouse)
 	end);
 	Tool.Unequipped:Connect(function()
 		_G.__bt_hide_ui_until_equip = true
@@ -1565,7 +1660,7 @@ function RegisterDockTools()
 		return
 	end
 	if Core.__dockToolsRegistered and (Core.__bt_dockButtonCount or 0) > 0 then
-		if Core.RefreshToolDock then
+		if Core.RefreshToolDock and not _G.__bt_hide_ui_until_equip then
 			Core.RefreshToolDock()
 		end
 		return
@@ -1636,8 +1731,10 @@ function RegisterDockTools()
 	BT_Reg('DecorateIcon', 'P', 'Decorate', 'Decorate Tool', Color3.fromRGB(255, 100, 180))
 
 	Core.__dockToolsRegistered = true
-	if Core.RefreshToolDock then
+	if Core.RefreshToolDock and not _G.__bt_hide_ui_until_equip then
 		Core.RefreshToolDock()
+	else
+		btTraceUI("RegisterDockTools", "RefreshToolDock deferred")
 	end
 end
 

@@ -14,7 +14,7 @@ _G.BT_LAUNCHER_FETCH_READY = false
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 13
+local ENTRY_REV = 14
 
 local loadFn
 local httpGet
@@ -432,7 +432,10 @@ local ok, err = pcall(function()
 		end
 
 		local dockCount = tool:GetAttribute("BT_DockButtonCount") or 0
-		if dockCount == 0 and type(RemoteToolBuilder.rebuildToolDock) == "function" then
+		if dockCount == 0
+			and not _G.__bt_hide_ui_until_equip
+			and type(RemoteToolBuilder.rebuildToolDock) == "function"
+		then
 			dockCount = RemoteToolBuilder.rebuildToolDock(tool) or 0
 			tool:SetAttribute("BT_DockButtonCount", dockCount)
 		end

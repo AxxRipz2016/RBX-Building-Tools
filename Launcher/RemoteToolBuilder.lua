@@ -660,8 +660,15 @@ local function purgeOldPlayerUI()
 	end
 end
 
-local function scrubPlayerBtUi(coreEnv: any?)
+local function uiTrace(coreEnv: any?, verb: string, detail: string?)
+	if type(coreEnv) == "table" and type(coreEnv.BT_TraceUI) == "function" then
+		pcall(coreEnv.BT_TraceUI, verb, detail)
+	end
+end
+
+local function scrubPlayerBtUi(coreEnv: any?, reason: string?)
 	coreEnv = (type(coreEnv) == "table" and coreEnv) or _G.Core
+	uiTrace(coreEnv, "scrubPlayerBtUi", reason or "")
 	if type(coreEnv) == "table" then
 		if type(coreEnv.ScrubBtUiFromPlayerGui) == "function" then
 			pcall(coreEnv.ScrubBtUiFromPlayerGui)
@@ -771,6 +778,10 @@ local function findToolListFrame(coreEnv: any): Frame?
 end
 
 local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]: string }): number
+	if _G.__bt_hide_ui_until_equip then
+		uiTrace(coreEnv, "syncDockButtons:skip", "hide until equip")
+		return 0
+	end
 	local toolListFrame = findToolListFrame(coreEnv)
 	if not toolListFrame then
 		return 0
@@ -1074,6 +1085,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 	if tool:GetAttribute("BT_LocalOnly") then
 		_G.__bt_tool = tool
 		_G.__bt_hide_ui_until_equip = true
+		_G.__bt_ui_trace = true
 		purgeOldPlayerUI()
 
 		step("Assets…")
@@ -1090,7 +1102,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		local coreScript = tool:WaitForChild("Core") :: ModuleScript
 		local coreEnv = RemoteLoader.run("Core/init.lua", tool, coreScript)
 		ensureCoreDockReady(coreEnv)
-		scrubPlayerBtUi(coreEnv)
+		scrubPlayerBtUi(coreEnv, "after Core")
 
 		step("Move…")
 		local moveMod = preloadMoveModule(tool)
@@ -1132,17 +1144,18 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 
 		step("Док…")
 		local dockCount = finishDockRegistration(coreEnv, tool)
-		scrubPlayerBtUi(coreEnv)
+		scrubPlayerBtUi(coreEnv, "after dock")
 		tool:SetAttribute("BT_DockButtonCount", dockCount)
-		warn(`[BT] StartRuntime док: {dockCount} (UI и кнопки — после экипировки Tool)`)
+		uiTrace(coreEnv, "StartRuntime:dock", `{dockCount} кнопок, mount после экипировки`)
 
 		if tool:GetAttribute("BT_InterfacesPending") then
 			step("Интерфейсы (lol)…")
 			ensureInterfacesFromLol(tool)
 			tool:SetAttribute("BT_InterfacesPending", nil)
-			scrubPlayerBtUi(coreEnv)
+			scrubPlayerBtUi(coreEnv, "after lol")
 		end
 
+		scrubPlayerBtUi(coreEnv, "StartRuntime done")
 		step("Готово")
 		return _G.Core
 	end

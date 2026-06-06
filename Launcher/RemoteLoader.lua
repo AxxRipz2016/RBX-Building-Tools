@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 120
+local SOURCE_CACHE_REV = 121
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
