@@ -369,14 +369,16 @@ end
 
 function Core.EnsureUI()
 	btTraceUI("EnsureUI", "enter")
-	if needsUIInit() then
-		InitializeUI()
-	end
-	-- Solo/remote: ScreenGui только когда Roblox Tool в Character (не в Backpack)
-	if Mode == 'Tool' and not isRobloxToolEquippedInCharacter() then
-		btTraceUI("EnsureUI", "suppressed (no rbx tool in character)")
+	if _G.__bt_hide_ui_until_equip or (Mode == 'Tool' and not isRobloxToolEquippedInCharacter()) then
+		btTraceUI("EnsureUI", "blocked (no cube in hands)")
+		if needsUIInit() then
+			Core.EnsureDockReady()
+		end
 		hideRootUI()
 		return
+	end
+	if needsUIInit() then
+		InitializeUI()
 	end
 	if not Player then
 		btTraceUI("EnsureUI", "aborted (Player nil)")
@@ -569,6 +571,11 @@ end;
 function Enable(Mouse)
 
 	if Mode == 'Tool' then
+		if _G.__bt_hide_ui_until_equip then
+			btTraceUI("Enable:HARD_BLOCK", "hide until equip")
+			hideRootUI()
+			return
+		end
 		local rbxTool = getRobloxTool()
 		local character = Player and Player.Character
 		if not rbxTool or not character or rbxTool.Parent ~= character then
@@ -633,7 +640,9 @@ function Enable(Mouse)
 	-- Show UI (remote/solo: только когда Tool в Character)
 	local rbxTool = getRobloxTool()
 	local character = Player.Character
-	if Mode ~= 'Tool' or (character and rbxTool and rbxTool.Parent == character) then
+	if not _G.__bt_hide_ui_until_equip
+		and (Mode ~= 'Tool' or (character and rbxTool and rbxTool.Parent == character))
+	then
 		mountDockIfNeeded()
 		local rebuild = _G.__bt_rebuildToolDock
 		if type(rebuild) == "function" then
@@ -844,7 +853,7 @@ function InitializeUI()
 			Tool = ToolModule;
 		})
 
-		if Core.__bt_dockMounted and Core.__bt_DockHandle then
+		if Core.__bt_dockMounted and Core.__bt_DockHandle and not _G.__bt_hide_ui_until_equip then
 			Roact.update(Core.__bt_DockHandle, Roact.createElement(DockComponent, {
 				Core = Core;
 				Tools = Cryo.List.join(ToolList);
@@ -1773,6 +1782,21 @@ Core.ExportSelection = ExportSelection
 pcall(function()
 	Core.__bt_defaultMove = DefaultBuildingToolModule()
 end)
+
+do
+	local ensureUiImpl = Core.EnsureUI
+	function Core.EnsureUI()
+		if _G.__bt_hide_ui_until_equip or (Mode == 'Tool' and not isRobloxToolEquippedInCharacter()) then
+			btTraceUI("EnsureUI:FINAL_BLOCK", "no cube")
+			if needsUIInit() then
+				Core.EnsureDockReady()
+			end
+			hideRootUI()
+			return
+		end
+		return ensureUiImpl()
+	end
+end
 
 -- Return core (remote executor: _G.Core env)
 return (_G.Core or Core);

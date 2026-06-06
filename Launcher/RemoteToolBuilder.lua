@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local function req(moduleName: string)
 	if _G.BT_LAUNCHER_LOAD then
@@ -343,6 +344,104 @@ local function buildModuleTree(tool: Tool, paths: { string })
 	end
 end
 
+local UI_SCREEN_NAME = "Building Tools by F3X (UI)"
+local uiGateConn: RBXScriptConnection? = nil
+
+local function uiTrace(coreEnv: any?, verb: string, detail: string?)
+	if type(coreEnv) == "table" and type(coreEnv.BT_TraceUI) == "function" then
+		pcall(coreEnv.BT_TraceUI, verb, detail)
+	end
+end
+
+local function getUiHiddenHolder(tool: Tool?): Folder?
+	tool = tool or (_G.__bt_tool :: Tool?)
+	if not tool or not tool:IsA("Tool") then
+		return nil
+	end
+	local holder = tool:FindFirstChild("_BT_UIHolder")
+	if not holder then
+		holder = Instance.new("Folder")
+		holder.Name = "_BT_UIHolder"
+		holder.Parent = tool
+	end
+	return holder :: Folder
+end
+
+local function scrubLeakedBtScreenGui(reason: string?)
+	local player = Players.LocalPlayer
+	if not player then
+		return
+	end
+	local pg = player:FindFirstChild("PlayerGui")
+	if not pg then
+		return
+	end
+	local leaked = pg:FindFirstChild(UI_SCREEN_NAME)
+	if leaked and leaked:IsA("ScreenGui") then
+		leaked.Enabled = false
+		local holder = getUiHiddenHolder()
+		leaked.Parent = holder or nil
+		uiTrace(_G.Core, "gatekeeper:scrub", reason or UI_SCREEN_NAME)
+	end
+end
+
+local function ensureUiGatekeeper()
+	if uiGateConn then
+		return
+	end
+	uiGateConn = RunService.Heartbeat:Connect(function()
+		if not _G.__bt_hide_ui_until_equip then
+			return
+		end
+		scrubLeakedBtScreenGui("heartbeat")
+		local core = _G.Core
+		if type(core) ~= "table" then
+			return
+		end
+		local ui = core.UI or core.__bt_UI
+		if ui and typeof(ui) == "Instance" and ui:IsA("ScreenGui") then
+			if ui.Enabled then
+				ui.Enabled = false
+			end
+			local pg = Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")
+			if pg and ui.Parent == pg then
+				ui.Parent = getUiHiddenHolder() or nil
+			end
+		end
+	end)
+end
+
+local function purgeOldPlayerUI()
+	local player = Players.LocalPlayer
+	if not player then
+		return
+	end
+	local pg = player:FindFirstChild("PlayerGui")
+	if pg then
+		local old = pg:FindFirstChild(UI_SCREEN_NAME)
+		if old then
+			old:Destroy()
+		end
+	end
+	_G.UI = nil
+	local core = _G.Core
+	if type(core) == "table" then
+		if type(core.HideRootUI) == "function" then
+			pcall(core.HideRootUI)
+		end
+		core.UI = nil
+		core.__bt_UI = nil
+		core.__bt_ToolList = nil
+		core.__bt_DockHandle = nil
+		core.__bt_DockComponent = nil
+		core.AddToolButton = nil
+		core.__dockToolsRegistered = nil
+		core.__bt_dockButtonCount = 0
+		core.__bt_dockMounted = false
+		core.__bt_deferDockMount = true
+	end
+end
+
 function RemoteToolBuilder.Build(
 	player: Player?,
 	callbacks: { onFile: any?, onMessage: any? } | ((string) -> ())?
@@ -357,6 +456,12 @@ function RemoteToolBuilder.Build(
 		onFile = callbacks.onFile
 		onMessage = callbacks.onMessage
 	end
+
+	_G.__bt_hide_ui_until_equip = true
+	_G.__bt_ui_trace = true
+	purgeOldPlayerUI()
+	scrubLeakedBtScreenGui("Build:start")
+	ensureUiGatekeeper()
 
 	local existing = player.Backpack:FindFirstChild(Config.ToolName)
 	if existing and existing:IsA("Tool") then
@@ -633,39 +738,6 @@ local function runBuildingToolModule(tool: Tool, moduleName: string): any?
 	return RemoteLoader.run(path, tool, modScript)
 end
 
-local function purgeOldPlayerUI()
-	local player = Players.LocalPlayer
-	if not player then
-		return
-	end
-	local pg = player:FindFirstChild("PlayerGui")
-	if not pg then
-		return
-	end
-	local old = pg:FindFirstChild("Building Tools by F3X (UI)")
-	if old then
-		old:Destroy()
-	end
-	_G.UI = nil
-	local core = _G.Core
-	if type(core) == "table" then
-		core.UI = nil
-		core.__bt_UI = nil
-		core.__bt_ToolList = nil
-		core.__bt_DockHandle = nil
-		core.__bt_DockComponent = nil
-		core.AddToolButton = nil
-		core.__dockToolsRegistered = nil
-		core.__bt_dockButtonCount = 0
-	end
-end
-
-local function uiTrace(coreEnv: any?, verb: string, detail: string?)
-	if type(coreEnv) == "table" and type(coreEnv.BT_TraceUI) == "function" then
-		pcall(coreEnv.BT_TraceUI, verb, detail)
-	end
-end
-
 local function scrubPlayerBtUi(coreEnv: any?, reason: string?)
 	coreEnv = (type(coreEnv) == "table" and coreEnv) or _G.Core
 	uiTrace(coreEnv, "scrubPlayerBtUi", reason or "")
@@ -766,9 +838,9 @@ end
 
 local function findToolListFrame(coreEnv: any): Frame?
 	local ui = (type(coreEnv) == "table" and (coreEnv.UI or coreEnv.__bt_UI)) or nil
-	if not ui or not ui:IsA("ScreenGui") then
+	if (not ui or not ui:IsA("ScreenGui")) and not _G.__bt_hide_ui_until_equip then
 		local pg = Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")
-		ui = pg and pg:FindFirstChild("Building Tools by F3X (UI)")
+		ui = pg and pg:FindFirstChild(UI_SCREEN_NAME)
 	end
 	if not ui then
 		return nil
@@ -895,10 +967,12 @@ function RemoteToolBuilder.GiveToPlayer(tool: Tool, player: Player?)
 		end)
 		tool.Unequipped:Connect(function()
 			_G.__bt_hide_ui_until_equip = true
+			ensureUiGatekeeper()
 			local core = _G.Core
 			if type(core) == "table" and type(core.HideRootUI) == "function" then
 				pcall(core.HideRootUI)
 			end
+			scrubLeakedBtScreenGui("Unequipped")
 		end)
 	end
 	tool.Parent = player:WaitForChild("Backpack")
@@ -1087,6 +1161,8 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		_G.__bt_hide_ui_until_equip = true
 		_G.__bt_ui_trace = true
 		purgeOldPlayerUI()
+		scrubLeakedBtScreenGui("StartRuntime")
+		ensureUiGatekeeper()
 
 		step("Assets…")
 		local assetsScript = tool:FindFirstChild("Assets")

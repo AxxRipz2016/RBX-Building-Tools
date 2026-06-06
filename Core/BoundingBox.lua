@@ -91,7 +91,7 @@ function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 	BoundingBoxUpdater = Support.ScheduleRecurringTask(BoundingBoxModule.UpdateBoundingBox, 0.05);
 
 	-- Attach handles if requested
-	if BoundingBoxHandleCallback then
+	if type(BoundingBoxHandleCallback) == "function" then
 		BoundingBoxHandleCallback(BoxPart);
 	end;
 
@@ -131,7 +131,7 @@ function BoundingBoxModule.UpdateBoundingBox()
 	if InactiveBoxPart and #selectionParts > 0 then
 		BoxPart = InactiveBoxPart;
 		InactiveBoxPart = nil;
-		if BoundingBoxHandleCallback then
+		if type(BoundingBoxHandleCallback) == "function" then
 			BoundingBoxHandleCallback(BoxPart);
 		end
 
@@ -139,7 +139,7 @@ function BoundingBoxModule.UpdateBoundingBox()
 	elseif BoxPart and #selectionParts == 0 then
 		InactiveBoxPart = BoxPart;
 		BoxPart = nil;
-		if BoundingBoxHandleCallback then
+		if type(BoundingBoxHandleCallback) == "function" then
 			BoundingBoxHandleCallback(BoxPart);
 		end
 		return;
@@ -196,7 +196,7 @@ function BoundingBoxModule.ClearBoundingBox()
 	BoundingBoxEnabled = false;
 
 	-- Clear the bounding box handle callback
-	if BoundingBoxHandleCallback then
+	if type(BoundingBoxHandleCallback) == "function" then
 		BoundingBoxHandleCallback(nil);
 	end
 	BoundingBoxHandleCallback = nil;

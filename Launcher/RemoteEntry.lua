@@ -11,10 +11,11 @@ if _G.BT_LAUNCHER_BUSY then
 end
 _G.BT_LAUNCHER_BUSY = true
 _G.BT_LAUNCHER_FETCH_READY = false
+_G.__bt_hide_ui_until_equip = true
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 16
+local ENTRY_REV = 17
 
 local loadFn
 local httpGet
