@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 116
+local SOURCE_CACHE_REV = 117
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -738,13 +738,13 @@ local function validateCoreInitPatterns(source: string): (boolean, string?)
 		return true
 	end
 	if source:find("\nend\nAssignHotkey%(%{ ['\"]LeftShift", 1, true) then
-		return false, "лишний end перед AssignHotkey (битый кэш — новый paste r116+)"
+		return false, "лишний end перед AssignHotkey (битый кэш — новый paste r117+)"
 	end
 	if source:find("\nend\nend\nAssignHotkey", 1, true) then
 		return false, "двойной end перед AssignHotkey (битый кэш Core/init)"
 	end
 	if source:find("%);\r?\n%s*end%s*;%s*\r?\n%s*%-%- Connect the button", 1, true) then
-		return false, "лишний end после Plugin CreateButton (legacy-патч — обнови paste r116+)"
+		return false, "лишний end после Plugin CreateButton (legacy-патч — обнови paste r117+)"
 	end
 	for lineNo = 704, 712 do
 		local line = getSourceLine(source, lineNo)
@@ -774,7 +774,11 @@ local function validateCoreInitCompileBody(source: string): (boolean, string?)
 	if not fn and compileErr then
 		local errLine = tonumber(tostring(compileErr):match(":(%d+):"))
 		local excerpt = if errLine then formatSourceExcerpt(source, errLine, 4) else ""
-		return false, `{compileErr}{if #excerpt > 0 then "\n" .. excerpt else "" end}`
+		local msg = tostring(compileErr)
+		if #excerpt > 0 then
+			msg = msg .. "\n" .. excerpt
+		end
+		return false, msg
 	end
 	return true
 end
@@ -2130,7 +2134,7 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 				result = getPatchedSource(path)
 				if not result then
 					rawSourceCache[path] = nil
-					lastErr = "Core/init.lua: патч/compile validate failed (обнови paste до r116+)"
+					lastErr = "Core/init.lua: патч/compile validate failed (обнови paste до r117+)"
 					continue
 				end
 				failedPaths[path] = nil
