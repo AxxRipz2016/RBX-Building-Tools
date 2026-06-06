@@ -666,10 +666,15 @@ local function ensureCoreDockReady(coreEnv: any): boolean
 		warn("[BT] ensureCoreDockReady: Core nil")
 		return false
 	end
-	if type(coreEnv.EnsureUI) == "function" then
-		local ok, err = pcall(coreEnv.EnsureUI)
+	if type(coreEnv.EnsureDockReady) == "function" then
+		local ok, err = pcall(coreEnv.EnsureDockReady)
 		if not ok then
-			warn("[BT] EnsureUI:", err)
+			warn("[BT] EnsureDockReady:", err)
+		end
+	elseif type(coreEnv.InitializeUI) == "function" then
+		local ok, err = pcall(coreEnv.InitializeUI)
+		if not ok then
+			warn("[BT] InitializeUI:", err)
 		end
 	end
 	if type(coreEnv.AddToolButton) ~= "function" and type(coreEnv.InitializeUI) == "function" then
@@ -802,8 +807,13 @@ local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]
 			if type(coreEnv.EquipTool) ~= "function" then
 				return
 			end
-			if type(coreEnv.EnsureUI) == "function" then
-				pcall(coreEnv.EnsureUI)
+			local rbxTool = _G.__bt_tool or tool
+			local plr = Players.LocalPlayer
+			if rbxTool and plr and rbxTool.Parent == plr.Backpack and plr.Character then
+				local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+				if hum then
+					hum:EquipTool(rbxTool)
+				end
 			end
 			local mod = runBuildingToolModule(tool, moduleName)
 			if type(coreEnv.ResolveBuildingToolModule) == "function" then

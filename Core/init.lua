@@ -188,21 +188,62 @@ function Core.BT_HideAllToolPanels()
 	end
 end
 
+local function isRobloxToolEquippedInCharacter()
+	if Mode ~= 'Tool' then
+		return true
+	end
+	local rbxTool = (_G.__bt_tool or Tool)
+	local character = Player and Player.Character
+	return character ~= nil
+		and rbxTool ~= nil
+		and typeof(rbxTool) == "Instance"
+		and rbxTool:IsA("Tool")
+		and rbxTool.Parent == character
+end
+
+local function hideRootUI()
+	if UI and typeof(UI) == "Instance" and UI:IsA("ScreenGui") then
+		UI.Parent = nil
+		UI.Enabled = false
+	end
+end
+
+local function needsUIInit(): boolean
+	if not UI or not Core.UI then
+		return true
+	end
+	if typeof(Core.UI) ~= "Instance" or not Core.UI:IsA("ScreenGui") then
+		return true
+	end
+	if type(Core.AddToolButton) ~= "function" then
+		return true
+	end
+	return false
+end
+
 -- BT remote Core (launcher не гоняет legacy-gsub по этому файлу)
-function Core.EnsureUI()
-	if not UI or not Core.UI or (typeof(Core.UI) == "Instance" and not Core.UI.Parent) then
+function Core.EnsureDockReady()
+	if needsUIInit() then
 		InitializeUI()
+	end
+end
+
+function Core.EnsureUI()
+	if needsUIInit() then
+		InitializeUI()
+	end
+	-- Solo/remote: ScreenGui только когда Roblox Tool в Character (не в Backpack)
+	if Mode == 'Tool' and not isRobloxToolEquippedInCharacter() then
+		hideRootUI()
+		return
 	end
 	if not UIContainer then
 		UIContainer = Player:WaitForChild("PlayerGui")
 		Core.UIContainer = UIContainer
 	end
-	if UI and not UI.Parent then
+	if UI then
 		UI.Parent = UIContainer
 		UI.Enabled = true
-	end
-	if not IsEnabled then
-		Enable(Player:GetMouse())
 	end
 end
 
@@ -621,6 +662,9 @@ function InitializeUI()
 			UIMaid:Destroy()
 		end
 	end)
+
+	-- Remote: док/API без показа до экипировки Tool
+	hideRootUI()
 end
 
 local UIElements = Tool:WaitForChild 'UI'
