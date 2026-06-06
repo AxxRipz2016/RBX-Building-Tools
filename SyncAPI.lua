@@ -43,6 +43,11 @@ local streamingClonesPendingUntagging = {}
 
 -- Determine whether we're in tool or plugin mode
 ToolMode = (Tool.Parent and Tool.Parent:IsA("Plugin")) and "Plugin" or "Tool"
+
+-- BT_LOCAL_SYNC_PLAYER: solo/remote — Player сразу, не ждать AncestryChanged
+if Tool:GetAttribute("BT_LocalOnly") then
+	Player = Players.LocalPlayer
+end
 	
 local IsHttpServiceEnabled = nil
 
@@ -2028,7 +2033,13 @@ return {
 
 		-- Ensure client is current player in tool mode
 		if ToolMode == 'Tool' then
-			assert(Player and (Client == Player), 'Permission denied for client');
+			if not Player and Tool:GetAttribute("BT_LocalOnly") then
+				Player = Players.LocalPlayer
+			end
+			if not (Player and Client == Player) then
+				warn("[BT] SyncAPI: Permission denied for client")
+				return nil
+			end
 		end;
 
 		-- Execute valid actions

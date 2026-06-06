@@ -15,7 +15,7 @@ _G.__bt_hide_ui_until_equip = true
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 17
+local ENTRY_REV = 18
 
 local loadFn
 local httpGet

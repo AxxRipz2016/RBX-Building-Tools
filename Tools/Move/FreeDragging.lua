@@ -103,7 +103,7 @@ function FreeDragging:EnableDragging()
 
 				-- Prepare for dragging
 				local bb = GetBoundingBoxAPI()
-				if bb and bb.ClearBoundingBox then bb:ClearBoundingBox() end
+				if bb and type(bb.ClearBoundingBox) == "function" then bb.ClearBoundingBox() end
 				self:SetUpDragging(self.StartTarget, SnapTracking.Enabled and self.Tool.SnappedPoint or nil)
 
 				-- Stop watching for potential dragging
@@ -160,7 +160,7 @@ function FreeDragging:StartDragging(BasePart, InitialPartStates, InitialModelSta
 
 	-- Disable bounding box calculation
 	local bb = GetBoundingBoxAPI()
-	if bb and bb.ClearBoundingBox then bb:ClearBoundingBox() end
+	if bb and type(bb.ClearBoundingBox) == "function" then bb.ClearBoundingBox() end
 
 	-- Cache area permissions information
 	local AreaPermissions

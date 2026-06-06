@@ -87,8 +87,18 @@ function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 	end
 
 	-- Begin the bounding box's updater
-	BoundingBoxModule.UpdateBoundingBox();
-	BoundingBoxUpdater = Support.ScheduleRecurringTask(BoundingBoxModule.UpdateBoundingBox, 0.05);
+	local updateBBox = BoundingBoxModule.UpdateBoundingBox
+	if type(updateBBox) ~= "function" then
+		warn("[BT] BoundingBox: UpdateBoundingBox is not a function")
+		return
+	end
+	updateBBox()
+	local schedule = Support and Support.ScheduleRecurringTask
+	if type(schedule) ~= "function" then
+		warn("[BT] BoundingBox: ScheduleRecurringTask недоступен")
+		return
+	end
+	BoundingBoxUpdater = schedule(updateBBox, 0.05);
 
 	-- Attach handles if requested
 	if type(BoundingBoxHandleCallback) == "function" then

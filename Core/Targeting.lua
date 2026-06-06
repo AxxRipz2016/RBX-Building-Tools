@@ -53,8 +53,20 @@ function TargetingModule:EnableTargeting()
 			Core.Mouse = Mouse
 		end
 	end
-	if not Mouse or not Mouse.Move then
+	if not Mouse or typeof(Mouse) ~= "Instance" then
 		warn("[BT] Targeting: Mouse недоступен")
+		return
+	end
+	if not Mouse.Move or type(Mouse.Move.Connect) ~= "function" then
+		warn("[BT] Targeting: Mouse.Move недоступен")
+		return
+	end
+	if not Mouse.Button1Up or type(Mouse.Button1Up.Connect) ~= "function" then
+		warn("[BT] Targeting: Mouse.Button1Up недоступен")
+		return
+	end
+	if not Mouse.Button1Down or type(Mouse.Button1Down.Connect) ~= "function" then
+		warn("[BT] Targeting: Mouse.Button1Down недоступен")
 		return
 	end
 
@@ -341,6 +353,9 @@ function TargetingModule.StartRectangleSelecting()
 	RectangleSelectStart = Vector2.new(Mouse.X, Mouse.Y);
 
 	-- Track mouse while rectangle selecting
+	if not Mouse or not Mouse.Move or type(Mouse.Move.Connect) ~= "function" then
+		return
+	end
 	GetCore().Connections.WatchRectangleSelection = Mouse.Move:Connect(function ()
 
 		-- If rectangle selecting, update rectangle

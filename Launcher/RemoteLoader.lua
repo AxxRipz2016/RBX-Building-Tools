@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 124
+local SOURCE_CACHE_REV = 125
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -1364,7 +1364,8 @@ end
 	end
 
 	if path == "Core/BoundingBox.lua" then
-		if not source:find("if BoundingBoxHandleCallback then", 1, true) then
+		local modernBBox = source:find("type%(BoundingBoxHandleCallback%)", 1, true) ~= nil
+		if not modernBBox and not source:find("if BoundingBoxHandleCallback then", 1, true) then
 			source = source:gsub(
 				"BoundingBoxHandleCallback%(nil%);",
 				"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(nil); end"
@@ -1441,14 +1442,16 @@ local InactiveBoxPart
 				"%1if type(StopAggregatingStaticParts) == 'function' then StopAggregatingStaticParts(); end"
 			)
 		end
-		source = source:gsub(
-			"BoundingBoxHandleCallback%(BoundingBox%);",
-			"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(BoundingBox); end"
-		)
-		source = source:gsub(
-			"BoundingBoxHandleCallback%(BoxPart%);",
-			"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(BoxPart); end"
-		)
+		if not modernBBox then
+			source = source:gsub(
+				"BoundingBoxHandleCallback%(BoundingBox%);",
+				"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(BoundingBox); end"
+			)
+			source = source:gsub(
+				"BoundingBoxHandleCallback%(BoxPart%);",
+				"if BoundingBoxHandleCallback then BoundingBoxHandleCallback(BoxPart); end"
+			)
+		end
 		if not source:find("getSelectionParts", 1, true) then
 			source = source:gsub(
 				"(local function safeDestroyBox)",

@@ -80,9 +80,9 @@ function ResizeTool.Equip()
 	-- Enables the tool's equipped functionality
 
 	-- Start up our interface
-	local showUI = ResizeTool.__btShowUI or ShowUI
-	local showHandles = ResizeTool.__btShowHandles or ShowHandles
-	local bindKeys = ResizeTool.__btBindShortcutKeys or BindShortcutKeys
+	local showUI = ResizeTool.__btShowUI or ResizeTool.ShowUI or ShowUI
+	local showHandles = ResizeTool.__btShowHandles or ResizeTool.ShowHandles or ShowHandles
+	local bindKeys = ResizeTool.__btBindShortcutKeys or ResizeTool.BindShortcutKeys or BindShortcutKeys
 	if type(showUI) == "function" then
 		showUI()
 	end
@@ -102,8 +102,8 @@ function ResizeTool.Unequip()
 	-- Disables the tool's equipped functionality
 
 	-- Clear unnecessary resources
-	local hideUI = ResizeTool.__btHideUI or HideUI
-	local hideHandles = ResizeTool.__btHideHandles or HideHandles
+	local hideUI = ResizeTool.__btHideUI or ResizeTool.HideUI or HideUI
+	local hideHandles = ResizeTool.__btHideHandles or ResizeTool.HideHandles or HideHandles
 	if type(hideUI) == "function" then
 		hideUI()
 	end
@@ -1164,7 +1164,12 @@ function GetFacesFromCorner(Part, Point)
 	return { Faces[1].Face, Faces[2].Face, Faces[3].Face };
 end;
 
--- Return the tool
+-- Return the tool (remote env: явные ссылки на функции)
+ResizeTool.ShowUI = ShowUI
+ResizeTool.HideUI = HideUI
+ResizeTool.ShowHandles = ShowHandles
+ResizeTool.HideHandles = HideHandles
+ResizeTool.BindShortcutKeys = BindShortcutKeys
 ResizeTool.__btShowUI = ShowUI
 ResizeTool.__btHideUI = HideUI
 ResizeTool.__btShowHandles = ShowHandles
