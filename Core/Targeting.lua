@@ -21,15 +21,42 @@ TargetingModule.ScopeChanged = Signal.new()
 TargetingModule.ScopeTargetChanged = Signal.new()
 TargetingModule.ScopeLockChanged = Signal.new()
 
+local function getLifecycleSignal(core, name)
+	local sig = core and core[name]
+	if type(sig) == "table" and type(sig.Connect) == "function" then
+		return sig
+	end
+	local globalCore = _G.Core
+	sig = globalCore and globalCore[name]
+	if type(sig) == "table" and type(sig.Connect) == "function" then
+		return sig
+	end
+	return nil
+end
+
 function TargetingModule:EnableTargeting()
 	-- 	Begin targeting parts from the mouse
 
 	-- Get core API
 	local Core = GetCore();
+	if type(Core.Connections) ~= "table" then
+		Core.Connections = {}
+	end
 	local Connections = Core.Connections;
 
 	-- Create reference to mouse
 	Mouse = Core.Mouse;
+	if Mouse == nil or typeof(Mouse) ~= "Instance" then
+		local plr = Core.Player or (_G.Core and _G.Core.Player)
+		if plr then
+			Mouse = plr:GetMouse()
+			Core.Mouse = Mouse
+		end
+	end
+	if not Mouse or not Mouse.Move then
+		warn("[BT] Targeting: Mouse недоступен")
+		return
+	end
 
 	-- Listen for target changes
 	Connections.Targeting = Mouse.Move:Connect(function ()
@@ -49,10 +76,11 @@ function TargetingModule:EnableTargeting()
 	Connections.RectSelectionFinished = Support.AddUserInputListener('Ended', 'MouseButton1', true, self.FinishRectangleSelecting);
 
 	-- Hide target box when tool is unequipped
-	Connections.HideTargetBoxOnDisable = Core.Disabling:Connect(self.HighlightTarget);
-
-	-- Cancel any ongoing selection when tool is unequipped
-	Connections.CancelSelectionOnDisable = Core.Disabling:Connect(self.CancelRectangleSelecting);
+	local disabling = getLifecycleSignal(Core, "Disabling")
+	if disabling then
+		Connections.HideTargetBoxOnDisable = disabling:Connect(self.HighlightTarget)
+		Connections.CancelSelectionOnDisable = disabling:Connect(self.CancelRectangleSelecting)
+	end
 
 	-- Enable scope selection
 	self:EnableScopeSelection()
@@ -603,9 +631,12 @@ function TargetingModule:EnableScopeSelection()
 	)
 
 	-- Disable scoping interface when tool disables
-	GetCore().Disabling:Connect(function ()
-		ContextActionService:UnbindAction('BT: Scope')
-	end)
+	local disableSig = getLifecycleSignal(GetCore(), "Disabling")
+	if disableSig then
+		disableSig:Connect(function ()
+			ContextActionService:UnbindAction('BT: Scope')
+		end)
+	end
 
 end
 
@@ -615,7 +646,11 @@ function TargetingModule:EnableScopeAutoReset()
 	local LastScopeListener, LastScopeAncestry
 
 	-- Listen to changes in scope
-	GetCore().UIMaid.ScopeReset = self.ScopeChanged:Connect(function (Scope)
+	local core = GetCore()
+	if type(core.UIMaid) ~= "table" then
+		return
+	end
+	core.UIMaid.ScopeReset = self.ScopeChanged:Connect(function (Scope)
 
 		-- Clear last scope listener
 		LastScopeListener = LastScopeListener and LastScopeListener:Disconnect()
@@ -717,10 +752,13 @@ function TargetingModule:BindTargetingModeHotkeys()
 	ContextActionService:BindAction('BT: Toggle Targeting Mode', Callback, false, Enum.KeyCode.T)
 
 	-- Unbind hotkey when tool is disabled
-	local Core = GetCore()
-	Core.Connections.UnbindTargetingModeHotkeys = Core.Disabling:Connect(function ()
-		ContextActionService:UnbindAction('BT: Toggle Targeting Mode')
-	end)
+	local core = GetCore()
+	local disableSig = getLifecycleSignal(core, "Disabling")
+	if disableSig and type(core.Connections) == "table" then
+		core.Connections.UnbindTargetingModeHotkeys = disableSig:Connect(function ()
+			ContextActionService:UnbindAction('BT: Toggle Targeting Mode')
+		end)
+	end
 end
 
 function GetCore()

@@ -12,19 +12,26 @@ local function GetBoundingBoxAPI()
 	return Core.BoundingBox
 end
 
-local BoundingBoxAPI = setmetatable({}, {
-	__index = function(_, key)
-		local api = GetBoundingBoxAPI()
-		if type(api) ~= "table" then return nil end
-		local v = api[key]
-		if type(v) == "function" then
-			return function(...)
-				return v(...)
-			end
-		end
-		return v
+local function callBoundingBox(method, ...)
+	local api = GetBoundingBoxAPI()
+	if type(api) ~= "table" then
+		return nil
+	end
+	local fn = api[method]
+	if type(fn) ~= "function" then
+		return nil
+	end
+	return fn(...)
+end
+
+local BoundingBoxAPI = {
+	StartBoundingBox = function(...)
+		return callBoundingBox("StartBoundingBox", ...)
 	end,
-})
+	ClearBoundingBox = function(...)
+		return callBoundingBox("ClearBoundingBox", ...)
+	end,
+}
 
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'

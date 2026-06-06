@@ -77,7 +77,14 @@ function BoundingBoxModule.StartBoundingBox(HandleAttachmentCallback)
 	StartAggregatingStaticParts();
 
 	-- Store handle attachment callback
-	BoundingBoxHandleCallback = HandleAttachmentCallback;
+	if type(HandleAttachmentCallback) == "function" then
+		BoundingBoxHandleCallback = HandleAttachmentCallback
+	else
+		if HandleAttachmentCallback ~= nil then
+			warn("[BT] StartBoundingBox: callback must be function, got", typeof(HandleAttachmentCallback))
+		end
+		BoundingBoxHandleCallback = nil
+	end
 
 	-- Begin the bounding box's updater
 	BoundingBoxModule.UpdateBoundingBox();

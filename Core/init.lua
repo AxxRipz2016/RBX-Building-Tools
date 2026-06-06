@@ -21,6 +21,14 @@ local BoundingBoxModule = require(script:WaitForChild('BoundingBox'))
 -- Libraries
 Region = require(Tool.Libraries.Region)
 Signal = require(Tool.Libraries.Signal)
+Enabling = Signal.new()
+Disabling = Signal.new()
+Enabled = Signal.new()
+Disabled = Signal.new()
+Core.Enabling = Enabling
+Core.Disabling = Disabling
+Core.Enabled = Enabled
+Core.Disabled = Disabled
 Support = require(Tool.Libraries.SupportLibrary)
 Try = require(Tool.Libraries.Try)
 Make = require(Tool.Libraries.Make)
@@ -35,6 +43,7 @@ Support.ImportServices();
 SyncAPI = Tool.SyncAPI;
 Core.SyncAPI = SyncAPI;
 Player = Players.LocalPlayer;
+Core.Player = Player
 local CollectionService = game:GetService('CollectionService')
 local RunService = game:GetService('RunService')
 
@@ -557,15 +566,6 @@ function EnableHotkeys()
 
 end;
 
-Enabling = Signal.new()
-Disabling = Signal.new()
-Enabled = Signal.new()
-Disabled = Signal.new()
-Core.Enabling = Enabling
-Core.Disabling = Disabling
-Core.Enabled = Enabled
-Core.Disabled = Disabled
-
 function Enable(Mouse)
 
 	if Mode == 'Tool' then
@@ -895,6 +895,7 @@ function InitializeUI()
 
 	-- Clean up UI on tool teardown
 	UIMaid = Maid.new()
+	Core.UIMaid = UIMaid
 	Tool.AncestryChanged:Connect(function (Item, Parent)
 		if Parent == nil then
 			UIMaid:Destroy()

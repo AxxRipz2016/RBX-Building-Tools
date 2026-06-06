@@ -80,12 +80,21 @@ function ResizeTool.Equip()
 	-- Enables the tool's equipped functionality
 
 	-- Start up our interface
-	ShowUI();
-	local okHandles, errHandles = pcall(ShowHandles)
-	if not okHandles then
-		warn("[BT] Resize ShowHandles:", errHandles)
+	local showUI = ResizeTool.__btShowUI or ShowUI
+	local showHandles = ResizeTool.__btShowHandles or ShowHandles
+	local bindKeys = ResizeTool.__btBindShortcutKeys or BindShortcutKeys
+	if type(showUI) == "function" then
+		showUI()
 	end
-	BindShortcutKeys();
+	if type(showHandles) == "function" then
+		local okHandles, errHandles = pcall(showHandles)
+		if not okHandles then
+			warn("[BT] Resize ShowHandles:", errHandles)
+		end
+	end
+	if type(bindKeys) == "function" then
+		bindKeys()
+	end
 
 end;
 
@@ -93,8 +102,14 @@ function ResizeTool.Unequip()
 	-- Disables the tool's equipped functionality
 
 	-- Clear unnecessary resources
-	HideUI();
-	HideHandles();
+	local hideUI = ResizeTool.__btHideUI or HideUI
+	local hideHandles = ResizeTool.__btHideHandles or HideHandles
+	if type(hideUI) == "function" then
+		hideUI()
+	end
+	if type(hideHandles) == "function" then
+		hideHandles()
+	end
 	ClearConnections();
 	if type(SnapTracking) == "table" and type(SnapTracking.StopTracking) == "function" then
 		SnapTracking.StopTracking();
@@ -1150,4 +1165,11 @@ function GetFacesFromCorner(Part, Point)
 end;
 
 -- Return the tool
+ResizeTool.__btShowUI = ShowUI
+ResizeTool.__btHideUI = HideUI
+ResizeTool.__btShowHandles = ShowHandles
+ResizeTool.__btHideHandles = HideHandles
+ResizeTool.__btBindShortcutKeys = BindShortcutKeys
+ResizeTool.__btFinishSnapping = FinishSnapping
+
 return ResizeTool;

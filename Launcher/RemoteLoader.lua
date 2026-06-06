@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 122
+local SOURCE_CACHE_REV = 123
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -223,19 +223,41 @@ local function GetBoundingBoxAPI()
 	return nil
 end
 
-local BoundingBoxAPI = setmetatable({}, {
-	__index = function(_, key)
-		local api = GetBoundingBoxAPI()
-		if type(api) ~= "table" then return nil end
-		local v = api[key]
-		if type(v) == "function" then
-			return function(...)
-				return v(...)
-			end
-		end
-		return v
+local function callBoundingBox(method, ...)
+	local api = GetBoundingBoxAPI()
+	if type(api) ~= "table" then
+		return nil
+	end
+	local fn = api[method]
+	if type(fn) ~= "function" then
+		return nil
+	end
+	return fn(...)
+end
+
+local BoundingBoxAPI = {
+	StartBoundingBox = function(...)
+		return callBoundingBox("StartBoundingBox", ...)
 	end,
-})
+	ClearBoundingBox = function(...)
+		return callBoundingBox("ClearBoundingBox", ...)
+	end,
+	GetBoundingBox = function(...)
+		return callBoundingBox("GetBoundingBox", ...)
+	end,
+	CalculateExtents = function(...)
+		return callBoundingBox("CalculateExtents", ...)
+	end,
+	PauseMonitoring = function(...)
+		return callBoundingBox("PauseMonitoring", ...)
+	end,
+	ResumeMonitoring = function(...)
+		return callBoundingBox("ResumeMonitoring", ...)
+	end,
+	RecalculateStaticExtents = function(...)
+		return callBoundingBox("RecalculateStaticExtents", ...)
+	end,
+}
 
 ]]
 

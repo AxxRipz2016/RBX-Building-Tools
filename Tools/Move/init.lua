@@ -22,19 +22,29 @@ local function GetBoundingBoxAPI()
 	return nil
 end
 
-local BoundingBoxAPI = setmetatable({}, {
-	__index = function(_, key)
-		local api = GetBoundingBoxAPI()
-		if type(api) ~= "table" then return nil end
-		local v = api[key]
-		if type(v) == "function" then
-			return function(...)
-				return v(...)
-			end
-		end
-		return v
+local function callBoundingBox(method: string, ...)
+	local api = GetBoundingBoxAPI()
+	if type(api) ~= "table" then
+		return nil
+	end
+	local fn = api[method]
+	if type(fn) ~= "function" then
+		return nil
+	end
+	return fn(...)
+end
+
+local BoundingBoxAPI = {
+	StartBoundingBox = function(...)
+		return callBoundingBox("StartBoundingBox", ...)
 	end,
-})
+	ClearBoundingBox = function(...)
+		return callBoundingBox("ClearBoundingBox", ...)
+	end,
+	GetBoundingBox = function(...)
+		return callBoundingBox("GetBoundingBox", ...)
+	end,
+}
 
 -- Services
 local ContextActionService = game:GetService 'ContextActionService'
