@@ -14,7 +14,7 @@ _G.BT_LAUNCHER_FETCH_READY = false
 
 local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 12
+local ENTRY_REV = 13
 
 local loadFn
 local httpGet

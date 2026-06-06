@@ -210,14 +210,80 @@ local function isRobloxToolEquippedInCharacter(): boolean
 		and rbxTool.Parent == character
 end
 
--- ScreenGui в PlayerGui виден всегда; в Tool (Backpack) — нет
+local function getUiHiddenHolder(): Folder?
+	local rbxTool = getRobloxTool()
+	if not rbxTool then
+		return nil
+	end
+	local holder = rbxTool:FindFirstChild("_BT_UIHolder")
+	if not holder then
+		holder = Instance.new("Folder")
+		holder.Name = "_BT_UIHolder"
+		holder.Parent = rbxTool
+	end
+	return holder
+end
+
+local function scrubBtUiFromPlayerGui()
+	local pg = Player and Player:FindFirstChild("PlayerGui")
+	if not pg then
+		return
+	end
+	local leaked = pg:FindFirstChild("Building Tools by F3X (UI)")
+	if not leaked or not leaked:IsA("ScreenGui") then
+		return
+	end
+	leaked.Enabled = false
+	local holder = getUiHiddenHolder()
+	leaked.Parent = holder or nil
+	if UI == leaked then
+		UI = leaked
+		Core.UI = leaked
+		Core.__bt_UI = leaked
+	end
+end
+
+-- ScreenGui только в PlayerGui при экипировке; иначе в скрытой папке Tool
+Core.ScrubBtUiFromPlayerGui = scrubBtUiFromPlayerGui
+
 function Core.HideRootUI()
+	scrubBtUiFromPlayerGui()
 	if not UI or typeof(UI) ~= "Instance" or not UI:IsA("ScreenGui") then
 		return
 	end
-	local rbxTool = getRobloxTool()
-	UI.Parent = rbxTool or nil
 	UI.Enabled = false
+	UI.Parent = getUiHiddenHolder()
+end
+
+local function mountDockIfNeeded(): boolean
+	if _G.__bt_hide_ui_until_equip then
+		return false
+	end
+	if Core.__bt_dockMounted and Core.__bt_DockHandle then
+		return true
+	end
+	if not UI or not Core.__bt_DockComponent then
+		return false
+	end
+	local ToolList = Core.__bt_ToolList or {}
+	local DockComponent = Core.__bt_DockComponent
+	if Core.__bt_DockHandle then
+		pcall(Roact.unmount, Core.__bt_DockHandle)
+		Core.__bt_DockHandle = nil
+	end
+	local ok, handle = pcall(function()
+		return Roact.mount(Roact.createElement(DockComponent, {
+			Core = Core;
+			Tools = Cryo.List.join(ToolList);
+			UIRoot = UI;
+		}), UI, 'Dock')
+	end)
+	if ok and handle then
+		Core.__bt_DockHandle = handle
+		Core.__bt_dockMounted = true
+		return true
+	end
+	return false
 end
 
 local function hideRootUI()
@@ -258,6 +324,7 @@ function Core.EnsureUI()
 		Core.UIContainer = UIContainer
 	end
 	if UI then
+		mountDockIfNeeded()
 		UI.Parent = UIContainer
 		UI.Enabled = true
 	end
@@ -433,6 +500,7 @@ function Enable(Mouse)
 			return
 		end
 		_G.__bt_hide_ui_until_equip = false
+		Core.__bt_deferDockMount = false
 	end
 
 	-- Ensure tool is disabled or disabling, and not already enabling
@@ -474,8 +542,19 @@ function Enable(Mouse)
 		task.wait(0.05);
 	end;
 
+	if not UIContainer then
+		UIContainer = Player:WaitForChild("PlayerGui")
+		Core.UIContainer = UIContainer
+	end
+
 	-- Show UI (remote/solo: только когда Tool в Character)
-	if Mode ~= 'Tool' or (Player.Character and Tool.Parent == Player.Character) then
+	local rbxTool = getRobloxTool()
+	if Mode ~= 'Tool' or (Player.Character and rbxTool and rbxTool.Parent == Player.Character) then
+		mountDockIfNeeded()
+		local rebuild = _G.__bt_rebuildToolDock
+		if type(rebuild) == "function" then
+			pcall(rebuild)
+		end
 		UI.Parent = UIContainer;
 		UI.Enabled = true;
 	end;
@@ -623,16 +702,23 @@ function InitializeUI()
 	-- Create dock
 	local ToolList = {}
 	local DockComponent = require(Tool:WaitForChild('UI'):WaitForChild('Dock'))
-	local DockElement = Roact.createElement(DockComponent, {
-		Core = Core;
-		Tools = ToolList;
-		UIRoot = UI;
-	})
-	local DockHandle = Roact.mount(DockElement, UI, 'Dock')
+	local deferDockMount = _G.__bt_hide_ui_until_equip == true
+	Core.__bt_deferDockMount = deferDockMount
+	Core.__bt_dockMounted = false
+	Core.__bt_DockHandle = nil
+
+	if not deferDockMount then
+		local DockHandle = Roact.mount(Roact.createElement(DockComponent, {
+			Core = Core;
+			Tools = ToolList;
+			UIRoot = UI;
+		}), UI, 'Dock')
+		Core.__bt_DockHandle = DockHandle
+		Core.__bt_dockMounted = true
+	end
 
 	-- Solo/remote: прямой доступ к доку из лаунчера
 	Core.__bt_ToolList = ToolList
-	Core.__bt_DockHandle = DockHandle
 	Core.__bt_DockComponent = DockComponent
 	Core.__bt_UI = UI
 
@@ -646,22 +732,31 @@ function InitializeUI()
 			Tool = ToolModule;
 		})
 
-		-- Update dock
-		Roact.update(DockHandle, Roact.createElement(DockComponent, {
-			Core = Core;
-			Tools = Cryo.List.join(ToolList);
-			UIRoot = UI;
-		}))
+		if Core.__bt_dockMounted and Core.__bt_DockHandle then
+			Roact.update(Core.__bt_DockHandle, Roact.createElement(DockComponent, {
+				Core = Core;
+				Tools = Cryo.List.join(ToolList);
+				UIRoot = UI;
+			}))
+		end
 	end
 	Core.AddToolButton = AddToolButton
+	Core.MountDockIfNeeded = mountDockIfNeeded
 	function Core.RefreshToolDock()
 		if Core.__bt_nativeDockOnly then
+			if Core.__bt_deferDockMount and not Core.__bt_dockMounted then
+				return
+			end
 			local rebuild = _G.__bt_rebuildToolDock
 			if type(rebuild) == "function" then
 				pcall(rebuild)
 			end
 			return
 		end
+		if not mountDockIfNeeded() then
+			return
+		end
+		local DockHandle = Core.__bt_DockHandle
 		if not (DockHandle and ToolList and DockComponent and UI) then
 			return
 		end
@@ -676,12 +771,13 @@ function InitializeUI()
 		if not ok then
 			warn("[BT] RefreshToolDock update:", err)
 			pcall(Roact.unmount, DockHandle)
-			DockHandle = Roact.mount(Roact.createElement(DockComponent, {
+			local newHandle = Roact.mount(Roact.createElement(DockComponent, {
 				Core = Core;
 				Tools = toolsForDock;
 				UIRoot = UI;
 			}), UI, "Dock")
-			Core.__bt_DockHandle = DockHandle
+			Core.__bt_DockHandle = newHandle
+			Core.__bt_dockMounted = newHandle ~= nil
 		end
 	end
 

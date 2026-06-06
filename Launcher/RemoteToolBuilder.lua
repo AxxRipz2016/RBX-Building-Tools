@@ -660,6 +660,18 @@ local function purgeOldPlayerUI()
 	end
 end
 
+local function scrubPlayerBtUi(coreEnv: any?)
+	coreEnv = (type(coreEnv) == "table" and coreEnv) or _G.Core
+	if type(coreEnv) == "table" then
+		if type(coreEnv.ScrubBtUiFromPlayerGui) == "function" then
+			pcall(coreEnv.ScrubBtUiFromPlayerGui)
+		end
+		if type(coreEnv.HideRootUI) == "function" then
+			pcall(coreEnv.HideRootUI)
+		end
+	end
+end
+
 local function ensureCoreDockReady(coreEnv: any): boolean
 	coreEnv = (type(coreEnv) == "table" and coreEnv) or _G.Core
 	if type(coreEnv) ~= "table" then
@@ -931,12 +943,10 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 			end
 		end
 		coreEnv.__bt_dockButtonCount = added
-		if type(coreEnv.RefreshToolDock) == "function" then
+		if not _G.__bt_hide_ui_until_equip and type(coreEnv.RefreshToolDock) == "function" then
 			coreEnv.RefreshToolDock()
 		end
-		if type(coreEnv.HideRootUI) == "function" then
-			pcall(coreEnv.HideRootUI)
-		end
+		scrubPlayerBtUi(coreEnv)
 		return added
 	end
 
@@ -969,33 +979,30 @@ local function registerDockDirect(coreEnv: any, tool: Tool): number
 	end
 
 	coreEnv.__bt_nativeDockOnly = true
-	local dockProps = {
-		Core = coreEnv,
-		Tools = {},
-		UIRoot = ui,
-	}
-	local dockElement = Roact.createElement(dockComponent, dockProps)
-	pcall(function()
-		if dockHandle then
-			Roact.unmount(dockHandle)
+	if not _G.__bt_hide_ui_until_equip then
+		local dockProps = {
+			Core = coreEnv,
+			Tools = toolsSnapshot,
+			UIRoot = ui,
+		}
+		local dockElement = Roact.createElement(dockComponent, dockProps)
+		pcall(function()
+			if dockHandle then
+				Roact.unmount(dockHandle)
+			end
+		end)
+		local mountOk, mountHandleOrErr = pcall(function()
+			return Roact.mount(dockElement, ui, "Dock")
+		end)
+		if mountOk and mountHandleOrErr then
+			coreEnv.__bt_DockHandle = mountHandleOrErr
+			coreEnv.__bt_dockMounted = true
+		else
+			warn(`[BT] Roact.mount дока: {mountHandleOrErr}`)
 		end
-	end)
-	local mountOk, mountHandleOrErr = pcall(function()
-		return Roact.mount(dockElement, ui, "Dock")
-	end)
-	if mountOk and mountHandleOrErr then
-		coreEnv.__bt_DockHandle = mountHandleOrErr
-	else
-		warn(`[BT] Roact.mount дока: {mountHandleOrErr}`)
 	end
 
-	-- Кнопки дока — только после экипировки (waitAndSyncDock / Equipped)
-	if type(coreEnv.HideRootUI) == "function" then
-		pcall(coreEnv.HideRootUI)
-	elseif ui then
-		ui.Parent = tool
-		ui.Enabled = false
-	end
+	scrubPlayerBtUi(coreEnv)
 
 	coreEnv.__bt_dockButtonCount = added
 	coreEnv.__dockToolsRegistered = true
@@ -1083,6 +1090,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		local coreScript = tool:WaitForChild("Core") :: ModuleScript
 		local coreEnv = RemoteLoader.run("Core/init.lua", tool, coreScript)
 		ensureCoreDockReady(coreEnv)
+		scrubPlayerBtUi(coreEnv)
 
 		step("Move…")
 		local moveMod = preloadMoveModule(tool)
@@ -1124,9 +1132,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 
 		step("Док…")
 		local dockCount = finishDockRegistration(coreEnv, tool)
-		if type(coreEnv) == "table" and type(coreEnv.HideRootUI) == "function" then
-			pcall(coreEnv.HideRootUI)
-		end
+		scrubPlayerBtUi(coreEnv)
 		tool:SetAttribute("BT_DockButtonCount", dockCount)
 		warn(`[BT] StartRuntime док: {dockCount} (UI и кнопки — после экипировки Tool)`)
 
@@ -1134,6 +1140,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 			step("Интерфейсы (lol)…")
 			ensureInterfacesFromLol(tool)
 			tool:SetAttribute("BT_InterfacesPending", nil)
+			scrubPlayerBtUi(coreEnv)
 		end
 
 		step("Готово")
