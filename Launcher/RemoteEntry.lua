@@ -33,7 +33,7 @@ end
 
 local BASE_URL = "https://raw.githubusercontent.com/AxxRipz2016/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 20
+local ENTRY_REV = 21
 
 local loadFn
 local httpGet
@@ -70,7 +70,7 @@ end
 local moduleCache: { [string]: any } = {}
 
 local function moduleCacheKey(path: string): string
-	return path .. "#e" .. tostring(ENTRY_REV)
+	return path .. "#v" .. tostring(cacheTag) .. "#e" .. tostring(ENTRY_REV)
 end
 
 local GITHUB_REPO = "AxxRipz2016/RBX-Building-Tools"
@@ -132,8 +132,11 @@ local function mayUseRemoteFetcher(): boolean
 	return true
 end
 
-local function loadFromGit(path: string)
+local function loadFromGit(path: string, forceRefresh: boolean?)
 	local key = moduleCacheKey(path)
+	if forceRefresh then
+		moduleCache[key] = nil
+	end
 	if moduleCache[key] ~= nil then
 		return moduleCache[key]
 	end
@@ -358,15 +361,24 @@ local ok, err = pcall(function()
 		RemoteLoader.setContinueOnError(true)
 	end
 
-	local RemoteToolBuilder = loadFromGit("Launcher/RemoteToolBuilder.lua")
+	local function loadRemoteToolBuilderFresh(force: boolean?)
+		return loadFromGit("Launcher/RemoteToolBuilder.lua", force)
+	end
+	local RemoteToolBuilder = loadRemoteToolBuilderFresh(false)
 	if type(RemoteToolBuilder.getBuildId) ~= "function" then
 		error("[BT] RemoteToolBuilder устарел (нет getBuildId) — обнови paste / перезайди в плейс", 0)
 	end
 	if tostring(RemoteToolBuilder.getBuildId()) ~= tostring(Version.Launcher) then
-		error(
-			`[BT] RemoteToolBuilder r{RemoteToolBuilder.getBuildId()} != Version r{Version.Launcher} — кэш executor, rejoin`,
-			0
+		warn(
+			`[BT] RemoteToolBuilder r{RemoteToolBuilder.getBuildId()} != Version r{Version.Launcher} — повтор HttpGet`
 		)
+		cacheTag = tostring(Version.Launcher) .. "_" .. tostring(tick())
+		RemoteToolBuilder = loadRemoteToolBuilderFresh(true)
+		if tostring(RemoteToolBuilder.getBuildId()) ~= tostring(Version.Launcher) then
+			warn(
+				`[BT] RemoteToolBuilder r{RemoteToolBuilder.getBuildId()} после retry — продолжаем (rejoin если баги)`
+			)
+		end
 	end
 	local manifestSrc = httpGetWithRetry("Launcher/manifest.lua")
 	if not isLikelyLuaSource(manifestSrc) then
