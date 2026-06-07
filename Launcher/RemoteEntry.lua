@@ -13,9 +13,27 @@ _G.BT_LAUNCHER_BUSY = true
 _G.BT_LAUNCHER_FETCH_READY = false
 _G.__bt_hide_ui_until_equip = true
 
-local BASE_URL = "https://raw.githubusercontent.com/utststs95/RBX-Building-Tools/refs/heads/development/"
+-- Сброс кэша executor между paste/сессиями (иначе старый RemoteToolBuilder/RemoteLoader)
+_G.BT_RemoteLoader = nil
+_G.BT_LAUNCHER_LOAD = nil
+_G.Core = nil
+_G.UI = nil
+_G.__bt_tool = nil
+_G.__bt_rebuildToolDock = nil
+do
+	local player = Players.LocalPlayer
+	local pg = player and player:FindFirstChild("PlayerGui")
+	if pg then
+		local leaked = pg:FindFirstChild("Building Tools by F3X (UI)")
+		if leaked then
+			leaked:Destroy()
+		end
+	end
+end
+
+local BASE_URL = "https://raw.githubusercontent.com/AxxRipz2016/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 18
+local ENTRY_REV = 19
 
 local loadFn
 local httpGet
@@ -46,12 +64,16 @@ end
 local function gitUrl(path: string): string
 	local url = BASE_URL .. path
 	local sep = if url:find("?", 1, true) then "&" else "?"
-	return url .. sep .. "bt=" .. cacheTag
+	return url .. sep .. "bt=" .. cacheTag .. "&e=" .. tostring(ENTRY_REV)
 end
 
 local moduleCache: { [string]: any } = {}
 
-local GITHUB_REPO = "utststs95/RBX-Building-Tools"
+local function moduleCacheKey(path: string): string
+	return path .. "#e" .. tostring(ENTRY_REV)
+end
+
+local GITHUB_REPO = "AxxRipz2016/RBX-Building-Tools"
 local GITHUB_BRANCH = "development"
 
 local function isLikelyLuaSource(body: string): boolean
@@ -111,8 +133,9 @@ local function mayUseRemoteFetcher(): boolean
 end
 
 local function loadFromGit(path: string)
-	if moduleCache[path] ~= nil then
-		return moduleCache[path]
+	local key = moduleCacheKey(path)
+	if moduleCache[key] ~= nil then
+		return moduleCache[key]
 	end
 
 	local src: string
@@ -162,8 +185,8 @@ local function loadFromGit(path: string)
 	if result == nil then
 		error(`[BT] {path}: модуль вернул nil`, 0)
 	end
-	moduleCache[path] = result
-	return moduleCache[path]
+	moduleCache[key] = result
+	return moduleCache[key]
 end
 
 _G.BT_HTTP_GET = httpGet
@@ -320,15 +343,10 @@ local ok, err = pcall(function()
 		end
 	end
 	if type(RemoteLoader) ~= "table" or type(RemoteLoader.configure) ~= "function" then
-		local fallback = _G.BT_RemoteLoader
-		if type(fallback) == "table" and type(fallback.configure) == "function" then
-			RemoteLoader = fallback
-		else
-			error(
-				"[BT] RemoteLoader не загрузился (nil/configure). В paste — только Bootstrap.lua, не старый RemoteEntry",
-				0
-			)
-		end
+		error(
+			"[BT] RemoteLoader не загрузился (nil/configure). Новый paste RemoteEntry, перезайди в плейс",
+			0
+		)
 	end
 	RemoteLoader.configure(BASE_URL, Config.RemoteVendorUrls)
 	if type(RemoteLoader.resetCancel) == "function" then
@@ -341,6 +359,15 @@ local ok, err = pcall(function()
 	end
 
 	local RemoteToolBuilder = loadFromGit("Launcher/RemoteToolBuilder.lua")
+	if type(RemoteToolBuilder.getBuildId) ~= "function" then
+		error("[BT] RemoteToolBuilder устарел (нет getBuildId) — обнови paste / перезайди в плейс", 0)
+	end
+	if tostring(RemoteToolBuilder.getBuildId()) ~= tostring(Version.Launcher) then
+		error(
+			`[BT] RemoteToolBuilder r{RemoteToolBuilder.getBuildId()} != Version r{Version.Launcher} — кэш executor, rejoin`,
+			0
+		)
+	end
 	local manifestSrc = httpGetWithRetry("Launcher/manifest.lua")
 	if not isLikelyLuaSource(manifestSrc) then
 		local okM, _ = RemoteLoader.fetchSource("Launcher/manifest.lua")

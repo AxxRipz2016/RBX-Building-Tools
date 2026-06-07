@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 125
+local SOURCE_CACHE_REV = 126
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -165,10 +165,24 @@ function Core.BT_HideAllToolPanels()
 end
 
 function Core.EnsureUI()
+	if _G.__bt_hide_ui_until_equip then
+		if type(Core.EnsureDockReady) == "function" then
+			pcall(Core.EnsureDockReady)
+		elseif type(InitializeUI) == "function" then
+			pcall(InitializeUI)
+		end
+		if type(Core.HideRootUI) == "function" then
+			pcall(Core.HideRootUI)
+		end
+		return
+	end
 	if not Core.UI or (typeof(Core.UI) == "Instance" and not Core.UI.Parent) then
 		if type(InitializeUI) == "function" then
 			InitializeUI()
 		end
+	end
+	if not Player then
+		return
 	end
 	if not UIContainer then
 		UIContainer = Player:WaitForChild("PlayerGui")
@@ -179,7 +193,7 @@ function Core.EnsureUI()
 		ui.Parent = UIContainer
 		ui.Enabled = true
 	end
-	if not IsEnabled and type(Enable) == "function" then
+	if not IsEnabled and type(Enable) == "function" and Player then
 		Enable(Player:GetMouse())
 	end
 end

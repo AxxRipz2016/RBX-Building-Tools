@@ -892,13 +892,15 @@ function InitializeUI()
 		if not ok then
 			warn("[BT] RefreshToolDock update:", err)
 			pcall(Roact.unmount, DockHandle)
-			local newHandle = Roact.mount(Roact.createElement(DockComponent, {
-				Core = Core;
-				Tools = toolsForDock;
-				UIRoot = UI;
-			}), UI, "Dock")
-			Core.__bt_DockHandle = newHandle
-			Core.__bt_dockMounted = newHandle ~= nil
+			if not _G.__bt_hide_ui_until_equip then
+				local newHandle = Roact.mount(Roact.createElement(DockComponent, {
+					Core = Core;
+					Tools = toolsForDock;
+					UIRoot = UI;
+				}), UI, "Dock")
+				Core.__bt_DockHandle = newHandle
+				Core.__bt_dockMounted = newHandle ~= nil
+			end
 		end
 	end
 
@@ -911,8 +913,16 @@ function InitializeUI()
 		end
 	end)
 
-	-- Remote: док/API без показа до экипировки Tool
-	hideRootUI()
+	-- Remote: ScreenGui никогда в PlayerGui до экипировки куба
+	if _G.__bt_hide_ui_until_equip or (Mode == 'Tool' and not isRobloxToolEquippedInCharacter()) then
+		UI.Enabled = false
+		local holder = getUiHiddenHolder()
+		if holder then
+			UI.Parent = holder
+		end
+	else
+		hideRootUI()
+	end
 end
 
 local UIElements = Tool:WaitForChild 'UI'

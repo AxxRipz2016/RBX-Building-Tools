@@ -13,6 +13,15 @@ local Config = req("Config")
 local RemoteLoader = req("RemoteLoader")
 
 local RemoteToolBuilder = {}
+local RTB_BUILD_ID = "126"
+
+function RemoteToolBuilder.getBuildId(): string
+	local v = _G.BT_LAUNCHER_VERSION
+	if type(v) == "table" and type(v.Launcher) == "string" then
+		return v.Launcher
+	end
+	return RTB_BUILD_ID
+end
 
 local manifestModule = (script and script.Parent and script.Parent:FindFirstChild("manifest")) or nil
 local manifestOverride: { string }? = nil
@@ -780,6 +789,7 @@ local function ensureCoreDockReady(coreEnv: any): boolean
 		)
 		return false
 	end
+	scrubPlayerBtUi(coreEnv, "ensureCoreDockReady")
 	return true
 end
 
@@ -1163,6 +1173,7 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		purgeOldPlayerUI()
 		scrubLeakedBtScreenGui("StartRuntime")
 		ensureUiGatekeeper()
+		print(`[BT] RemoteToolBuilder build {RTB_BUILD_ID} · UI только после экипировки куба`)
 
 		step("Assets…")
 		local assetsScript = tool:FindFirstChild("Assets")
@@ -1174,6 +1185,8 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 		step("Core…")
 		if type(RemoteLoader.invalidateModule) == "function" then
 			RemoteLoader.invalidateModule("Core/init.lua")
+			RemoteLoader.invalidateModule("SyncAPI.lua")
+			RemoteLoader.invalidateModule("Support/LocalAPIEndpoint.local.client.lua")
 		end
 		local coreScript = tool:WaitForChild("Core") :: ModuleScript
 		local coreEnv = RemoteLoader.run("Core/init.lua", tool, coreScript)
