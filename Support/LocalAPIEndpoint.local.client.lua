@@ -13,10 +13,11 @@ SyncAPI.OnInvoke = function(...)
 		warn("[BT] SyncAPI: рекурсивный Invoke — пропуск")
 		return nil
 	end
+	local args = table.pack(...)
 	invokeDepth += 1
 	local ok, result = pcall(function()
 		SyncModule = SyncModule or require(SyncAPI:WaitForChild("SyncModule"))
-		return SyncModule.PerformAction(Players.LocalPlayer, ...)
+		return SyncModule.PerformAction(Players.LocalPlayer, table.unpack(args, 1, args.n))
 	end)
 	invokeDepth -= 1
 	if not ok then
