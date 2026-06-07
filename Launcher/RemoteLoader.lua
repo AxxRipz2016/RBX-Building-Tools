@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 126
+local SOURCE_CACHE_REV = 127
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -781,15 +781,6 @@ local function validateCoreInitPatterns(source: string): (boolean, string?)
 	end
 	if source:find("%);\r?\n%s*end%s*;%s*\r?\n%s*%-%- Connect the button", 1, true) then
 		return false, "лишний end после Plugin CreateButton (legacy-патч — обнови paste r119+)"
-	end
-	for lineNo = 704, 712 do
-		local line = getSourceLine(source, lineNo)
-		if line then
-			local trimmed = line:match("^%s*(.-)%s*$") or line
-			if trimmed == "end" or trimmed == "end;" then
-				return false, `лишний end на строке {lineNo}`
-			end
-		end
 	end
 	return true
 end
@@ -1959,6 +1950,7 @@ local function getPatchedSource(path: string): string?
 		local okVal, valErr = validateCoreInitPatterns(patched)
 		if not okVal then
 			rawSourceCache[path] = nil
+			failedPaths[path] = valErr or "validateCoreInitPatterns"
 			return nil
 		end
 	end
@@ -2180,7 +2172,8 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 				result = getPatchedSource(path)
 				if not result then
 					rawSourceCache[path] = nil
-					lastErr = "Core/init.lua: патч/compile validate failed (обнови paste до r119+)"
+					lastErr = failedPaths[path]
+						or "Core/init.lua: патч/compile validate failed (обнови paste до r119+)"
 					continue
 				end
 				failedPaths[path] = nil

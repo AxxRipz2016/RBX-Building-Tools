@@ -33,7 +33,7 @@ end
 
 local BASE_URL = "https://raw.githubusercontent.com/AxxRipz2016/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 19
+local ENTRY_REV = 20
 
 local loadFn
 local httpGet

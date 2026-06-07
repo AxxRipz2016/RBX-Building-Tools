@@ -13,7 +13,7 @@ local Config = req("Config")
 local RemoteLoader = req("RemoteLoader")
 
 local RemoteToolBuilder = {}
-local RTB_BUILD_ID = "126"
+local RTB_BUILD_ID = "127"
 
 function RemoteToolBuilder.getBuildId(): string
 	local v = _G.BT_LAUNCHER_VERSION
