@@ -1128,6 +1128,7 @@ RotateTool.ShowHandles = RotateTool.AttachHandles
 RotateTool.HideHandles = RotateTool.HideHandles
 RotateTool.BindShortcutKeys = RotateTool.BindShortcutKeys
 
+RotateTool.__btSetPivot = RotateTool.SetPivot
 RotateTool.__btShowUI = ShowUI
 RotateTool.__btHideUI = HideUI
 RotateTool.__btShowHandles = RotateTool.AttachHandles
