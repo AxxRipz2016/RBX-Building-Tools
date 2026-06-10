@@ -4,6 +4,7 @@ Plugin = Tool.Parent and Tool.Parent:IsA("Plugin") and Tool.Parent or nil
 
 -- Detect mode
 Mode = Plugin and 'Plugin' or 'Tool';
+Core.Mode = Mode; 
 
 -- Load tool completely
 local Indicator = Tool:WaitForChild 'Loaded';

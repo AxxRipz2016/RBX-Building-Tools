@@ -1,4 +1,4 @@
--- BT_TOOLS_REV=138
+-- BT_TOOLS_REV=139
 local Tool = script.Parent.Parent;
 local Core = require(Tool.Core);
 local UserInputService = game:GetService("UserInputService")
@@ -196,6 +196,14 @@ function SetProperty(Property, Value)
 
 		-- Create the change request for this part
 		table.insert(HistoryRecord.After, { Part = Part, [Property] = Value });
+		
+		-- [ИСПРАВЛЕНИЕ]: Принудительно будим физику детали, если мы её открепляем
+		if Property == "Anchored" and Value == false then
+			pcall(function()
+				-- Задаем микроскопическую скорость вниз для пробуждения
+				Part.AssemblyLinearVelocity = Vector3.new(0, -0.01, 0) 
+			end)
+		end
 
 	end;
 
