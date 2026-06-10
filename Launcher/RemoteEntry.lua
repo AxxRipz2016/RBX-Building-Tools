@@ -33,7 +33,7 @@ end
 
 local BASE_URL = "https://raw.githubusercontent.com/AxxRipz2016/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 25
+local ENTRY_REV = 26
 
 local loadFn
 local httpGet
@@ -132,11 +132,41 @@ local function mayUseRemoteFetcher(): boolean
 	return true
 end
 
+local DEFAULT_VERSION = {
+	Launcher = "0",
+	Tool = "3.1.0",
+	Roact = "1.3.0",
+	Cryo = "master",
+	Branch = "development",
+}
+
+local function loadVersionTable()
+	local src = httpGetWithRetry("Launcher/Version.lua")
+	if not isLikelyLuaSource(src) then
+		return DEFAULT_VERSION
+	end
+	local fn, compileErr = loadFn(src, "@Version")
+	if not fn then
+		warn("[BT] Version compile:", compileErr)
+		return DEFAULT_VERSION
+	end
+	local ok, result = pcall(fn)
+	if ok and type(result) == "table" and type(result.Launcher) == "string" then
+		return result
+	end
+	return DEFAULT_VERSION
+end
+
+local Version = loadVersionTable()
+if type(Version) ~= "table" or type(Version.Launcher) ~= "string" then
+	Version = DEFAULT_VERSION
+end
+cacheTag = Version.Launcher
+
 -- Лаунчер-критичные файлы — только прямой HttpGet (не rawSourceCache RemoteLoader)
 local LAUNCHER_DIRECT_HTTP: { [string]: boolean } = {
 	["Launcher/RemoteLoader.lua"] = true,
 	["Launcher/RemoteToolBuilder.lua"] = true,
-	["Launcher/Version.lua"] = true,
 }
 
 local function invalidateRemoteLoaderPath(path: string)
@@ -146,18 +176,18 @@ local function invalidateRemoteLoaderPath(path: string)
 	end
 end
 
-local function validateLauncherSource(path: string, src: string)
+local function validateLauncherSource(path: string, src: string, launcherRev: string)
 	if path == "Launcher/RemoteToolBuilder.lua" then
-		local needle = 'RTB_BUILD_ID = "' .. tostring(Version.Launcher) .. '"'
+		local needle = 'RTB_BUILD_ID = "' .. tostring(launcherRev) .. '"'
 		if not src:find(needle, 1, true) then
 			local got = src:match('RTB_BUILD_ID = "(%d+)"') or "?"
-			error(`[BT] RemoteToolBuilder в ответе r{got}, нужен r{Version.Launcher}`, 0)
+			error(`[BT] RemoteToolBuilder в ответе r{got}, нужен r{launcherRev}`, 0)
 		end
 	elseif path == "Launcher/RemoteLoader.lua" then
-		local needle = "SOURCE_CACHE_REV = " .. tostring(Version.Launcher)
+		local needle = "SOURCE_CACHE_REV = " .. tostring(launcherRev)
 		if not src:find(needle, 1, true) then
 			local got = src:match("SOURCE_CACHE_REV = (%d+)") or "?"
-			error(`[BT] RemoteLoader в ответе rev{got}, нужен rev{Version.Launcher}`, 0)
+			error(`[BT] RemoteLoader в ответе rev{got}, нужен rev{launcherRev}`, 0)
 		end
 	end
 end
@@ -193,7 +223,7 @@ local function loadFromGit(path: string, forceRefresh: boolean?)
 	end
 
 	if LAUNCHER_DIRECT_HTTP[path] then
-		validateLauncherSource(path, src)
+		validateLauncherSource(path, src, Version.Launcher)
 	end
 
 	if not isLikelyLuaSource(src) then
@@ -304,34 +334,6 @@ local function showInstantBootScreen()
 end
 
 local dismissInstantBoot = showInstantBootScreen()
-
-local DEFAULT_VERSION = {
-	Launcher = "0",
-	Tool = "3.1.0",
-	Roact = "1.3.0",
-	Cryo = "master",
-	Branch = "development",
-}
-
-local function loadVersionTable()
-	local src = httpGetWithRetry("Launcher/Version.lua")
-	if not isLikelyLuaSource(src) then
-		return DEFAULT_VERSION
-	end
-	local fn, compileErr = loadFn(src, "@Version")
-	if not fn then
-		warn("[BT] Version compile:", compileErr)
-		return DEFAULT_VERSION
-	end
-	local ok, result = pcall(fn)
-	if ok and type(result) == "table" and type(result.Launcher) == "string" then
-		return result
-	end
-	return DEFAULT_VERSION
-end
-
-local Version = loadVersionTable()
-cacheTag = Version.Launcher
 
 local ui
 local initOk, initErr = pcall(function()
