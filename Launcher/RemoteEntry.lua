@@ -33,7 +33,7 @@ end
 
 local BASE_URL = "https://raw.githubusercontent.com/AxxRipz2016/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 26
+local ENTRY_REV = 27
 
 local loadFn
 local httpGet
@@ -176,20 +176,50 @@ local function invalidateRemoteLoaderPath(path: string)
 	end
 end
 
-local function validateLauncherSource(path: string, src: string, launcherRev: string)
+local function launcherSourceRev(path: string, src: string, launcherRev: string): (boolean, string)
 	if path == "Launcher/RemoteToolBuilder.lua" then
 		local needle = 'RTB_BUILD_ID = "' .. tostring(launcherRev) .. '"'
-		if not src:find(needle, 1, true) then
-			local got = src:match('RTB_BUILD_ID = "(%d+)"') or "?"
-			error(`[BT] RemoteToolBuilder в ответе r{got}, нужен r{launcherRev}`, 0)
+		if src:find(needle, 1, true) then
+			return true, launcherRev
 		end
-	elseif path == "Launcher/RemoteLoader.lua" then
-		local needle = "SOURCE_CACHE_REV = " .. tostring(launcherRev)
-		if not src:find(needle, 1, true) then
-			local got = src:match("SOURCE_CACHE_REV = (%d+)") or "?"
-			error(`[BT] RemoteLoader в ответе rev{got}, нужен rev{launcherRev}`, 0)
-		end
+		return false, src:match('RTB_BUILD_ID = "(%d+)"') or "?"
 	end
+	if path == "Launcher/RemoteLoader.lua" then
+		local needle = "SOURCE_CACHE_REV = " .. tostring(launcherRev)
+		if src:find(needle, 1, true) then
+			return true, launcherRev
+		end
+		return false, src:match("SOURCE_CACHE_REV = (%d+)") or "?"
+	end
+	return true, launcherRev
+end
+
+-- Executor часто кэширует HttpGet без query — качаем пока rev в теле не совпадёт
+local function fetchLauncherSourceValidated(path: string, launcherRev: string): string
+	local lastGot = "?"
+	for attempt = 1, 10 do
+		local bust = `{launcherRev}_lc{attempt}_{tostring(tick())}`
+		local urls = {
+			`{BASE_URL}{path}?bt={bust}&e={ENTRY_REV}`,
+			`https://cdn.jsdelivr.net/gh/{GITHUB_REPO}@{GITHUB_BRANCH}/{path}?bt={bust}`,
+			`https://raw.githubusercontent.com/{GITHUB_REPO}/refs/heads/{GITHUB_BRANCH}/{path}?bt={bust}&nc={ENTRY_REV}`,
+		}
+		for _, url in urls do
+			local ok, body = pcall(httpGet, url)
+			if ok and type(body) == "string" and isLikelyLuaSource(body) then
+				local valid, got = launcherSourceRev(path, body, launcherRev)
+				if valid then
+					return body
+				end
+				lastGot = got
+			end
+		end
+		task.wait(0.25 * attempt)
+	end
+	error(
+		`[BT] {path}: кэш HttpGet — в ответе rev{lastGot}, нужен rev{launcherRev}. Rejoin + новый paste RemoteEntry (ENTRY_REV>={ENTRY_REV})`,
+		0
+	)
 end
 
 local function loadFromGit(path: string, forceRefresh: boolean?)
@@ -218,12 +248,10 @@ local function loadFromGit(path: string, forceRefresh: boolean?)
 		else
 			src = activeLoader.getSource(path) or ""
 		end
+	elseif LAUNCHER_DIRECT_HTTP[path] then
+		src = fetchLauncherSourceValidated(path, Version.Launcher)
 	else
 		src = httpGetWithRetry(path)
-	end
-
-	if LAUNCHER_DIRECT_HTTP[path] then
-		validateLauncherSource(path, src, Version.Launcher)
 	end
 
 	if not isLikelyLuaSource(src) then
