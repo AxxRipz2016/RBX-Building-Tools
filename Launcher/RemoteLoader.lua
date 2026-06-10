@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 130
+local SOURCE_CACHE_REV = 131
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -34,6 +34,8 @@ local NO_STUB_PATHS: { [string]: boolean } = {
 	["SyncAPI.lua"] = true,
 	["Tools/Move/init.lua"] = true,
 	["Support/Assets.lua"] = true,
+	["Vendor/Roact/src/init.lua"] = true,
+	["Libraries/Cryo/init.lua"] = true,
 }
 
 local CRITICAL_PATHS = {
@@ -963,7 +965,9 @@ local function patchToolFnExports(path: string, source: string): string
 
 	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
 		if source:find("\nfunction " .. fnName .. "%(", 1, true) then
-			source = source:gsub(fnName .. "%(", toolName .. "." .. fnName .. "(")
+			-- Только вызовы с отступом (Equip/Unequip/тело), не «function Name(» и не экспорт
+			source = source:gsub("\n\t\t" .. fnName .. "%(", "\n\t\t" .. toolName .. "." .. fnName .. "(")
+			source = source:gsub("\n\t" .. fnName .. "%(", "\n\t" .. toolName .. "." .. fnName .. "(")
 		end
 	end
 

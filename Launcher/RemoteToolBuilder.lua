@@ -13,7 +13,7 @@ local Config = req("Config")
 local RemoteLoader = req("RemoteLoader")
 
 local RemoteToolBuilder = {}
-local RTB_BUILD_ID = "130"
+local RTB_BUILD_ID = "131"
 
 function RemoteToolBuilder.getBuildId(): string
 	return RTB_BUILD_ID
@@ -349,6 +349,27 @@ local function buildModuleTree(tool: Tool, paths: { string })
 	end
 end
 
+local function warmRoactModule(tool: Tool)
+	local vendor = tool:FindFirstChild("Vendor")
+	if not vendor then
+		warn("[BT] warmRoact: нет Vendor")
+		return
+	end
+	local roactInst = vendor:FindFirstChild("Roact")
+	if not roactInst or not roactInst:IsA("ModuleScript") then
+		warn("[BT] warmRoact: ModuleScript Roact не найден")
+		return
+	end
+	local path = roactInst:GetAttribute("BTPath") or "Vendor/Roact/src/init.lua"
+	local ok, result = pcall(RemoteLoader.run, path, tool, roactInst)
+	if not ok then
+		error(`[BT] Roact не загружен: {result}`, 0)
+	end
+	if type(result) ~= "table" or type(result.createElement) ~= "function" or type(result.mount) ~= "function" then
+		error("[BT] Roact: createElement/mount не функции", 0)
+	end
+end
+
 local UI_SCREEN_NAME = "Building Tools by F3X (UI)"
 local uiGateConn: RBXScriptConnection? = nil
 
@@ -548,6 +569,7 @@ function RemoteToolBuilder.Build(
 		onMessage("Предзагрузка Roact…")
 	end
 	RemoteLoader.preloadByPrefixes(paths, { "Vendor/Roact/" }, onFile)
+	warmRoactModule(tool)
 
 	if tool:GetAttribute("BT_LocalOnly") then
 		if onMessage then
