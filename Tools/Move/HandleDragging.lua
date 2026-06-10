@@ -56,6 +56,14 @@ local BoundingBoxAPI = setmetatable({
 	end,
 })
 
+local function safeGetBoundingBox()
+	local fn = BoundingBoxAPI and BoundingBoxAPI.GetBoundingBox
+	if type(fn) == "function" then
+		return fn()
+	end
+	return nil
+end
+
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'
 local MoveUtil = require(script.Parent:WaitForChild 'Util')
@@ -108,7 +116,10 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 
 	-- Just attach and show the handles if they already exist
 	if self.Handles then
-		self.Handles:BlacklistObstacle(BoundingBoxAPI.GetBoundingBox())
+		local box = safeGetBoundingBox()
+		if box then
+			self.Handles:BlacklistObstacle(box)
+		end
 		self.Handles:SetAdornee(Part)
 		return
 	end
@@ -124,7 +135,7 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 		self.IsHandleDragging = true
 
 		-- Freeze bounding box extents while dragging
-		if BoundingBoxAPI.GetBoundingBox() then
+		if safeGetBoundingBox() then
 			local InitialExtentsSize, InitialExtentsCFrame =
 				BoundingBoxAPI.CalculateExtents(Selection.Parts, BoundingBoxAPI.StaticExtents)
 			self.InitialExtentsSize = InitialExtentsSize
@@ -174,8 +185,11 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 		self.Tool.DragChanged:Fire(Distance)
 
 		-- Update bounding box if enabled in global axes movements
-		if self.Tool.Axes == 'Global' and BoundingBoxAPI.GetBoundingBox() then
-			BoundingBoxAPI.GetBoundingBox().CFrame = self.InitialExtentsCFrame + (AxisMultipliers[Face] * Distance)
+		if self.Tool.Axes == 'Global' then
+			local dragBox = safeGetBoundingBox()
+			if dragBox then
+				dragBox.CFrame = self.InitialExtentsCFrame + (AxisMultipliers[Face] * Distance)
+			end
 		end
 
 	end
@@ -204,8 +218,14 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 		self.Tool:RegisterChange()
 
 		-- Resume bounding box updates
-		BoundingBoxAPI.RecalculateStaticExtents()
-		BoundingBoxAPI.ResumeMonitoring()
+		if BoundingBoxAPI then
+			if type(BoundingBoxAPI.RecalculateStaticExtents) == "function" then
+				BoundingBoxAPI.RecalculateStaticExtents()
+			end
+			if type(BoundingBoxAPI.ResumeMonitoring) == "function" then
+				BoundingBoxAPI.ResumeMonitoring()
+			end
+		end
 	end
 
 	-- Create the handles

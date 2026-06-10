@@ -66,6 +66,14 @@ local BoundingBoxAPI = setmetatable({
 	end,
 })
 
+local function safeGetBoundingBox()
+	local fn = BoundingBoxAPI and BoundingBoxAPI.GetBoundingBox
+	if type(fn) == "function" then
+		return fn()
+	end
+	return nil
+end
+
 -- Services
 local ContextActionService = game:GetService 'ContextActionService'
 local Workspace = game:GetService 'Workspace'
@@ -146,7 +154,7 @@ function RotateTool.Unequip()
 
 end;
 
-function ClearConnections()
+function RotateTool.ClearConnections()
 	-- Clears out temporary connections
 
 	for ConnectionKey, Connection in pairs(Connections) do
@@ -194,13 +202,13 @@ local function ShowUI()
 	-- Add functionality to the pivot option switch
 	local PivotSwitch = RotateTool.UI.PivotOption;
 	PivotSwitch.Center.Button.MouseButton1Down:Connect(function ()
-		SetPivot('Center');
+		RotateTool.SetPivot('Center');
 	end);
 	PivotSwitch.Local.Button.MouseButton1Down:Connect(function ()
-		SetPivot('Local');
+		RotateTool.SetPivot('Local');
 	end);
 	PivotSwitch.Last.Button.MouseButton1Down:Connect(function ()
-		SetPivot('Last');
+		RotateTool.SetPivot('Last');
 	end);
 
 	-- Add functionality to the increment input
@@ -309,7 +317,7 @@ function UpdateUI()
 
 end;
 
-function SetPivot(PivotMode)
+function RotateTool.SetPivot(PivotMode)
 	-- Sets the given rotation pivot mode
 
 	-- Update setting
@@ -327,26 +335,26 @@ function SetPivot(PivotMode)
 
 	-- For center mode, use bounding box handles
 	if PivotMode == 'Center' then
-		BoundingBoxAPI.StartBoundingBox(AttachHandles);
+		BoundingBoxAPI.StartBoundingBox(RotateTool.AttachHandles);
 
 	-- For local mode, use focused part handles
 	elseif PivotMode == 'Local' then
-		AttachHandles(Selection.Focus, true); 
+		RotateTool.AttachHandles(Selection.Focus, true); 
 
 	-- For last mode, use focused part handles
 	elseif PivotMode == 'Last' then
-		AttachHandles(CustomPivotPoint and (RotateTool.Handles and RotateTool.Handles.Adornee) or Selection.Focus, true);
+		RotateTool.AttachHandles(CustomPivotPoint and (RotateTool.Handles and RotateTool.Handles.Adornee) or Selection.Focus, true);
 	end;
 
 end;
 
-function AttachHandles(Part, Autofocus)
+function RotateTool.AttachHandles(Part, Autofocus)
 	-- Creates and attaches handles to `Part`, and optionally automatically attaches to the focused part
 
 	-- Enable autofocus if requested and not already on
 	if Autofocus and not Connections.AutofocusHandle then
 		Connections.AutofocusHandle = Selection.FocusChanged:Connect(function ()
-			AttachHandles(Selection.Focus, true);
+			RotateTool.AttachHandles(Selection.Focus, true);
 		end);
 
 	-- Disable autofocus if not requested and on
@@ -359,7 +367,10 @@ function AttachHandles(Part, Autofocus)
 
 	-- Just attach and show the handles if they already exist
 	if RotateTool.Handles then
-		RotateTool.Handles:BlacklistObstacle(BoundingBoxAPI.GetBoundingBox())
+		local box = safeGetBoundingBox()
+		if box then
+			RotateTool.Handles:BlacklistObstacle(box)
+		end
 		RotateTool.Handles:SetAdornee(Part)
 		return
 	end
@@ -375,7 +386,8 @@ function AttachHandles(Part, Autofocus)
 		HandleRotating = true;
 
 		-- Freeze bounding box extents while rotating
-		if BoundingBoxAPI.GetBoundingBox() then
+		local dragBBox = safeGetBoundingBox()
+		if dragBBox then
 			InitialExtentsSize, InitialExtentsCFrame = BoundingBoxAPI.CalculateExtents(Selection.Parts, BoundingBoxAPI.StaticExtents)
 			BoundingBoxAPI.PauseMonitoring();
 		end;
@@ -393,7 +405,10 @@ function AttachHandles(Part, Autofocus)
 
 		-- Set the pivot point to the center of the selection if in Center mode
 		if RotateTool.Pivot == 'Center' then
-			PivotPoint = BoundingBoxAPI.GetBoundingBox().CFrame;
+			local centerBox = safeGetBoundingBox()
+			if centerBox then
+				PivotPoint = centerBox.CFrame;
+			end
 
 		-- Set the pivot point to the center of the focused part if in Last mode
 		elseif RotateTool.Pivot == 'Last' and not CustomPivotPoint then
@@ -491,14 +506,14 @@ function AttachHandles(Part, Autofocus)
 		Color = RotateTool.Color.Color,
 		Parent = Core.UIContainer,
 		Adornee = Part,
-		ObstacleBlacklist = { BoundingBoxAPI.GetBoundingBox() },
+		ObstacleBlacklist = { safeGetBoundingBox() },
 		OnDragStart = OnHandleDragStart,
 		OnDrag = OnHandleDrag,
 		OnDragEnd = OnHandleDragEnd
 	})
 end
 
-function HideHandles()
+function RotateTool.HideHandles()
 	-- Hides the resizing handles
 
 	-- Make sure handles exist and are visible
@@ -615,7 +630,7 @@ function GetHandleDisplayDelta(HandleRotation)
 
 end;
 
-function BindShortcutKeys()
+function RotateTool.BindShortcutKeys()
 	-- Enables useful shortcut keys for this tool
 
 	-- Track user input while this tool is equipped
@@ -641,13 +656,13 @@ function BindShortcutKeys()
 
 			-- Toggle the current axis mode
 			if RotateTool.Pivot == 'Center' then
-				SetPivot('Local');
+				RotateTool.SetPivot('Local');
 
 			elseif RotateTool.Pivot == 'Local' then
-				SetPivot('Last');
+				RotateTool.SetPivot('Last');
 
 			elseif RotateTool.Pivot == 'Last' then
-				SetPivot('Center');
+				RotateTool.SetPivot('Center');
 			end;
 
 		-- Nudge around X axis if the 8 button on the keypad is pressed
@@ -738,7 +753,7 @@ function StartSnapping()
 			Size = Vector3.new(5, 1, 5)
 		};
 		SetPivot 'Last';
-		AttachHandles(Part, true);
+		RotateTool.AttachHandles(Part, true);
 
 		-- Maintain the part in memory to prevent garbage collection
 		GCBypass = { Part };
@@ -1046,14 +1061,9 @@ function GetIncrementMultiple(Number, Increment)
 	return Number;
 end;
 
--- BT remote export helpers v2
+-- BT remote export helpers v3
 RotateTool.ShowUI = ShowUI
 RotateTool.HideUI = HideUI
-RotateTool.BindShortcutKeys = BindShortcutKeys
-RotateTool.HideHandles = HideHandles
-RotateTool.SetPivot = SetPivot
-RotateTool.ClearConnections = ClearConnections
-RotateTool.AttachHandles = AttachHandles
 
 -- Return the tool
 return RotateTool;

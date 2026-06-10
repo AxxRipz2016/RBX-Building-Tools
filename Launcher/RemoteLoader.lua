@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 133
+local SOURCE_CACHE_REV = 134
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -954,7 +954,7 @@ local TOOL_GLOBAL_FN_EXPORTS = {
 	"AttachHandles",
 }
 
-local TOOL_EXPORT_MARKER = "BT remote export helpers v2"
+local TOOL_EXPORT_MARKER = "BT remote export helpers v3"
 
 local function stripOldToolExportBlock(source: string, toolName: string): string
 	local marker = "\n-- BT remote export helpers"
@@ -969,11 +969,25 @@ local function stripOldToolExportBlock(source: string, toolName: string): string
 	return source:sub(1, start) .. source:sub(ret)
 end
 
-local function repairBrokenR130ToolPatches(source: string, toolName: string): string
+local function repairBrokenToolPatches(source: string, toolName: string): string
 	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
 		source = source:gsub("\nfunction " .. toolName .. "." .. fnName .. "%(", "\nfunction " .. fnName .. "(")
 	end
-	return stripOldToolExportBlock(source, toolName)
+	source = stripOldToolExportBlock(source, toolName)
+	-- v2 затирал методы: RotateTool.SetPivot = SetPivot при nil SetPivot
+	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
+		source = source:gsub("\n" .. toolName .. "." .. fnName .. " = " .. fnName .. "\n", "\n")
+	end
+	return source
+end
+
+local function promoteToolFnsToMethods(source: string, toolName: string): string
+	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
+		if source:find("\nfunction " .. fnName .. "%(", 1, true) then
+			source = source:gsub("\nfunction " .. fnName .. "%(", "\nfunction " .. toolName .. "." .. fnName .. "(")
+		end
+	end
+	return source
 end
 
 local function patchToolFnExports(path: string, source: string): string
@@ -991,10 +1005,9 @@ local function patchToolFnExports(path: string, source: string): string
 	end
 
 	if source:find("BT remote export helpers", 1, true)
-		or source:find("\nfunction " .. toolName .. ".SetPivot%(", 1, true)
-		or source:find("\nfunction " .. toolName .. ".AttachHandles%(", 1, true)
+		or source:find("\n" .. toolName .. ".SetPivot = SetPivot", 1, true)
 	then
-		source = repairBrokenR130ToolPatches(source, toolName)
+		source = repairBrokenToolPatches(source, toolName)
 	end
 
 	if source:find("local function ShowUI", 1, true) then
@@ -1004,22 +1017,20 @@ local function patchToolFnExports(path: string, source: string): string
 	end
 
 	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
-		if source:find("\nfunction " .. fnName .. "%(", 1, true) then
-			-- Только вызовы с отступом (Equip/Unequip/тело), не «function Name(» и не экспорт
+		if source:find("\nfunction " .. fnName .. "%(", 1, true)
+			or source:find("\nfunction " .. toolName .. "." .. fnName .. "%(", 1, true)
+		then
 			source = source:gsub("\n\t\t" .. fnName .. "%(", "\n\t\t" .. toolName .. "." .. fnName .. "(")
 			source = source:gsub("\n\t" .. fnName .. "%(", "\n\t" .. toolName .. "." .. fnName .. "(")
 		end
 	end
 
+	source = promoteToolFnsToMethods(source, toolName)
+
 	local exportLines: { string } = {}
 	if source:find("local function ShowUI", 1, true) then
 		table.insert(exportLines, toolName .. ".ShowUI = ShowUI")
 		table.insert(exportLines, toolName .. ".HideUI = HideUI")
-	end
-	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
-		if source:find("\nfunction " .. fnName .. "%(", 1, true) then
-			table.insert(exportLines, toolName .. "." .. fnName .. " = " .. fnName)
-		end
 	end
 
 	if #exportLines > 0 then
