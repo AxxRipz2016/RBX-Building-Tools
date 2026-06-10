@@ -1,5 +1,6 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+-- BT_TOOLS_REV=138
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
 local UI = Tool:WaitForChild('UI')
 local Libraries = Tool:WaitForChild('Libraries')
@@ -14,9 +15,9 @@ local Dropdown = require(UI:WaitForChild('Dropdown'))
 local Signal = require(Libraries:WaitForChild('Signal'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
@@ -38,6 +39,25 @@ Lets you create new parts.<font size="6"><br /></font>
 
 -- Container for temporary connections (disconnected automatically)
 local Connections = {};
+
+-- State variables (previously implicit globals)
+local DragNewParts
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local EnableClickCreation
+local CreatePart
+
+local function btSetGuiVisible(gui, visible)
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function NewPartTool:Equip()
 	-- Enables the tool's equipped functionality
@@ -78,7 +98,7 @@ function NewPartTool:ShowUI()
 	if self.UI then
 
 		-- Reveal the UI
-		self.UI.Visible = true;
+		btSetGuiVisible(self.UI, true);
 
 		-- Skip UI creation
 		return;
@@ -88,10 +108,10 @@ function NewPartTool:ShowUI()
 	-- Create the UI
 	self.UI = Core.Tool.Interfaces.BTNewPartToolGUI:Clone()
 	self.UI.Parent = Core.UI
-	self.UI.Visible = true
+	btSetGuiVisible(self.UI, true);
 
 	-- Creatable part types
-	Types = {
+	local Types = {
 		'Normal';
 		'Truss';
 		'Wedge';
@@ -137,7 +157,7 @@ function NewPartTool:HideUI()
 	end
 
 	-- Hide the UI
-	self.UI.Visible = false
+	btSetGuiVisible(self.UI, false);
 
 end;
 
@@ -190,19 +210,19 @@ function CreatePart(Type)
 	local HistoryRecord = {
 		Part = Part;
 
-		Unapply = function (HistoryRecord)
+		Unapply = function (Record)
 			-- Reverts this change
 
 			-- Remove the part
-			Core.SyncAPI:Invoke('Remove', { HistoryRecord.Part });
+			Core.SyncAPI:Invoke('Remove', { Record.Part });
 
 		end;
 
-		Apply = function (HistoryRecord)
+		Apply = function (Record)
 			-- Reapplies this change
 
 			-- Restore the part
-			Core.SyncAPI:Invoke('UndoRemove', { HistoryRecord.Part });
+			Core.SyncAPI:Invoke('UndoRemove', { Record.Part });
 
 		end;
 

@@ -1,21 +1,21 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+-- BT_TOOLS_REV=138
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
+local UserInputService = game:GetService("UserInputService")
 
 -- Libraries
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
 local AnchorTool = {
-
 	Name = 'Anchor Tool';
 	Color = BrickColor.new 'Really black';
-
 }
 
 AnchorTool.ManualText = [[<font face="GothamBlack" size="16">Anchor Tool  🛠</font>
@@ -25,6 +25,42 @@ Lets you anchor and unanchor parts.<font size="6"><br /></font>
 
 -- Container for temporary connections (disconnected automatically)
 local Connections = {};
+
+-- State variables (previously implicit globals)
+local UIUpdater
+local HistoryRecord
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local ShowUI
+local HideUI
+local UpdateUI
+local SetProperty
+local BindShortcutKeys
+local ToggleAnchors
+local TrackChange
+local RegisterChange
+
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
+
+local function btSetGuiVisible(gui, visible)
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function AnchorTool.Equip()
 	-- Enables the tool's equipped functionality
@@ -54,17 +90,17 @@ function ClearConnections()
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if AnchorTool.UI then
 
 		-- Reveal the UI
-		AnchorTool.UI.Visible = true;
+		btSetGuiVisible(AnchorTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
-		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+		UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 		-- Skip UI creation
 		return;
@@ -74,7 +110,7 @@ local function ShowUI()
 	-- Create the UI
 	AnchorTool.UI = Core.Tool.Interfaces.BTAnchorToolGUI:Clone();
 	AnchorTool.UI.Parent = Core.UI;
-	AnchorTool.UI.Visible = true;
+	btSetGuiVisible(AnchorTool.UI, true);
 
 	-- References to UI elements
 	local AnchorButton = AnchorTool.UI.Status.Anchored.Button;
@@ -93,7 +129,7 @@ local function ShowUI()
 	ListenForManualWindowTrigger(AnchorTool.ManualText, AnchorTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-	UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+	UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 end;
 
@@ -123,7 +159,7 @@ function UpdateUI()
 
 end;
 
-local function HideUI()
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -132,11 +168,12 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(AnchorTool.UI, false);
+	btSetGuiVisible(AnchorTool.UI, false);
 
 	-- Stop updating the UI
 	if UIUpdater and type(UIUpdater.Stop) == "function" then
 		UIUpdater:Stop();
+		UIUpdater = nil;
 	end
 
 end;

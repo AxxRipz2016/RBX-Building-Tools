@@ -1,4 +1,4 @@
--- BT_ROTATE_REV=137
+-- BT_ROTATE_REV=138
 Tool = script.Parent.Parent;
 Core = require(Tool.Core);
 SnapTracking = require(Tool.Core.Snapping);

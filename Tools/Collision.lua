@@ -1,14 +1,44 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+-- BT_TOOLS_REV=138
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
+local UserInputService = game:GetService("UserInputService")
 
 -- Libraries
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
+
+-- Container for temporary connections (disconnected automatically)
+local Connections = {};
+
+-- State variables (previously implicit globals)
+local UIUpdater
+local HistoryRecord
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local ShowUI
+local HideUI
+local UpdateUI
+local SetProperty
+local BindShortcutKeys
+local ToggleCollision
+local TrackChange
+local RegisterChange
+
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
 
 local function btSetGuiVisible(gui, visible)
 	if gui == nil or typeof(gui) ~= "Instance" then
@@ -31,9 +61,6 @@ CollisionTool.ManualText = [[<font face="GothamBlack" size="16">Collision Tool  
 Lets you change whether parts collide with one another.<font size="6"><br /></font>
 
 <b>TIP:</b> Press <b>Enter</b> to toggle collision quickly.]]
-
--- Container for temporary connections (disconnected automatically)
-local Connections = {};
 
 function CollisionTool.Equip()
 	-- Enables the tool's equipped functionality
@@ -63,7 +90,7 @@ function ClearConnections()
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
@@ -73,7 +100,7 @@ local function ShowUI()
 		btSetGuiVisible(CollisionTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
-		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+		UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 		-- Skip UI creation
 		return;
@@ -102,7 +129,7 @@ local function ShowUI()
 	ListenForManualWindowTrigger(CollisionTool.ManualText, CollisionTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-	UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+	UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 end;
 
@@ -132,7 +159,7 @@ function UpdateUI()
 
 end;
 
-local function HideUI()
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -146,6 +173,7 @@ local function HideUI()
 	-- Stop updating the UI
 	if UIUpdater and type(UIUpdater.Stop) == "function" then
 		UIUpdater:Stop();
+		UIUpdater = nil;
 	end
 
 end;
