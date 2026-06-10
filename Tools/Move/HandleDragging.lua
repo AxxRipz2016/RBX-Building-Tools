@@ -1,15 +1,30 @@
+-- BT_MOVE_REV=137
 local Tool = script.Parent.Parent.Parent
 
 -- API
 local Core = require(Tool.Core)
 local Selection = Core.Selection
 local Security = Core.Security
+
 local function GetBoundingBoxAPI()
 	if type(Core.GetBoundingBoxAPI) == "function" then
 		local api = Core.GetBoundingBoxAPI()
 		if api then return api end
 	end
-	return Core.BoundingBox
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = _G.__bt_tool or Tool
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			return mod
+		end
+	end
+	return nil
 end
 
 local function callBoundingBox(method, ...)
@@ -234,7 +249,7 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 		Color = self.Tool.Color.Color,
 		Parent = Core.UIContainer,
 		Adornee = Part,
-		ObstacleBlacklist = { BoundingBoxAPI.GetBoundingBox() },
+		ObstacleBlacklist = { safeGetBoundingBox() },
 		OnDragStart = OnHandleDragStart,
 		OnDrag = OnHandleDrag,
 		OnDragEnd = OnHandleDragEnd

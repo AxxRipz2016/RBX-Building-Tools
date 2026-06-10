@@ -1,3 +1,4 @@
+-- BT_MOVE_REV=137
 local Tool = script.Parent.Parent.Parent
 local UserInputService = game:GetService 'UserInputService'
 local ContextActionService = game:GetService 'ContextActionService'
@@ -8,11 +9,26 @@ local Core = require(Tool.Core)
 local Selection = Core.Selection
 local Security = Core.Security
 local SnapTracking = require(Tool.Core.Snapping)
+
 local function GetBoundingBoxAPI()
 	if type(Core.GetBoundingBoxAPI) == "function" then
-		return Core.GetBoundingBoxAPI()
+		local api = Core.GetBoundingBoxAPI()
+		if api then return api end
 	end
-	return Core.BoundingBox
+	if type(Core.BoundingBox) == "table" then
+		return Core.BoundingBox
+	end
+	local rbxTool = _G.__bt_tool or Tool
+	local coreInst = rbxTool and rbxTool:FindFirstChild("Core")
+	local bbInst = coreInst and coreInst:FindFirstChild("BoundingBox")
+	if bbInst and bbInst:IsA("ModuleScript") then
+		local ok, mod = pcall(require, bbInst)
+		if ok and type(mod) == "table" then
+			Core.BoundingBox = mod
+			return mod
+		end
+	end
+	return nil
 end
 
 -- Libraries
