@@ -5,6 +5,9 @@ Plugin = Tool.Parent and Tool.Parent:IsA("Plugin") and Tool.Parent or nil
 -- Detect mode
 Mode = Plugin and 'Plugin' or 'Tool';
 Core.Mode = Mode; 
+if type(_G.Core) == "table" then
+	_G.Core.Mode = Mode
+end
 
 -- Load tool completely
 local Indicator = Tool:WaitForChild 'Loaded';
