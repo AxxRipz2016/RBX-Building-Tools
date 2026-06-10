@@ -415,7 +415,7 @@ end
 local SelectionBoxPool = InstancePool.new(60, function ()
 	return Make 'SelectionBox' {
 		Name = 'BTSelectionBox',
-		Parent = GetCore().UI,
+		Parent = nil, -- Инициализируем без родителя, родитель задается динамически
 		LineThickness = 0.025,
 		Transparency = 0.5,
 		Color = Selection.Color
@@ -426,14 +426,15 @@ end)
 function SelectionBoxPool.Cleanup(SelectionBox)
 	SelectionBox.Adornee = nil
 	SelectionBox.Visible = nil
-	SelectionBox.Parent = nil -- [ИСПРАВЛЕНИЕ]: Сбрасываем родителя при возвращении в пул
+	SelectionBox.Parent = nil -- Сбрасываем родителя при возвращении в пул
 end
 
 function CreateSelectionBoxes(Item)
 	-- Creates selection boxes for the given item
 
-	-- Only create selection boxes if in tool mode
-	if GetCore().Mode ~= 'Tool' then
+	-- Проверка режима с фолбеком на "Tool", если лоадер не успел синхронизировать _G.Core.Mode
+	local CurrentMode = GetCore().Mode or 'Tool'
+	if CurrentMode ~= 'Tool' then
 		return;
 	end;
 
@@ -450,16 +451,16 @@ function CreateSelectionBoxes(Item)
 
 	-- Create selection box for each targetable item
 	local SelectionBoxes = {}
-	for Item in pairs(Items) do
+	for TargetItem in pairs(Items) do
 
 		-- Create the selection box
 		local SelectionBox = SelectionBoxPool:Get()
-		SelectionBox.Adornee = Item
-		SelectionBox.Parent = GetCore().UI -- [ИСПРАВЛЕНИЕ]: Устанавливаем актуальный родительский UI ScreenGui
+		SelectionBox.Adornee = TargetItem
+		SelectionBox.Parent = TargetItem -- [ИСПРАВЛЕНИЕ]: Помещаем SelectionBox прямо внутрь выделяемого парта. Это гарантирует отображение обводки.
 		SelectionBox.Visible = true
 
 		-- Register the outline
-		SelectionBoxes[Item] = SelectionBox
+		SelectionBoxes[TargetItem] = SelectionBox
 
 	end
 
