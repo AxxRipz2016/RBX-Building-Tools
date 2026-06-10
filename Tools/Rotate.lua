@@ -1,4 +1,3 @@
--- BT_ROTATE_REV=135
 Tool = script.Parent.Parent;
 Core = require(Tool.Core);
 SnapTracking = require(Tool.Core.Snapping);
@@ -86,9 +85,9 @@ local Make = require(Libraries:WaitForChild 'Make')
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
@@ -129,15 +128,51 @@ Press <b><i>R</i></b> and click on a part's <b>snap point</b> to rotate around i
 -- Container for temporary connections (disconnected automatically)
 local Connections = {};
 
+-- State variables (previously implicit globals)
+local UIUpdater
+local CustomPivotPoint
+local HandleRotating
+local HistoryRecord
+local SnappedPoint
+local GCBypass
+local HandleDirection
+local HandleFirstAngle
+local LastDisplayedRotation
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnection
+local ShowUI
+local HideUI
+local UpdateUI
+local RotateSelectionAroundPivot
+local GetHandleDisplayDelta
+local StartSnapping
+local SetAxisAngle
+local NudgeSelectionByAxis
+local TrackChange
+local RegisterChange
+local PrepareSelectionForRotating
+local GetIncrementMultiple
+
 function RotateTool.Equip()
 	-- Enables the tool's equipped functionality
 
 	-- Set our current pivot mode
-	RotateTool.SetPivot(RotateTool.Pivot);
+	local setPivot = RotateTool.__btSetPivot or RotateTool.SetPivot
+	if type(setPivot) == "function" then
+		setPivot(RotateTool.Pivot);
+	end
 
 	-- Start up our interface
-	RotateTool.ShowUI();
-	RotateTool.BindShortcutKeys();
+	local showUI = RotateTool.__btShowUI or RotateTool.ShowUI or ShowUI
+	if type(showUI) == "function" then
+		showUI();
+	end
+
+	local bindKeys = RotateTool.__btBindShortcutKeys or RotateTool.BindShortcutKeys
+	if type(bindKeys) == "function" then
+		bindKeys();
+	end
 
 end;
 
@@ -145,13 +180,28 @@ function RotateTool.Unequip()
 	-- Disables the tool's equipped functionality
 
 	-- Clear unnecessary resources
-	RotateTool.HideUI();
-	RotateTool.HideHandles();
-	RotateTool.ClearConnections();
+	local hideUI = RotateTool.__btHideUI or RotateTool.HideUI or HideUI
+	if type(hideUI) == "function" then
+		hideUI();
+	end
+
+	local hideHandles = RotateTool.__btHideHandles or RotateTool.HideHandles
+	if type(hideHandles) == "function" then
+		hideHandles();
+	end
+
+	local clearConnections = RotateTool.ClearConnections
+	if type(clearConnections) == "function" then
+		clearConnections();
+	end
+
 	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then
 		BoundingBoxAPI.ClearBoundingBox();
 	end
-	SnapTracking.StopTracking();
+
+	if type(SnapTracking) == "table" and type(SnapTracking.StopTracking) == "function" then
+		SnapTracking.StopTracking();
+	end
 
 end;
 
@@ -178,7 +228,7 @@ function ClearConnection(ConnectionKey)
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
@@ -251,7 +301,7 @@ local function ShowUI()
 
 end;
 
-local function HideUI()
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -263,7 +313,9 @@ local function HideUI()
 	Core.BT_SetGuiVisible(RotateTool.UI, false);
 
 	-- Stop updating the UI
-	UIUpdater:Stop();
+	if UIUpdater and type(UIUpdater.Stop) == "function" then
+		UIUpdater:Stop();
+	end
 
 end;
 
@@ -376,14 +428,17 @@ function RotateTool.AttachHandles(Part, Autofocus)
 		return
 	end
 
+	-- State shared across drag events
 	local AreaPermissions
+	local InitialPartStates, InitialModelStates
+	local PivotPoint
+	local InitialExtentsSize, InitialExtentsCFrame
+
 	local function OnHandleDragStart()
 		-- Prepare for rotating parts when the handle is clicked
 
 		-- Prevent selection
-		if Core.Targeting and type(Core.Targeting.CancelSelecting) == "function" then
-			Core.Targeting.CancelSelecting();
-		end
+		Core.Targeting.CancelSelecting();
 
 		-- Indicate rotating via handle
 		HandleRotating = true;
@@ -473,9 +528,7 @@ function RotateTool.AttachHandles(Part, Autofocus)
 		end
 
 		-- Prevent selection
-		if Core.Targeting and type(Core.Targeting.CancelSelecting) == "function" then
-			Core.Targeting.CancelSelecting();
-		end
+		Core.Targeting.CancelSelecting();
 
 		-- Disable rotating
 		HandleRotating = false;
@@ -757,7 +810,7 @@ function StartSnapping()
 			CFrame = SnappedPoint,
 			Size = Vector3.new(5, 1, 5)
 		};
-		SetPivot 'Last';
+		RotateTool.SetPivot('Last');
 		RotateTool.AttachHandles(Part, true);
 
 		-- Maintain the part in memory to prevent garbage collection
@@ -778,7 +831,7 @@ function SetAxisAngle(Axis, Angle)
 	-- Sets the selection's angle on axis `Axis` to `Angle`
 
 	-- Turn the given angle from degrees to radians
-	local Angle = math.rad(Angle);
+	local AngleRad = math.rad(Angle);
 
 	-- Track this change
 	TrackChange();
@@ -791,9 +844,9 @@ function SetAxisAngle(Axis, Angle)
 
 		-- Set the part's new CFrame
 		Part.CFrame = CFrame.new(Part.Position) * CFrame.fromOrientation(
-			Axis == 'X' and Angle or math.rad(Part.Orientation.X),
-			Axis == 'Y' and Angle or math.rad(Part.Orientation.Y),
-			Axis == 'Z' and Angle or math.rad(Part.Orientation.Z)
+			Axis == 'X' and AngleRad or math.rad(Part.Orientation.X),
+			Axis == 'Y' and AngleRad or math.rad(Part.Orientation.Y),
+			Axis == 'Z' and AngleRad or math.rad(Part.Orientation.Z)
 		);
 
 	end;
@@ -845,6 +898,7 @@ function NudgeSelectionByAxis(Axis, Direction)
 	local InitialPartStates, InitialModelStates = PrepareSelectionForRotating()
 
 	-- Set the pivot point to the center of the selection if in Center mode
+	local PivotPoint
 	if RotateTool.Pivot == 'Center' then
 		local BoundingBoxSize, BoundingBoxCFrame = BoundingBoxAPI.CalculateExtents(Selection.Parts);
 		PivotPoint = BoundingBoxCFrame;
@@ -1069,15 +1123,15 @@ end;
 -- BT remote export helpers v3
 RotateTool.ShowUI = ShowUI
 RotateTool.HideUI = HideUI
+RotateTool.ShowHandles = RotateTool.AttachHandles
+RotateTool.HideHandles = RotateTool.HideHandles
+RotateTool.BindShortcutKeys = RotateTool.BindShortcutKeys
 
-do
-	local required = { "SetPivot", "ShowUI", "HideUI", "BindShortcutKeys", "AttachHandles", "HideHandles", "ClearConnections" }
-	for _, name in ipairs(required) do
-		if type(RotateTool[name]) ~= "function" then
-			error(`[BT] Rotate r135: RotateTool.{name} не функция`, 0)
-		end
-	end
-end
+RotateTool.__btShowUI = ShowUI
+RotateTool.__btHideUI = HideUI
+RotateTool.__btShowHandles = RotateTool.AttachHandles
+RotateTool.__btHideHandles = RotateTool.HideHandles
+RotateTool.__btBindShortcutKeys = RotateTool.BindShortcutKeys
 
 -- Return the tool
 return RotateTool;
