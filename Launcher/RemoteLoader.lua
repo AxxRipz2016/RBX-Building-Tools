@@ -2054,7 +2054,7 @@ local function getRawSource(path: string): string?
 end
 
 local TOOL_SOURCE_FINGERPRINTS: { [string]: string } = {
-	["Tools/Rotate.lua"] = "BT_ROTATE_REV=135",
+	["Tools/Rotate.lua"] = "BT_ROTATE_REV=136",
 }
 
 local function validateFetchedToolSource(path: string, body: string): (boolean, string?)
