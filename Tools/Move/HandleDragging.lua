@@ -24,14 +24,37 @@ local function callBoundingBox(method, ...)
 	return fn(...)
 end
 
-local BoundingBoxAPI = {
+local BoundingBoxAPI = setmetatable({
 	StartBoundingBox = function(...)
 		return callBoundingBox("StartBoundingBox", ...)
 	end,
 	ClearBoundingBox = function(...)
 		return callBoundingBox("ClearBoundingBox", ...)
 	end,
-}
+	GetBoundingBox = function(...)
+		return callBoundingBox("GetBoundingBox", ...)
+	end,
+	CalculateExtents = function(...)
+		return callBoundingBox("CalculateExtents", ...)
+	end,
+	PauseMonitoring = function(...)
+		return callBoundingBox("PauseMonitoring", ...)
+	end,
+	ResumeMonitoring = function(...)
+		return callBoundingBox("ResumeMonitoring", ...)
+	end,
+	RecalculateStaticExtents = function(...)
+		return callBoundingBox("RecalculateStaticExtents", ...)
+	end,
+}, {
+	__index = function(_, k)
+		local api = GetBoundingBoxAPI()
+		if type(api) == "table" then
+			return api[k]
+		end
+		return nil
+	end,
+})
 
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'

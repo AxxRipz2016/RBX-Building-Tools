@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 129
+local SOURCE_CACHE_REV = 130
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -931,6 +931,61 @@ local function patchToolBoundingBoxApi(path: string, source: string): string
 	return inserted
 end
 
+local TOOL_GLOBAL_FN_EXPORTS = {
+	"BindShortcutKeys",
+	"HideHandles",
+	"ShowHandles",
+	"EnableSurfaceSelection",
+	"SetPivot",
+	"SetSurface",
+	"ClearConnections",
+	"AttachHandles",
+}
+
+local function patchToolFnExports(path: string, source: string): string
+	if not path:find("^Tools/", 1, true) or path:find("Libraries/", 1, true) then
+		return source
+	end
+	if source:find("BT remote export helpers", 1, true) then
+		return source
+	end
+
+	local toolName = source:match("\nlocal (%w+Tool) = {")
+	if not toolName then
+		return source
+	end
+
+	if source:find("local function ShowUI", 1, true) then
+		source = source:gsub("ShowUI%(%);", toolName .. ".ShowUI();")
+		source = source:gsub("HideUI%(%);", toolName .. ".HideUI();")
+		source = source:gsub("HideUI%(%)\n", toolName .. ".HideUI()\n")
+	end
+
+	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
+		if source:find("\nfunction " .. fnName .. "%(", 1, true) then
+			source = source:gsub(fnName .. "%(", toolName .. "." .. fnName .. "(")
+		end
+	end
+
+	local exportLines: { string } = {}
+	if source:find("local function ShowUI", 1, true) then
+		table.insert(exportLines, toolName .. ".ShowUI = ShowUI")
+		table.insert(exportLines, toolName .. ".HideUI = HideUI")
+	end
+	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
+		if source:find("\nfunction " .. fnName .. "%(", 1, true) then
+			table.insert(exportLines, toolName .. "." .. fnName .. " = " .. fnName)
+		end
+	end
+
+	if #exportLines > 0 then
+		local block = "\n-- BT remote export helpers\n" .. table.concat(exportLines, "\n") .. "\n"
+		source = source:gsub("\nreturn " .. toolName, block .. "return " .. toolName)
+	end
+
+	return source
+end
+
 local function patchToolsRuntime(path: string, source: string): string
 	if not path:find("^Tools/", 1, true) or path:find("Libraries/", 1, true) then
 		return source
@@ -1180,6 +1235,7 @@ end
 
 	source = patchToolBoundingBoxApi(path, source)
 	source = patchToolBtGuiHelper(path, source)
+	source = patchToolFnExports(path, source)
 	return source
 end
 

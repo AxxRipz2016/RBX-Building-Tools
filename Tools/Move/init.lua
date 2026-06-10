@@ -34,7 +34,7 @@ local function callBoundingBox(method: string, ...)
 	return fn(...)
 end
 
-local BoundingBoxAPI = {
+local BoundingBoxAPI = setmetatable({
 	StartBoundingBox = function(...)
 		return callBoundingBox("StartBoundingBox", ...)
 	end,
@@ -44,7 +44,27 @@ local BoundingBoxAPI = {
 	GetBoundingBox = function(...)
 		return callBoundingBox("GetBoundingBox", ...)
 	end,
-}
+	CalculateExtents = function(...)
+		return callBoundingBox("CalculateExtents", ...)
+	end,
+	PauseMonitoring = function(...)
+		return callBoundingBox("PauseMonitoring", ...)
+	end,
+	ResumeMonitoring = function(...)
+		return callBoundingBox("ResumeMonitoring", ...)
+	end,
+	RecalculateStaticExtents = function(...)
+		return callBoundingBox("RecalculateStaticExtents", ...)
+	end,
+}, {
+	__index = function(_, k)
+		local api = GetBoundingBoxAPI()
+		if type(api) == "table" then
+			return api[k]
+		end
+		return nil
+	end,
+})
 
 -- Services
 local ContextActionService = game:GetService 'ContextActionService'
