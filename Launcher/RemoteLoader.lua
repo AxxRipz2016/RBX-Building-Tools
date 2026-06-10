@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 143
+local SOURCE_CACHE_REV = 144
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -2054,12 +2054,12 @@ local function getRawSource(path: string): string?
 end
 
 local TOOL_SOURCE_FINGERPRINTS: { [string]: string } = {
-	["Tools/Rotate.lua"] = "BT_ROTATE_REV=143",
-	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=143",
-	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=143",
-	["Tools/Anchor.lua"] = "BT_TOOLS_REV=143",
-	["Tools/Collision.lua"] = "BT_TOOLS_REV=143",
-	["Tools/NewPart.lua"] = "BT_TOOLS_REV=143",
+	["Tools/Rotate.lua"] = "BT_ROTATE_REV=144",
+	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=144",
+	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=144",
+	["Tools/Anchor.lua"] = "BT_TOOLS_REV=144",
+	["Tools/Collision.lua"] = "BT_TOOLS_REV=144",
+	["Tools/NewPart.lua"] = "BT_TOOLS_REV=144",
 }
 
 local function validateFetchedToolSource(path: string, body: string): (boolean, string?)
@@ -2070,8 +2070,12 @@ local function validateFetchedToolSource(path: string, body: string): (boolean, 
 	if body:find(needle, 1, true) then
 		return true, nil
 	end
-	if path == "Tools/Rotate.lua" and body:find("\nfunction RotateTool%.SetPivot%(", 1, true) then
-		return true, nil
+	if path == "Tools/Rotate.lua" then
+		if body:find("\nfunction RotateTool%.SetPivot%(", 1, true)
+			or body:find("RotateTool%.SetPivot%s*=%s*function", 1, true)
+			or body:find("safeGetBoundingBox", 1, true) then
+			return true, nil
+		end
 	end
 	return false, `{path}: нет {needle} (кэш HttpGet — rejoin)`
 end
@@ -2120,6 +2124,52 @@ local function getJsDelivrUrl(path: string): string?
 		return nil
 	end
 	return `https://cdn.jsdelivr.net/gh/{user}/{repo}@{branch}/{path}`
+end
+
+local function getRepoFetchMirrors(path: string): { string }
+	local user, repo, branch = RemoteLoader.BaseUrl:match(
+		"raw%.githubusercontent%.com/([^/]+)/([^/]+)/refs/heads/([^/]+)/"
+	)
+	local mirrors: { string } = {}
+	if user and repo and branch then
+		table.insert(mirrors, `https://raw.githubusercontent.com/{user}/{repo}/refs/heads/{branch}/{path}`)
+		table.insert(mirrors, `https://cdn.jsdelivr.net/gh/{user}/{repo}@{branch}/{path}`)
+	end
+	table.insert(mirrors, RemoteLoader.BaseUrl .. path)
+	return mirrors
+end
+
+local function fetchToolSourceValidated(path: string): (string?, string?)
+	if not TOOL_SOURCE_FINGERPRINTS[path] then
+		return nil, nil
+	end
+
+	local lastErr: string? = nil
+	for attempt = 1, 10 do
+		local bust = `{SOURCE_CACHE_REV}_lc{attempt}_{tostring(tick())}`
+		for _, base in getRepoFetchMirrors(path) do
+			local sep = if base:find("?", 1, true) then "&" else "?"
+			local url = `{base}{sep}btrev={bust}&try={attempt}`
+			throttle()
+			local ok, result = pcall(function()
+				return RemoteLoader.httpGet(url)
+			end)
+			if ok and type(result) == "string" and #result > 0 then
+				result = normalizeBody(result)
+			end
+			if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
+				local validBody, validErr = validateFetchedToolSource(path, result)
+				if validBody then
+					return result, nil
+				end
+				lastErr = validErr
+			elseif not ok then
+				lastErr = tostring(result)
+			end
+		end
+		task.wait(0.25 * attempt)
+	end
+	return nil, lastErr
 end
 
 local function getFetchUrls(path: string): { string }
@@ -2290,6 +2340,28 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 	end
 
 	local lastErr: string? = nil
+
+	if TOOL_SOURCE_FINGERPRINTS[path] then
+		local validated, validErr = fetchToolSourceValidated(path)
+		if validated then
+			rawSourceCache[path] = validated
+			sourceCache[path] = nil
+			local patched = getPatchedSource(path)
+			if patched then
+				failedPaths[path] = nil
+				fetchCount += 1
+				if progressCallback then
+					progressCallback(path, true, nil)
+				end
+				return true, patched
+			end
+			rawSourceCache[path] = nil
+			lastErr = failedPaths[path]
+		elseif validErr then
+			lastErr = validErr
+		end
+	end
+
 	local tried: { string } = {}
 
 	for _, url in getFetchUrls(path) do
