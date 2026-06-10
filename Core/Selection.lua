@@ -411,11 +411,59 @@ local function GetVisibleChildren(Item, Table)
 	return Table
 end
 
+local OUTLINE_GUI_NAME = "BTSelectionOutlines"
+
+local function getOutlineGui()
+	local core = GetCore()
+	local cached = core.__bt_OutlineGui
+	if typeof(cached) == "Instance" and cached:IsA("ScreenGui") and cached.Parent then
+		cached.Enabled = true
+		return cached
+	end
+
+	local Players = game:GetService("Players")
+	local localPlayer = Players.LocalPlayer
+	if localPlayer then
+		local pg = localPlayer:FindFirstChild("PlayerGui")
+		if pg then
+			local gui = pg:FindFirstChild(OUTLINE_GUI_NAME)
+			if not gui then
+				gui = Instance.new("ScreenGui")
+				gui.Name = OUTLINE_GUI_NAME
+				gui.ResetOnSpawn = false
+				gui.DisplayOrder = 9999
+				gui.IgnoreGuiInset = true
+				gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+				gui.Parent = pg
+			end
+			gui.Enabled = true
+			core.__bt_OutlineGui = gui
+			return gui
+		end
+	end
+
+	local ui = core.UI
+	if typeof(ui) == "Instance" and ui:IsA("ScreenGui") and ui.Parent then
+		return ui
+	end
+
+	return game:GetService("CoreGui")
+end
+
+local function applySelectionBox(SelectionBox, Adornee)
+	SelectionBox.Adornee = Adornee
+	SelectionBox.Color = Selection.Color
+	SelectionBox.LineThickness = 0.025
+	SelectionBox.Transparency = 0.5
+	SelectionBox.Parent = getOutlineGui()
+	SelectionBox.Visible = true
+end
+
 -- Create target box pool
 local SelectionBoxPool = InstancePool.new(60, function ()
 	return Make 'SelectionBox' {
 		Name = 'BTSelectionBox',
-		Parent = nil, -- Инициализируем без родителя, родитель задается динамически
+		Parent = nil,
 		LineThickness = 0.025,
 		Transparency = 0.5,
 		Color = Selection.Color
@@ -425,16 +473,15 @@ end)
 -- Define target box cleanup routine
 function SelectionBoxPool.Cleanup(SelectionBox)
 	SelectionBox.Adornee = nil
-	SelectionBox.Visible = nil
-	SelectionBox.Parent = nil -- Сбрасываем родителя при возвращении в пул
+	SelectionBox.Visible = false
+	SelectionBox.Parent = nil
 end
 
 function CreateSelectionBoxes(Item)
 	-- Creates selection boxes for the given item
 
-	-- Проверка режима с фолбеком на "Tool", если лоадер не успел синхронизировать _G.Core.Mode
-	local CurrentMode = GetCore().Mode or 'Tool'
-	if CurrentMode ~= 'Tool' then
+	local mode = GetCore().Mode
+	if mode and mode ~= 'Tool' then
 		return;
 	end;
 
@@ -453,13 +500,9 @@ function CreateSelectionBoxes(Item)
 	local SelectionBoxes = {}
 	for TargetItem in pairs(Items) do
 
-		-- Create the selection box
 		local SelectionBox = SelectionBoxPool:Get()
-		SelectionBox.Adornee = TargetItem
-		SelectionBox.Parent = TargetItem -- [ИСПРАВЛЕНИЕ]: Помещаем SelectionBox прямо внутрь выделяемого парта. Это гарантирует отображение обводки.
-		SelectionBox.Visible = true
+		applySelectionBox(SelectionBox, TargetItem)
 
-		-- Register the outline
 		SelectionBoxes[TargetItem] = SelectionBox
 
 	end
@@ -573,9 +616,21 @@ end;
 function Selection.EnableOutlines()
 	-- Enables selection outlines
 
-	-- Create outlines for each item
 	for Item in pairs(Selection.ItemIndex) do
-		CreateSelectionBoxes(Item)
+		if not Selection.Outlines[Item] then
+			CreateSelectionBoxes(Item)
+		end
+	end
+	Selection.ReattachOutlines()
+end
+
+function Selection.ReattachOutlines()
+	local gui = getOutlineGui()
+	for Outline in pairs(SelectionBoxPool.InUse) do
+		if Outline.Adornee then
+			Outline.Parent = gui
+			Outline.Visible = true
+		end
 	end
 end
 

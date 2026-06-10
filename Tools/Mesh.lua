@@ -1,20 +1,20 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
-local UI = Tool:WaitForChild('UI')
+local UITree = Tool:WaitForChild('UI')
 local Libraries = Tool:WaitForChild('Libraries')
 
 -- Libraries
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 local Roact = require(Vendor:WaitForChild('Roact'))
-local ColorPicker = require(UI:WaitForChild('ColorPicker'))
-local Dropdown = require(UI:WaitForChild('Dropdown'))
+local ColorPicker = require(UITree:WaitForChild('ColorPicker'))
+local Dropdown = require(UITree:WaitForChild('Dropdown'))
 local Signal = require(Libraries:WaitForChild('Signal'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
@@ -36,14 +36,67 @@ Lets you add meshes to parts.<font size="6"><br /></font>
 
 <b>NOTE:</b> If HttpService is not enabled, you must type the mesh or image asset ID directly.]]
 
--- Container for temporary connections (disconnected automatically)
+-- Container for temporary connections and state variables
 local Connections = {};
+local UIUpdater
+local HistoryRecord
+local MeshTypes
+local SortedMeshTypes
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local ShowUI
+local HideUI
+local UpdateUI
+local EnableSurfaceClickSelection
+local GetMeshes
+local ParseAssetId
+local VectorToColor
+local ColorToVector
+local UpdateDataInputs
+local UpdateColorIndicator
+local DisplayLinearLayout
+local AddMeshes
+local RemoveMeshes
+local SetPreviewTint
+local SetProperty
+local SetAxisScale
+local SetAxisOffset
+local SetMeshId
+local SetTextureId
+local TrackChange
+local RegisterChange
+
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
+
+local function btSetGuiVisible(gui, visible)
+	if type(Core.BT_SetGuiVisible) == "function" then
+		return Core.BT_SetGuiVisible(gui, visible)
+	end
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function MeshTool.Equip()
 	-- Enables the tool's equipped functionality
 
 	-- Start up our interface
 	ShowUI();
+	EnableSurfaceClickSelection();
 
 end;
 
@@ -66,17 +119,17 @@ function ClearConnections()
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if MeshTool.UI then
 
 		-- Reveal the UI
-		Core.BT_SetGuiVisible(MeshTool.UI, true);
+		btSetGuiVisible(MeshTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
-		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+		UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 		-- Skip UI creation
 		return;
@@ -86,7 +139,7 @@ local function ShowUI()
 	-- Create the UI
 	MeshTool.UI = Core.Tool.Interfaces.BTMeshToolGUI:Clone();
 	MeshTool.UI.Parent = Core.UI;
-	Core.BT_SetGuiVisible(MeshTool.UI, true);
+	btSetGuiVisible(MeshTool.UI, true);
 
 	local AddButton = MeshTool.UI.AddButton;
 	local RemoveButton = MeshTool.UI.RemoveButton;
@@ -207,7 +260,7 @@ local function ShowUI()
 	ListenForManualWindowTrigger(MeshTool.ManualText, MeshTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-	UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+	UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 end;
 
@@ -325,7 +378,26 @@ function UpdateUI()
 
 end;
 
-local function HideUI()
+function EnableSurfaceClickSelection(LightType)
+	-- Allows for the setting of the face for the given light type by clicking
+
+	-- Clear out any existing connection
+	if Connections.SurfaceClickSelection then
+		Connections.SurfaceClickSelection:Disconnect();
+		Connections.SurfaceClickSelection = nil;
+	end;
+
+	-- Add the new click connection
+	Connections.SurfaceClickSelection = Core.Mouse.Button1Down:Connect(function ()
+		local _, ScopeTarget = Core.Targeting:UpdateTarget()
+		if Selection.IsSelected(ScopeTarget) then
+			SetSurface(LightType, Core.Mouse.TargetSurface)
+		end
+	end)
+
+end;
+
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -334,9 +406,10 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(MeshTool.UI, false);
+	btSetGuiVisible(MeshTool.UI, false);
 	if UIUpdater and type(UIUpdater.Stop) == "function" then
 		UIUpdater:Stop();
+		UIUpdater = nil;
 	end
 
 end;
@@ -473,7 +546,7 @@ function AddMeshes()
 	local Meshes = Core.SyncAPI:Invoke('CreateMeshes', Changes);
 
 	-- Put together the history record
-	local HistoryRecord = {
+	local HistoryRecordVal = {
 		Meshes = Meshes;
 		Selection = Selection.Items;
 
@@ -502,7 +575,7 @@ function AddMeshes()
 	};
 
 	-- Register the history record
-	Core.History.Add(HistoryRecord);
+	Core.History.Add(HistoryRecordVal);
 
 end;
 
@@ -512,7 +585,7 @@ function RemoveMeshes()
 	local Meshes = GetMeshes();
 
 	-- Create the history record
-	local HistoryRecord = {
+	local HistoryRecordVal = {
 		Meshes = Meshes;
 		Selection = Selection.Items;
 
@@ -544,11 +617,9 @@ function RemoveMeshes()
 	Core.SyncAPI:Invoke('Remove', Meshes);
 
 	-- Register the history record
-	Core.History.Add(HistoryRecord);
+	Core.History.Add(HistoryRecordVal);
 
 end;
-
-local PreviewInitialState = nil
 
 function SetPreviewTint(Tint)
 	-- Previews the given tint on the selection
@@ -622,14 +693,14 @@ function SetAxisScale(Axis, Scale)
 		table.insert(HistoryRecord.Before, { Part = Mesh.Parent, Scale = Mesh.Scale });
 
 		-- Put together the changed scale
-		local Scale = Vector3.new(
+		local ScaleVal = Vector3.new(
 			Axis == 'X' and Scale or Mesh.Scale.X,
 			Axis == 'Y' and Scale or Mesh.Scale.Y,
 			Axis == 'Z' and Scale or Mesh.Scale.Z
 		);
 
 		-- Create the change request for this mesh
-		table.insert(HistoryRecord.After, { Part = Mesh.Parent, Scale = Scale });
+		table.insert(HistoryRecord.After, { Part = Mesh.Parent, Scale = ScaleVal });
 
 	end;
 
@@ -651,14 +722,14 @@ function SetAxisOffset(Axis, Offset)
 		table.insert(HistoryRecord.Before, { Part = Mesh.Parent, Offset = Mesh.Offset });
 
 		-- Put together the changed scale
-		local Offset = Vector3.new(
+		local OffsetVal = Vector3.new(
 			Axis == 'X' and Offset or Mesh.Offset.X,
 			Axis == 'Y' and Offset or Mesh.Offset.Y,
 			Axis == 'Z' and Offset or Mesh.Offset.Z
 		);
 
 		-- Create the change request for this mesh
-		table.insert(HistoryRecord.After, { Part = Mesh.Parent, Offset = Offset });
+		table.insert(HistoryRecord.After, { Part = Mesh.Parent, Offset = OffsetVal });
 
 	end;
 
@@ -688,9 +759,9 @@ function SetMeshId(AssetId)
 			assert(ExtractionData.success, 'Extraction failed');
 
 			-- Apply any mesh found
-			local MeshId = ExtractionData.meshID;
-			if MeshId then
-				Changes.MeshId = 'rbxassetid://' .. MeshId;
+			local ExtractedMeshId = ExtractionData.meshID;
+			if ExtractedMeshId then
+				Changes.MeshId = 'rbxassetid://' .. ExtractedMeshId;
 			end;
 
 			-- Apply any texture found
@@ -706,9 +777,9 @@ function SetMeshId(AssetId)
 			end;
 
 			-- Apply any scale found
-			local Scale = ExtractionData.scale;
-			if Scale then
-				Changes.Scale = Vector3.new(Scale.x, Scale.y, Scale.z);
+			local ExtractedScale = ExtractionData.scale;
+			if ExtractedScale then
+				Changes.Scale = Vector3.new(ExtractedScale.x, ExtractedScale.y, ExtractedScale.z);
 			end;
 
 		end);

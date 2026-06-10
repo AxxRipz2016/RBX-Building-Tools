@@ -1,5 +1,5 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
 local UITree = Tool:WaitForChild('UI')
 local Libraries = Tool:WaitForChild('Libraries')
@@ -12,9 +12,9 @@ local Dropdown = require(UITree:WaitForChild('Dropdown'))
 local Signal = require(Libraries:WaitForChild('Signal'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
@@ -31,8 +31,57 @@ Lets you add point lights, surface lights, and spotlights to parts.<font size="6
 
 <b>TIP:</b> Click on the surface of any part to change a light's side quickly.]]
 
--- Container for temporary connections (disconnected automatically)
+-- Container for temporary connections and state variables
 local Connections = {};
+local UIUpdater
+local HistoryRecord
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local ShowUI
+local HideUI
+local UpdateUI
+local EnableSurfaceClickSelection
+local EnableLightSettingsUI
+local GetLights
+local OpenLightOptions
+local CloseLightOptions
+local UpdateDataInputs
+local AddLights
+local RemoveLights
+local TrackChange
+local RegisterChange
+local SetRange
+local SetBrightness
+local SetColor
+local PreviewColor
+local ToggleShadows
+local SetSurface
+local SetAngle
+
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
+
+local function btSetGuiVisible(gui, visible)
+	if type(Core.BT_SetGuiVisible) == "function" then
+		return Core.BT_SetGuiVisible(gui, visible)
+	end
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function LightingTool.Equip()
 	-- Enables the tool's equipped functionality
@@ -62,17 +111,17 @@ function ClearConnections()
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if LightingTool.UI then
 
 		-- Reveal the UI
-		LightingTool.UI.Visible = true;
+		btSetGuiVisible(LightingTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
-		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+		UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 		-- Skip UI creation
 		return;
@@ -82,7 +131,7 @@ local function ShowUI()
 	-- Create the UI
 	LightingTool.UI = Core.Tool.Interfaces.BTLightingToolGUI:Clone();
 	LightingTool.UI.Parent = Core.UI;
-	LightingTool.UI.Visible = true;
+	btSetGuiVisible(LightingTool.UI, true);
 
 	-- Enable each light type UI
 	EnableLightSettingsUI(LightingTool.UI.PointLight);
@@ -94,7 +143,7 @@ local function ShowUI()
 	ListenForManualWindowTrigger(LightingTool.ManualText, LightingTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-	UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+	UIUpdater = btScheduleUI(UpdateUI, 0.1);
 end;
 
 function EnableSurfaceClickSelection(LightType)
@@ -228,7 +277,7 @@ function EnableLightSettingsUI(LightSettingsUI)
 
 end;
 
-local function HideUI()
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -237,11 +286,12 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(LightingTool.UI, false);
+	btSetGuiVisible(LightingTool.UI, false);
 
 	-- Stop updating the UI
 	if UIUpdater and type(UIUpdater.Stop) == "function" then
 		UIUpdater:Stop();
+		UIUpdater = nil;
 	end
 
 end;
@@ -303,19 +353,19 @@ function OpenLightOptions(LightType)
 
 	-- Push any UIs below this one downwards
 	local LightTypeIndex = Support.FindTableOccurrence(LightTypes, LightType);
-	for LightTypeIndex = LightTypeIndex + 1, #LightTypes do
+	for Index = LightTypeIndex + 1, #LightTypes do
 
 		-- Get the UI
-		local LightType = LightTypes[LightTypeIndex];
-		local UI = LightingTool.UI[LightType];
+		local CurrentLightType = LightTypes[Index];
+		local CurrentUI = LightingTool.UI[CurrentLightType];
 
 		-- Perform the position animation
-		UI:TweenPosition(
+		CurrentUI:TweenPosition(
 			UDim2.new(
-				UI.Position.X.Scale,
-				UI.Position.X.Offset,
-				UI.Position.Y.Scale,
-				30 + 30 * (LightTypeIndex - 1) + HeightExpansion.Y.Offset
+				CurrentUI.Position.X.Scale,
+				CurrentUI.Position.X.Offset,
+				CurrentUI.Position.Y.Scale,
+				30 + 30 * (Index - 1) + HeightExpansion.Y.Offset
 			),
 			Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.5, true
 		);
@@ -352,7 +402,7 @@ function CloseLightOptions(Exception)
 		);
 
 		-- Make sure to not resize the exempt light type UI
-		if not Exception or Exception and LightType ~= Exception then
+		if not Exception or (Exception and LightType ~= Exception) then
 
 			-- Allow the options UI to be resized
 			UI.Options.ClipsDescendants = true;
@@ -540,7 +590,7 @@ function AddLights(LightType)
 	local Lights = Core.SyncAPI:Invoke('CreateLights', Changes);
 
 	-- Put together the history record
-	local HistoryRecord = {
+	local HistoryRecordVal = {
 		Lights = Lights;
 		Selection = Selection.Items;
 
@@ -569,7 +619,7 @@ function AddLights(LightType)
 	};
 
 	-- Register the history record
-	Core.History.Add(HistoryRecord);
+	Core.History.Add(HistoryRecordVal);
 
 	-- Open the options UI for this light type
 	OpenLightOptions(LightType);
@@ -582,7 +632,7 @@ function RemoveLights(LightType)
 	local Lights = GetLights(LightType);
 
 	-- Create the history record
-	local HistoryRecord = {
+	local HistoryRecordVal = {
 		Lights = Lights;
 		Selection = Selection.Items;
 
@@ -614,7 +664,7 @@ function RemoveLights(LightType)
 	Core.SyncAPI:Invoke('Remove', Lights);
 
 	-- Register the history record
-	Core.History.Add(HistoryRecord);
+	Core.History.Add(HistoryRecordVal);
 
 end;
 

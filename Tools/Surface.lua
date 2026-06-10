@@ -1,5 +1,5 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
 local UI = Tool:WaitForChild('UI')
 local Libraries = Tool:WaitForChild('Libraries')
@@ -11,9 +11,9 @@ local Dropdown = require(UI:WaitForChild('Dropdown'))
 local Signal = require(Libraries:WaitForChild('Signal'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
@@ -37,8 +37,46 @@ Lets you change the surfaces of parts.<font size="6"><br /></font>
 
 <b>TIP: </b>Click a part's surface to select it quickly.]]
 
--- Container for temporary connections (disconnected automatically)
+-- Container for temporary connections and state variables
 local Connections = {};
+local UIUpdater
+local HistoryRecord
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local ShowUI
+local HideUI
+local GetSurfaceTypeDisplayName
+local UpdateUI
+local SetSurface
+local SetSurfaceType
+local EnableSurfaceSelection
+local TrackChange
+local RegisterChange
+
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
+
+local function btSetGuiVisible(gui, visible)
+	if type(Core.BT_SetGuiVisible) == "function" then
+		return Core.BT_SetGuiVisible(gui, visible)
+	end
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function SurfaceTool.Equip()
 	-- Enables the tool's equipped functionality
@@ -71,7 +109,7 @@ function ClearConnections()
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	local self = SurfaceTool
@@ -80,10 +118,10 @@ local function ShowUI()
 	if SurfaceTool.UI then
 
 		-- Reveal the UI
-		Core.BT_SetGuiVisible(SurfaceTool.UI, true);
+		btSetGuiVisible(SurfaceTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
-		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+		UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 		-- Skip UI creation
 		return;
@@ -93,7 +131,7 @@ local function ShowUI()
 	-- Create the UI
 	SurfaceTool.UI = Core.Tool.Interfaces.BTSurfaceToolGUI:Clone();
 	SurfaceTool.UI.Parent = Core.UI;
-	Core.BT_SetGuiVisible(SurfaceTool.UI, true);
+	btSetGuiVisible(SurfaceTool.UI, true);
 
 	-- Create type dropdown
 	local Surfaces = {
@@ -159,11 +197,11 @@ local function ShowUI()
 	ListenForManualWindowTrigger(SurfaceTool.ManualText, SurfaceTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-	UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+	UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 end;
 
-local function HideUI()
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -172,13 +210,11 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(SurfaceTool.UI, false);
+	btSetGuiVisible(SurfaceTool.UI, false);
 	if UIUpdater and type(UIUpdater.Stop) == "function" then
 		UIUpdater:Stop();
+		UIUpdater = nil;
 	end
-
-	-- Stop updating the UI
-	UIUpdater:Stop();
 
 end;
 

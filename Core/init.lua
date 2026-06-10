@@ -398,6 +398,9 @@ function Core.EnsureUI()
 		UI.Parent = UIContainer
 		UI.Enabled = true
 	end
+	if Selection and type(Selection.ReattachOutlines) == "function" then
+		pcall(Selection.ReattachOutlines)
+	end
 end
 
 function EquipTool(BuildingToolModule)

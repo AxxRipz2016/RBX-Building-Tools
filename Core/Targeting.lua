@@ -220,10 +220,49 @@ local function GetVisibleChildren(Item, Table)
 end
 
 -- Create target box pool
+local OUTLINE_GUI_NAME = "BTSelectionOutlines"
+
+local function getOutlineGui()
+	local core = GetCore()
+	local cached = core.__bt_OutlineGui
+	if typeof(cached) == "Instance" and cached:IsA("ScreenGui") and cached.Parent then
+		cached.Enabled = true
+		return cached
+	end
+
+	local Players = game:GetService("Players")
+	local localPlayer = Players.LocalPlayer
+	if localPlayer then
+		local pg = localPlayer:FindFirstChild("PlayerGui")
+		if pg then
+			local gui = pg:FindFirstChild(OUTLINE_GUI_NAME)
+			if not gui then
+				gui = Instance.new("ScreenGui")
+				gui.Name = OUTLINE_GUI_NAME
+				gui.ResetOnSpawn = false
+				gui.DisplayOrder = 9998
+				gui.IgnoreGuiInset = true
+				gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+				gui.Parent = pg
+			end
+			gui.Enabled = true
+			core.__bt_OutlineGui = gui
+			return gui
+		end
+	end
+
+	local ui = core.UI
+	if typeof(ui) == "Instance" and ui:IsA("ScreenGui") and ui.Parent then
+		return ui
+	end
+
+	return game:GetService("CoreGui")
+end
+
 local TargetBoxPool = InstancePool.new(60, function ()
 	return Make 'SelectionBox' {
 		Name = 'BTTargetBox',
-		Parent = GetCore().UI,
+		Parent = nil,
 		LineThickness = 0.025,
 		Transparency = 0.5,
 		Color = BrickColor.new 'Institutional white'
@@ -233,7 +272,8 @@ end)
 -- Define target box cleanup routine
 function TargetBoxPool.Cleanup(TargetBox)
 	TargetBox.Adornee = nil
-	TargetBox.Visible = nil
+	TargetBox.Visible = false
+	TargetBox.Parent = nil
 end
 
 function TargetingModule.HighlightTarget(Target)
@@ -253,9 +293,10 @@ function TargetingModule.HighlightTarget(Target)
 	end
 
 	-- Focus target boxes on target
-	for Target in pairs(Items) do
+	for TargetItem in pairs(Items) do
 		local TargetBox = TargetBoxPool:Get()
-		TargetBox.Adornee = Target
+		TargetBox.Adornee = TargetItem
+		TargetBox.Parent = getOutlineGui()
 		TargetBox.Visible = true
 	end
 

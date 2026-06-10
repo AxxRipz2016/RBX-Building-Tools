@@ -1,5 +1,5 @@
-Tool = script.Parent.Parent.Parent
-Core = require(Tool.Core)
+local Tool = script.Parent.Parent.Parent
+local Core = require(Tool.Core)
 
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'

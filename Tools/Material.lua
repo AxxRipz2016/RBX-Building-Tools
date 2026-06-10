@@ -1,5 +1,5 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
 local UI = Tool:WaitForChild('UI')
 local Libraries = Tool:WaitForChild('Libraries')
@@ -11,10 +11,45 @@ local Dropdown = require(UI:WaitForChild('Dropdown'))
 local Signal = require(Libraries:WaitForChild('Signal'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
+
+-- Designate a friendly name to each material
+local Materials = {
+	[Enum.Material.SmoothPlastic] = 'Smooth Plastic';
+	[Enum.Material.Plastic] = 'Plastic';
+	[Enum.Material.Brick] = 'Brick';
+	[Enum.Material.Cobblestone] = 'Cobblestone';
+	[Enum.Material.Concrete] = 'Concrete';
+	[Enum.Material.CorrodedMetal] = 'Corroded Metal';
+	[Enum.Material.DiamondPlate] = 'Diamond Plate';
+	[Enum.Material.Fabric] = 'Fabric';
+	[Enum.Material.Foil] = 'Foil';
+	[Enum.Material.ForceField] = 'Forcefield';
+	[Enum.Material.Granite] = 'Granite';
+	[Enum.Material.Grass] = 'Grass';
+	[Enum.Material.Ice] = 'Ice';
+	[Enum.Material.Marble] = 'Marble';
+	[Enum.Material.Metal] = 'Metal';
+	[Enum.Material.Neon] = 'Neon';
+	[Enum.Material.Pebble] = 'Pebble';
+	[Enum.Material.Sand] = 'Sand';
+	[Enum.Material.Slate] = 'Slate';
+	[Enum.Material.Wood] = 'Wood';
+	[Enum.Material.WoodPlanks] = 'Wood Planks';
+	[Enum.Material.Glass] = 'Glass';
+};
+
+-- List of UI layouts
+local Layouts = {
+	EmptySelection = { 'SelectNote' };
+	Normal = { 'MaterialOption', 'TransparencyOption', 'ReflectanceOption' };
+};
+
+-- List of UI elements
+local UIElements = { 'SelectNote', 'MaterialOption', 'TransparencyOption', 'ReflectanceOption' };
 
 -- Initialize the tool
 local MaterialTool = {
@@ -31,8 +66,32 @@ local MaterialTool = {
 MaterialTool.ManualText = [[<font face="GothamBlack" size="16">Material Tool  🛠</font>
 Lets you change the material, transparency, and reflectance of parts.]]
 
--- Container for temporary connections (disconnected automatically)
+-- Container for temporary connections and state variables
 local Connections = {};
+local HistoryRecord
+local CurrentLayout
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local SyncInputToProperty
+local SetProperty
+local UpdateDataInputs
+local TrackChange
+local RegisterChange
+
+local function btSetGuiVisible(gui, visible)
+	if type(Core.BT_SetGuiVisible) == "function" then
+		return Core.BT_SetGuiVisible(gui, visible)
+	end
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function MaterialTool:Equip()
 	-- Enables the tool's equipped functionality
@@ -61,32 +120,6 @@ function ClearConnections()
 
 end;
 
--- Designate a friendly name to each material
-local Materials = {
-	[Enum.Material.SmoothPlastic] = 'Smooth Plastic';
-	[Enum.Material.Plastic] = 'Plastic';
-	[Enum.Material.Brick] = 'Brick';
-	[Enum.Material.Cobblestone] = 'Cobblestone';
-	[Enum.Material.Concrete] = 'Concrete';
-	[Enum.Material.CorrodedMetal] = 'Corroded Metal';
-	[Enum.Material.DiamondPlate] = 'Diamond Plate';
-	[Enum.Material.Fabric] = 'Fabric';
-	[Enum.Material.Foil] = 'Foil';
-	[Enum.Material.ForceField] = 'Forcefield';
-	[Enum.Material.Granite] = 'Granite';
-	[Enum.Material.Grass] = 'Grass';
-	[Enum.Material.Ice] = 'Ice';
-	[Enum.Material.Marble] = 'Marble';
-	[Enum.Material.Metal] = 'Metal';
-	[Enum.Material.Neon] = 'Neon';
-	[Enum.Material.Pebble] = 'Pebble';
-	[Enum.Material.Sand] = 'Sand';
-	[Enum.Material.Slate] = 'Slate';
-	[Enum.Material.Wood] = 'Wood';
-	[Enum.Material.WoodPlanks] = 'Wood Planks';
-	[Enum.Material.Glass] = 'Glass';
-};
-
 function MaterialTool:ShowUI()
 	-- Creates and reveals the UI
 
@@ -94,7 +127,7 @@ function MaterialTool:ShowUI()
 	if self.UI then
 
 		-- Reveal the UI
-		self.UI.Visible = true;
+		btSetGuiVisible(self.UI, true);
 
 		-- Update the UI every 0.1 seconds
 		self.StopUpdatingUI = Support.Loop(0.1, function ()
@@ -109,7 +142,7 @@ function MaterialTool:ShowUI()
 	-- Create the UI
 	self.UI = Core.Tool.Interfaces.BTMaterialToolGUI:Clone();
 	self.UI.Parent = Core.UI;
-	self.UI.Visible = true;
+	btSetGuiVisible(self.UI, true);
 
 	-- References to inputs
 	local TransparencyInput = self.UI.TransparencyOption.Input.TextBox;
@@ -163,10 +196,12 @@ function MaterialTool:HideUI()
 	end;
 
 	-- Hide the UI
-	self.UI.Visible = false
+	btSetGuiVisible(self.UI, false);
 
 	-- Stop updating the UI
-	self.StopUpdatingUI()
+	if type(self.StopUpdatingUI) == "function" then
+		self.StopUpdatingUI()
+	end
 
 end;
 
@@ -223,18 +258,6 @@ function UpdateDataInputs(Data)
 	end;
 
 end;
-
--- List of UI layouts
-local Layouts = {
-	EmptySelection = { 'SelectNote' };
-	Normal = { 'MaterialOption', 'TransparencyOption', 'ReflectanceOption' };
-};
-
--- List of UI elements
-local UIElements = { 'SelectNote', 'MaterialOption', 'TransparencyOption', 'ReflectanceOption' };
-
--- Current UI layout
-local CurrentLayout;
 
 function MaterialTool:ChangeLayout(Layout)
 	-- Sets the UI to the given layout

@@ -1,21 +1,20 @@
-
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
 local UI = Tool:WaitForChild('UI')
 
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'
 local Maid = require(Libraries:WaitForChild 'Maid')
-local PaintHistoryRecord = require(script:WaitForChild 'PaintHistoryRecord')
+local PaintHistoryRecord = require(script.Parent:WaitForChild 'PaintHistoryRecord') -- [ИСПРАВЛЕНИЕ]: Ищем в script.Parent, так как модули соседи
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 local Roact = require(Vendor:WaitForChild('Roact'))
 local ColorPicker = require(UI:WaitForChild('ColorPicker'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
@@ -31,6 +30,44 @@ PaintTool.ManualText = [[<font face="GothamBlack" size="16">Paint Tool  🛠</fo
 Lets you paint parts in different colors.<font size="6"><br /></font>
 
 <b>TIP:</b> Press <b><i>R</i></b> while hovering over a part to copy its color.]]
+
+-- Container for temporary connections and state variables
+local Connections = {};
+local UIUpdater
+local PaletteButtons
+local InitialState
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ShowUI
+local HideUI
+local UpdateUI
+local SetColor
+local PaintParts
+local PreviewColor
+
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
+
+local function btSetGuiVisible(gui, visible)
+	if type(Core.BT_SetGuiVisible) == "function" then
+		return Core.BT_SetGuiVisible(gui, visible)
+	end
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function PaintTool:Equip()
 	-- Enables the tool's equipped functionality
@@ -56,17 +93,17 @@ function PaintTool:Unequip()
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if PaintTool.UI then
 
 		-- Reveal the UI
-		Core.BT_SetGuiVisible(PaintTool.UI, true);
+		btSetGuiVisible(PaintTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
-		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+		UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 		-- Skip UI creation
 		return;
@@ -76,7 +113,7 @@ local function ShowUI()
 	-- Create the UI
 	PaintTool.UI = Core.Tool.Interfaces.BTPaintToolGUI:Clone();
 	PaintTool.UI.Parent = Core.UI;
-	Core.BT_SetGuiVisible(PaintTool.UI, true);
+	btSetGuiVisible(PaintTool.UI, true);
 
 	-- Track palette buttons
 	PaletteButtons = {};
@@ -126,11 +163,11 @@ local function ShowUI()
 	ListenForManualWindowTrigger(PaintTool.ManualText, PaintTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-	UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+	UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 end;
 
-local function HideUI()
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -139,11 +176,12 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(PaintTool.UI, false);
+	btSetGuiVisible(PaintTool.UI, false);
 
 	-- Stop updating the UI
 	if UIUpdater and type(UIUpdater.Stop) == "function" then
 		UIUpdater:Stop();
+		UIUpdater = nil;
 	end
 
 end;
@@ -161,14 +199,18 @@ function UpdateUI()
 	-----------------------------------------
 
 	-- Clear old color indicators
-	for Color, Button in pairs(PaletteButtons) do
-		Button.Text = '';
+	if PaletteButtons then
+		for Color, Button in pairs(PaletteButtons) do
+			Button.Text = '';
+		end;
 	end;
 
 	-- Indicate the variety of colors in the selection
-	for _, Part in pairs(Selection.Parts) do
-		if PaletteButtons[Part.BrickColor.Name] and Part.Color == Part.BrickColor.Color then
-			PaletteButtons[Part.BrickColor.Name].Text = '+';
+	if PaletteButtons then
+		for _, Part in pairs(Selection.Parts) do
+			if PaletteButtons[Part.BrickColor.Name] and Part.Color == Part.BrickColor.Color then
+				PaletteButtons[Part.BrickColor.Name].Text = '+';
+			end;
 		end;
 	end;
 

@@ -1,5 +1,5 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
 local UI = Tool:WaitForChild('UI')
 
@@ -9,9 +9,9 @@ local Roact = require(Vendor:WaitForChild('Roact'))
 local ColorPicker = require(UI:WaitForChild('ColorPicker'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
@@ -23,8 +23,53 @@ local DecorateTool = {
 DecorateTool.ManualText = [[<font face="GothamBlack" size="16">Decorate Tool  🛠</font>
 Allows you to add smoke, fire, and sparkles to parts.]]
 
--- Container for temporary connections (disconnected automatically)
+-- Container for temporary connections and state variables
 local Connections = {};
+local UIUpdater
+local HistoryRecord
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local ShowUI
+local HideUI
+local UpdateUI
+local GetDecorations
+local UpdateColorIndicator
+local UpdateDataInputs
+local TrackChange
+local RegisterChange
+local EnableOptionsUI
+local OpenOptions
+local CloseOptions
+local SyncInputToProperty
+local SetPreviewColor
+local SetProperty
+local AddDecorations
+local RemoveDecorations
+
+local function btScheduleUI(fn, interval)
+	if type(Support.ScheduleRecurringTask) == "function" then
+		return Support.ScheduleRecurringTask(fn, interval)
+	end
+	if type(Support.Loop) == "function" then
+		return Support.Loop(interval, fn)
+	end
+	return { Stop = function() end }
+end
+
+local function btSetGuiVisible(gui, visible)
+	if type(Core.BT_SetGuiVisible) == "function" then
+		return Core.BT_SetGuiVisible(gui, visible)
+	end
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function DecorateTool.Equip()
 	-- Enables the tool's equipped functionality
@@ -53,17 +98,17 @@ function ClearConnections()
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if DecorateTool.UI then
 
 		-- Reveal the UI
-		Core.BT_SetGuiVisible(DecorateTool.UI, true);
+		btSetGuiVisible(DecorateTool.UI, true);
 
 		-- Update the UI every 0.1 seconds
-		UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+		UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 		-- Skip UI creation
 		return;
@@ -73,7 +118,7 @@ local function ShowUI()
 	-- Create the UI
 	DecorateTool.UI = Core.Tool.Interfaces.BTDecorateToolGUI:Clone();
 	DecorateTool.UI.Parent = Core.UI;
-	Core.BT_SetGuiVisible(DecorateTool.UI, true);
+	btSetGuiVisible(DecorateTool.UI, true);
 
 	-- Enable each decoration type UI
 	EnableOptionsUI(DecorateTool.UI.Smoke);
@@ -85,7 +130,7 @@ local function ShowUI()
 	ListenForManualWindowTrigger(DecorateTool.ManualText, DecorateTool.Color.Color, SignatureButton)
 
 	-- Update the UI every 0.1 seconds
-	UIUpdater = Support.ScheduleRecurringTask(UpdateUI, 0.1);
+	UIUpdater = btScheduleUI(UpdateUI, 0.1);
 
 end;
 
@@ -202,7 +247,7 @@ function UpdateUI()
 
 end;
 
-local function HideUI()
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -211,13 +256,11 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(DecorateTool.UI, false);
+	btSetGuiVisible(DecorateTool.UI, false);
 	if UIUpdater and type(UIUpdater.Stop) == "function" then
 		UIUpdater:Stop();
+		UIUpdater = nil;
 	end
-
-	-- Stop updating the UI
-	UIUpdater:Stop();
 
 end;
 
@@ -411,19 +454,19 @@ function OpenOptions(DecorationType)
 
 	-- Push any UIs below this one downwards
 	local DecorationTypeIndex = Support.FindTableOccurrence(DecorationTypes, DecorationType);
-	for DecorationTypeIndex = DecorationTypeIndex + 1, #DecorationTypes do
+	for Index = DecorationTypeIndex + 1, #DecorationTypes do
 
 		-- Get the UI
-		local DecorationType = DecorationTypes[DecorationTypeIndex];
-		local UI = DecorateTool.UI[DecorationType];
+		local CurrentDecType = DecorationTypes[Index];
+		local CurrentUI = DecorateTool.UI[CurrentDecType];
 
 		-- Perform the position animation
-		UI:TweenPosition(
+		CurrentUI:TweenPosition(
 			UDim2.new(
-				UI.Position.X.Scale,
-				UI.Position.X.Offset,
-				UI.Position.Y.Scale,
-				30 + 30 * (DecorationTypeIndex - 1) + HeightExpansion.Y.Offset
+				CurrentUI.Position.X.Scale,
+				CurrentUI.Position.X.Offset,
+				CurrentUI.Position.Y.Scale,
+				30 + 30 * (Index - 1) + HeightExpansion.Y.Offset
 			),
 			Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.5, true
 		);
@@ -457,7 +500,7 @@ function CloseOptions(Exception)
 		);
 		
 		-- Make sure to not resize the exempt decoration type UI
-		if not Exception or Exception and DecorationType ~= Exception then
+		if not Exception or (Exception and DecorationType ~= Exception) then
 
 			-- Allow the options UI to be resized
 			UI.Options.ClipsDescendants = true;
@@ -610,7 +653,7 @@ function AddDecorations(DecorationType)
 	local Decorations = Core.SyncAPI:Invoke('CreateDecorations', Changes);
 
 	-- Put together the history record
-	local HistoryRecord = {
+	local HistoryRecordVal = {
 		Decorations = Decorations;
 		Selection = Selection.Items;
 
@@ -639,7 +682,7 @@ function AddDecorations(DecorationType)
 	};
 
 	-- Register the history record
-	Core.History.Add(HistoryRecord);
+	Core.History.Add(HistoryRecordVal);
 
 	-- Open the options UI for this decoration type
 	OpenOptions(DecorationType);
@@ -652,7 +695,7 @@ function RemoveDecorations(DecorationType)
 	local Decorations = GetDecorations(DecorationType);
 
 	-- Create the history record
-	local HistoryRecord = {
+	local HistoryRecordVal = {
 		Decorations = Decorations;
 		Selection = Selection.Items;
 
@@ -684,7 +727,7 @@ function RemoveDecorations(DecorationType)
 	Core.SyncAPI:Invoke('Remove', Decorations);
 
 	-- Register the history record
-	Core.History.Add(HistoryRecord);
+	Core.History.Add(HistoryRecordVal);
 
 end;
 

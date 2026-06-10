@@ -1,13 +1,13 @@
-Tool = script.Parent.Parent;
-Core = require(Tool.Core);
+local Tool = script.Parent.Parent;
+local Core = require(Tool.Core);
 
 -- Libraries
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 
 -- Import relevant references
-Selection = Core.Selection;
-Support = Core.Support;
-Security = Core.Security;
+local Selection = Core.Selection;
+local Support = Core.Support;
+local Security = Core.Security;
 Support.ImportServices();
 
 -- Initialize the tool
@@ -21,8 +21,32 @@ Allows you to weld parts to hold them together.<font size="6"><br /></font>
 
 <b>NOTE: </b>Welds may break if parts are individually moved.]]
 
--- Container for temporary connections (disconnected automatically)
+-- Container for temporary connections and state variables
 local Connections = {};
+
+-- Forward declarations of local helper functions to ensure scope compatibility
+local ClearConnections
+local ShowUI
+local HideUI
+local GetPartWelds
+local SearchWelds
+local CreateWelds
+local BreakWelds
+local EnableFocusHighlighting
+
+local function btSetGuiVisible(gui, visible)
+	if type(Core.BT_SetGuiVisible) == "function" then
+		return Core.BT_SetGuiVisible(gui, visible)
+	end
+	if gui == nil or typeof(gui) ~= "Instance" then
+		return
+	end
+	if gui:IsA("ScreenGui") then
+		gui.Enabled = visible and true or false
+	elseif gui:IsA("GuiObject") then
+		gui.Visible = visible and true or false
+	end
+end
 
 function WeldTool.Equip()
 	-- Enables the tool's equipped functionality
@@ -52,14 +76,14 @@ function ClearConnections()
 
 end;
 
-local function ShowUI()
+function ShowUI()
 	-- Creates and reveals the UI
 
 	-- Reveal UI if already created
 	if WeldTool.UI then
 
 		-- Reveal the UI
-		WeldTool.UI.Visible = true;
+		btSetGuiVisible(WeldTool.UI, true);
 
 		-- Skip UI creation
 		return;
@@ -69,7 +93,7 @@ local function ShowUI()
 	-- Create the UI
 	WeldTool.UI = Core.Tool.Interfaces.BTWeldToolGUI:Clone();
 	WeldTool.UI.Parent = Core.UI;
-	WeldTool.UI.Visible = true;
+	btSetGuiVisible(WeldTool.UI, true);
 
 	-- Hook up the buttons
 	WeldTool.UI.Interface.WeldButton.MouseButton1Click:Connect(CreateWelds);
@@ -81,7 +105,7 @@ local function ShowUI()
 
 end;
 
-local function HideUI()
+function HideUI()
 	-- Hides the tool UI
 
 	-- Make sure there's a UI
@@ -90,7 +114,7 @@ local function HideUI()
 	end;
 
 	-- Hide the UI
-	Core.BT_SetGuiVisible(WeldTool.UI, false);
+	btSetGuiVisible(WeldTool.UI, false);
 
 end;
 
@@ -164,19 +188,19 @@ function CreateWelds()
 	local HistoryRecord = {
 		Welds = Welds;
 
-		Unapply = function (HistoryRecord)
+		Unapply = function (Record)
 			-- Reverts this change
 
 			-- Remove the welds
-			Core.SyncAPI:Invoke('RemoveWelds', HistoryRecord.Welds);
+			Core.SyncAPI:Invoke('RemoveWelds', Record.Welds);
 
 		end;
 
-		Apply = function (HistoryRecord)
+		Apply = function (Record)
 			-- Reapplies this change
 
 			-- Restore the welds
-			Core.SyncAPI:Invoke('UndoRemovedWelds', HistoryRecord.Welds);
+			Core.SyncAPI:Invoke('UndoRemovedWelds', Record.Welds);
 
 		end;
 
@@ -214,19 +238,19 @@ function BreakWelds()
 	local HistoryRecord = {
 		Welds = Welds;
 
-		Unapply = function (HistoryRecord)
+		Unapply = function (Record)
 			-- Reverts this change
 
 			-- Restore the welds
-			Core.SyncAPI:Invoke('UndoRemovedWelds', HistoryRecord.Welds);
+			Core.SyncAPI:Invoke('UndoRemovedWelds', Record.Welds);
 
 		end;
 
-		Apply = function (HistoryRecord)
+		Apply = function (Record)
 			-- Reapplies this change
 
 			-- Remove the welds
-			Core.SyncAPI:Invoke('RemoveWelds', HistoryRecord.Welds);
+			Core.SyncAPI:Invoke('RemoveWelds', Record.Welds);
 
 		end;
 
