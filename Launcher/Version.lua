@@ -2,7 +2,7 @@
 	Версии для Remote/UI. Меняй Launcher при каждом push лаунчера.
 ]]
 return {
-	Launcher = "132",
+	Launcher = "133",
 	Tool = "3.1.0",
 	Roact = "1.3.0",
 	Cryo = "master",

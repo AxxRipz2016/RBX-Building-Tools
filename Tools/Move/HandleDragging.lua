@@ -190,8 +190,12 @@ function HandleDragging:AttachHandles(Part, Autofocus)
 
 		-- Make joints, restore original anchor and collision states
 		for Part, State in pairs(self.InitialPartStates) do
-			Part:MakeJoints()
-			Core.RestoreJoints(State.Joints)
+			if type(Part.MakeJoints) == "function" then
+				Part:MakeJoints()
+			end
+			if type(Core.RestoreJoints) == "function" then
+				Core.RestoreJoints(State.Joints)
+			end
 			Part.CanCollide = State.CanCollide
 			Part.Anchored = State.Anchored
 		end

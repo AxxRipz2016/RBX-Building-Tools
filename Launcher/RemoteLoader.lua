@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 132
+local SOURCE_CACHE_REV = 133
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -954,17 +954,47 @@ local TOOL_GLOBAL_FN_EXPORTS = {
 	"AttachHandles",
 }
 
-local function patchToolFnExports(path: string, source: string): string
-	if not path:find("^Tools/", 1, true) or path:find("Libraries/", 1, true) then
+local TOOL_EXPORT_MARKER = "BT remote export helpers v2"
+
+local function stripOldToolExportBlock(source: string, toolName: string): string
+	local marker = "\n-- BT remote export helpers"
+	local start = source:find(marker, 1, true)
+	if not start then
 		return source
 	end
-	if source:find("BT remote export helpers", 1, true) then
+	local ret = source:find("\nreturn " .. toolName, start, true)
+	if not ret then
+		return source
+	end
+	return source:sub(1, start) .. source:sub(ret)
+end
+
+local function repairBrokenR130ToolPatches(source: string, toolName: string): string
+	for _, fnName in TOOL_GLOBAL_FN_EXPORTS do
+		source = source:gsub("\nfunction " .. toolName .. "." .. fnName .. "%(", "\nfunction " .. fnName .. "(")
+	end
+	return stripOldToolExportBlock(source, toolName)
+end
+
+local function patchToolFnExports(path: string, source: string): string
+	if not path:find("^Tools/", 1, true) or path:find("Libraries/", 1, true) then
 		return source
 	end
 
 	local toolName = source:match("\nlocal (%w+Tool) = {")
 	if not toolName then
 		return source
+	end
+
+	if source:find(TOOL_EXPORT_MARKER, 1, true) then
+		return source
+	end
+
+	if source:find("BT remote export helpers", 1, true)
+		or source:find("\nfunction " .. toolName .. ".SetPivot%(", 1, true)
+		or source:find("\nfunction " .. toolName .. ".AttachHandles%(", 1, true)
+	then
+		source = repairBrokenR130ToolPatches(source, toolName)
 	end
 
 	if source:find("local function ShowUI", 1, true) then
@@ -993,7 +1023,7 @@ local function patchToolFnExports(path: string, source: string): string
 	end
 
 	if #exportLines > 0 then
-		local block = "\n-- BT remote export helpers\n" .. table.concat(exportLines, "\n") .. "\n"
+		local block = "\n-- " .. TOOL_EXPORT_MARKER .. "\n" .. table.concat(exportLines, "\n") .. "\n"
 		source = source:gsub("\nreturn " .. toolName, block .. "return " .. toolName)
 	end
 

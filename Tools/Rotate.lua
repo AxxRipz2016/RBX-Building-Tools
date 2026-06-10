@@ -124,11 +124,11 @@ function RotateTool.Equip()
 	-- Enables the tool's equipped functionality
 
 	-- Set our current pivot mode
-	SetPivot(RotateTool.Pivot);
+	RotateTool.SetPivot(RotateTool.Pivot);
 
 	-- Start up our interface
-	ShowUI();
-	BindShortcutKeys();
+	RotateTool.ShowUI();
+	RotateTool.BindShortcutKeys();
 
 end;
 
@@ -136,9 +136,9 @@ function RotateTool.Unequip()
 	-- Disables the tool's equipped functionality
 
 	-- Clear unnecessary resources
-	HideUI();
-	HideHandles();
-	ClearConnections();
+	RotateTool.HideUI();
+	RotateTool.HideHandles();
+	RotateTool.ClearConnections();
 	if BoundingBoxAPI and BoundingBoxAPI.ClearBoundingBox then
 		BoundingBoxAPI.ClearBoundingBox();
 	end
@@ -1045,6 +1045,15 @@ function GetIncrementMultiple(Number, Increment)
 
 	return Number;
 end;
+
+-- BT remote export helpers v2
+RotateTool.ShowUI = ShowUI
+RotateTool.HideUI = HideUI
+RotateTool.BindShortcutKeys = BindShortcutKeys
+RotateTool.HideHandles = HideHandles
+RotateTool.SetPivot = SetPivot
+RotateTool.ClearConnections = ClearConnections
+RotateTool.AttachHandles = AttachHandles
 
 -- Return the tool
 return RotateTool;
