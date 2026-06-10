@@ -1,4 +1,4 @@
--- BT_TOOLS_REV=139
+-- BT_TOOLS_REV=140
 local Tool = script.Parent.Parent;
 local Core = require(Tool.Core);
 local UserInputService = game:GetService("UserInputService")

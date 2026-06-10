@@ -1360,6 +1360,10 @@ Actions = {
 		-- Perform each change
 		for Part, Change in pairs(ChangeSet) do
 			Part.Anchored = Change.Anchored;
+        
+			if Change.Anchored == false then
+				Part.AssemblyLinearVelocity = Vector3.new(0, -0.01, 0)
+			end
 		end;
 
 	end;

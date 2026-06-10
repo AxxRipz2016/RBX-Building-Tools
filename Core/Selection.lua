@@ -426,6 +426,7 @@ end)
 function SelectionBoxPool.Cleanup(SelectionBox)
 	SelectionBox.Adornee = nil
 	SelectionBox.Visible = nil
+	SelectionBox.Parent = nil -- [ИСПРАВЛЕНИЕ]: Сбрасываем родителя при возвращении в пул
 end
 
 function CreateSelectionBoxes(Item)
@@ -454,6 +455,7 @@ function CreateSelectionBoxes(Item)
 		-- Create the selection box
 		local SelectionBox = SelectionBoxPool:Get()
 		SelectionBox.Adornee = Item
+		SelectionBox.Parent = GetCore().UI -- [ИСПРАВЛЕНИЕ]: Устанавливаем актуальный родительский UI ScreenGui
 		SelectionBox.Visible = true
 
 		-- Register the outline
