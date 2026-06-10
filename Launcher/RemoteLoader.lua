@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 131
+local SOURCE_CACHE_REV = 132
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -37,6 +37,16 @@ local NO_STUB_PATHS: { [string]: boolean } = {
 	["Vendor/Roact/src/init.lua"] = true,
 	["Libraries/Cryo/init.lua"] = true,
 }
+
+local function isNoStubPath(modulePath: string): boolean
+	if NO_STUB_PATHS[modulePath] then
+		return true
+	end
+	if modulePath:sub(1, #"Vendor/Roact/") == "Vendor/Roact/" then
+		return true
+	end
+	return false
+end
 
 local CRITICAL_PATHS = {
 	"Core/init.lua",
@@ -2051,9 +2061,11 @@ local function getFetchUrls(path: string): { string }
 	local seen: { [string]: boolean } = {}
 
 	local function add(url: string)
-		if not seen[url] then
-			seen[url] = true
-			table.insert(urls, url)
+		local sep = if url:find("?", 1, true) then "&" else "?"
+		local busted = `{url}{sep}btrev={SOURCE_CACHE_REV}`
+		if not seen[busted] then
+			seen[busted] = true
+			table.insert(urls, busted)
 		end
 	end
 
@@ -2179,6 +2191,11 @@ function RemoteLoader.invalidateModule(path: string)
 	moduleCache[path] = nil
 	rawSourceCache[path] = nil
 	sourceCache[path] = nil
+	failedPaths[path] = nil
+end
+
+function RemoteLoader.getPipelineRev(): number
+	return SOURCE_CACHE_REV
 end
 
 function RemoteLoader.getCachedModule(path: string): any
@@ -2633,13 +2650,13 @@ local function buildRequire(tool: Tool)
 		local ok, result = pcall(RemoteLoader.run, modulePath, tool, target)
 		if not ok then
 			local msg = `require {modulePath} ({target:GetFullName()}): {result}`
-			if continueOnError and not NO_STUB_PATHS[modulePath] then
+			if continueOnError and not isNoStubPath(modulePath) then
 				recordRunError(modulePath, msg)
 				return makeStubModule(modulePath)
 			end
 			error(`[BT] {msg}`, 0)
 		end
-		if result == nil and continueOnError and not NO_STUB_PATHS[modulePath] then
+		if result == nil and continueOnError and not isNoStubPath(modulePath) then
 			return makeStubModule(modulePath)
 		end
 		return result
@@ -2796,7 +2813,7 @@ end
 
 local function cacheModuleResult(path: string, result: any): any
 	if result == nil then
-		if continueOnError and not NO_STUB_PATHS[path] then
+		if continueOnError and not isNoStubPath(path) then
 			result = makeStubModule(path)
 		else
 			error(`[BT] {path}: модуль вернул nil`, 0)
@@ -2810,7 +2827,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	local cached = moduleCache[path]
 	if cached ~= nil then
 		if cached == false then
-			if continueOnError and not NO_STUB_PATHS[path] then
+			if continueOnError and not isNoStubPath(path) then
 				return makeStubModule(path)
 			end
 			error(`[BT] повторный run {path} после ошибки`, 0)
@@ -2851,7 +2868,7 @@ function RemoteLoader.run(path: string, tool: Tool, scriptInstance: Instance?): 
 	end
 
 	if not ok then
-		if continueOnError and not NO_STUB_PATHS[path] then
+		if continueOnError and not isNoStubPath(path) then
 			recordRunError(path, tostring(result))
 			moduleCache[path] = false
 			return makeStubModule(path)

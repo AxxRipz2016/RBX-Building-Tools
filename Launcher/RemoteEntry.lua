@@ -33,7 +33,7 @@ end
 
 local BASE_URL = "https://raw.githubusercontent.com/AxxRipz2016/RBX-Building-Tools/refs/heads/development/"
 -- Меняй при смене логики loadFromGit (старый paste без ?bt= кэширует RemoteEntry)
-local ENTRY_REV = 24
+local ENTRY_REV = 25
 
 local loadFn
 local httpGet
@@ -132,17 +132,49 @@ local function mayUseRemoteFetcher(): boolean
 	return true
 end
 
+-- Лаунчер-критичные файлы — только прямой HttpGet (не rawSourceCache RemoteLoader)
+local LAUNCHER_DIRECT_HTTP: { [string]: boolean } = {
+	["Launcher/RemoteLoader.lua"] = true,
+	["Launcher/RemoteToolBuilder.lua"] = true,
+	["Launcher/Version.lua"] = true,
+}
+
+local function invalidateRemoteLoaderPath(path: string)
+	local rl = _G.BT_RemoteLoader
+	if type(rl) == "table" and type(rl.invalidateModule) == "function" then
+		rl.invalidateModule(path)
+	end
+end
+
+local function validateLauncherSource(path: string, src: string)
+	if path == "Launcher/RemoteToolBuilder.lua" then
+		local needle = 'RTB_BUILD_ID = "' .. tostring(Version.Launcher) .. '"'
+		if not src:find(needle, 1, true) then
+			local got = src:match('RTB_BUILD_ID = "(%d+)"') or "?"
+			error(`[BT] RemoteToolBuilder в ответе r{got}, нужен r{Version.Launcher}`, 0)
+		end
+	elseif path == "Launcher/RemoteLoader.lua" then
+		local needle = "SOURCE_CACHE_REV = " .. tostring(Version.Launcher)
+		if not src:find(needle, 1, true) then
+			local got = src:match("SOURCE_CACHE_REV = (%d+)") or "?"
+			error(`[BT] RemoteLoader в ответе rev{got}, нужен rev{Version.Launcher}`, 0)
+		end
+	end
+end
+
 local function loadFromGit(path: string, forceRefresh: boolean?)
 	local key = moduleCacheKey(path)
 	if forceRefresh then
 		moduleCache[key] = nil
+		invalidateRemoteLoaderPath(path)
 	end
 	if moduleCache[key] ~= nil then
 		return moduleCache[key]
 	end
 
 	local src: string
-	if mayUseRemoteFetcher() then
+	local useFetcher = mayUseRemoteFetcher() and not LAUNCHER_DIRECT_HTTP[path]
+	if useFetcher then
 		local activeLoader = _G.BT_RemoteLoader
 		local okFetch, fetchErr = activeLoader.fetchSource(path)
 		if not okFetch then
@@ -158,6 +190,10 @@ local function loadFromGit(path: string, forceRefresh: boolean?)
 		end
 	else
 		src = httpGetWithRetry(path)
+	end
+
+	if LAUNCHER_DIRECT_HTTP[path] then
+		validateLauncherSource(path, src)
 	end
 
 	if not isLikelyLuaSource(src) then
@@ -364,21 +400,48 @@ local ok, err = pcall(function()
 	local function loadRemoteToolBuilderFresh(force: boolean?)
 		return loadFromGit("Launcher/RemoteToolBuilder.lua", force)
 	end
-	local RemoteToolBuilder = loadRemoteToolBuilderFresh(false)
+	local RemoteToolBuilder: any = nil
+	local MAX_RTB_ATTEMPTS = 6
+	for attempt = 1, MAX_RTB_ATTEMPTS do
+		if attempt > 1 then
+			cacheTag = tostring(Version.Launcher) .. "_a" .. tostring(attempt) .. "_" .. tostring(tick())
+			task.wait(0.3 * attempt)
+		end
+		local okRtb, rtbOrErr = pcall(loadRemoteToolBuilderFresh, attempt > 1)
+		if okRtb then
+			RemoteToolBuilder = rtbOrErr
+		else
+			warn(`[BT] RemoteToolBuilder попытка {attempt}: {rtbOrErr}`)
+		end
+		if type(RemoteToolBuilder) == "table"
+			and type(RemoteToolBuilder.getBuildId) == "function"
+			and tostring(RemoteToolBuilder.getBuildId()) == tostring(Version.Launcher)
+		then
+			break
+		end
+		if attempt < MAX_RTB_ATTEMPTS then
+			local got = if type(RemoteToolBuilder) == "table" and type(RemoteToolBuilder.getBuildId) == "function"
+				then RemoteToolBuilder.getBuildId()
+				else "?"
+			warn(`[BT] RemoteToolBuilder r{got} != r{Version.Launcher} — HttpGet {attempt + 1}/{MAX_RTB_ATTEMPTS}`)
+		end
+	end
 	if type(RemoteToolBuilder.getBuildId) ~= "function" then
 		error("[BT] RemoteToolBuilder устарел (нет getBuildId) — обнови paste / перезайди в плейс", 0)
 	end
 	if tostring(RemoteToolBuilder.getBuildId()) ~= tostring(Version.Launcher) then
-		warn(
-			`[BT] RemoteToolBuilder r{RemoteToolBuilder.getBuildId()} != Version r{Version.Launcher} — повтор HttpGet`
+		error(
+			`[BT] RemoteToolBuilder закэширован r{RemoteToolBuilder.getBuildId()}, нужен r{Version.Launcher}. Rejoin + новый paste.`,
+			0
 		)
-		cacheTag = tostring(Version.Launcher) .. "_" .. tostring(tick())
-		RemoteToolBuilder = loadRemoteToolBuilderFresh(true)
-		if tostring(RemoteToolBuilder.getBuildId()) ~= tostring(Version.Launcher) then
-			warn(
-				`[BT] RemoteToolBuilder r{RemoteToolBuilder.getBuildId()} после retry — продолжаем (rejoin если баги)`
-			)
-		end
+	end
+	if type(RemoteLoader.getPipelineRev) == "function"
+		and RemoteLoader.getPipelineRev() ~= tonumber(Version.Launcher)
+	then
+		error(
+			`[BT] RemoteLoader rev{RemoteLoader.getPipelineRev()} != r{Version.Launcher}. Rejoin + новый paste.`,
+			0
+		)
 	end
 	local manifestSrc = httpGetWithRetry("Launcher/manifest.lua")
 	if not isLikelyLuaSource(manifestSrc) then
