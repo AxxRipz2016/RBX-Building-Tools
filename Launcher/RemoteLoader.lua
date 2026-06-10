@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 134
+local SOURCE_CACHE_REV = 135
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -1000,7 +1000,9 @@ local function patchToolFnExports(path: string, source: string): string
 		return source
 	end
 
-	if source:find(TOOL_EXPORT_MARKER, 1, true) then
+	if source:find(TOOL_EXPORT_MARKER, 1, true)
+		and source:find("\nfunction " .. toolName .. ".SetPivot%(", 1, true)
+	then
 		return source
 	end
 
@@ -2051,6 +2053,24 @@ local function getRawSource(path: string): string?
 	return rawSourceCache[path]
 end
 
+local TOOL_SOURCE_FINGERPRINTS: { [string]: string } = {
+	["Tools/Rotate.lua"] = "BT_ROTATE_REV=135",
+}
+
+local function validateFetchedToolSource(path: string, body: string): (boolean, string?)
+	local needle = TOOL_SOURCE_FINGERPRINTS[path]
+	if not needle then
+		return true, nil
+	end
+	if body:find(needle, 1, true) then
+		return true, nil
+	end
+	if path == "Tools/Rotate.lua" and body:find("\nfunction RotateTool%.SetPivot%(", 1, true) then
+		return true, nil
+	end
+	return false, `{path}: нет {needle} (кэш HttpGet — rejoin)`
+end
+
 local function getPatchedSource(path: string): string?
 	local raw = getRawSource(path)
 	if not raw then
@@ -2285,6 +2305,13 @@ function RemoteLoader.fetchSource(path: string): (boolean, string?)
 				result = normalizeBody(result)
 			end
 			if ok and type(result) == "string" and #result > 0 and isLikelyLuaSource(result) then
+				local validBody, validErr = validateFetchedToolSource(path, result)
+				if not validBody then
+					lastErr = validErr
+					rawSourceCache[path] = nil
+					sourceCache[path] = nil
+					continue
+				end
 				rawSourceCache[path] = result
 				sourceCache[path] = nil
 				result = getPatchedSource(path)

@@ -1,3 +1,4 @@
+-- BT_ROTATE_REV=135
 Tool = script.Parent.Parent;
 Core = require(Tool.Core);
 SnapTracking = require(Tool.Core.Snapping);
@@ -380,7 +381,9 @@ function RotateTool.AttachHandles(Part, Autofocus)
 		-- Prepare for rotating parts when the handle is clicked
 
 		-- Prevent selection
-		Core.Targeting.CancelSelecting();
+		if Core.Targeting and type(Core.Targeting.CancelSelecting) == "function" then
+			Core.Targeting.CancelSelecting();
+		end
 
 		-- Indicate rotating via handle
 		HandleRotating = true;
@@ -470,7 +473,9 @@ function RotateTool.AttachHandles(Part, Autofocus)
 		end
 
 		-- Prevent selection
-		Core.Targeting.CancelSelecting();
+		if Core.Targeting and type(Core.Targeting.CancelSelecting) == "function" then
+			Core.Targeting.CancelSelecting();
+		end
 
 		-- Disable rotating
 		HandleRotating = false;
@@ -1064,6 +1069,15 @@ end;
 -- BT remote export helpers v3
 RotateTool.ShowUI = ShowUI
 RotateTool.HideUI = HideUI
+
+do
+	local required = { "SetPivot", "ShowUI", "HideUI", "BindShortcutKeys", "AttachHandles", "HideHandles", "ClearConnections" }
+	for _, name in ipairs(required) do
+		if type(RotateTool[name]) ~= "function" then
+			error(`[BT] Rotate r135: RotateTool.{name} не функция`, 0)
+		end
+	end
+end
 
 -- Return the tool
 return RotateTool;

@@ -13,7 +13,7 @@ local Config = req("Config")
 local RemoteLoader = req("RemoteLoader")
 
 local RemoteToolBuilder = {}
-local RTB_BUILD_ID = "134"
+local RTB_BUILD_ID = "135"
 
 function RemoteToolBuilder.getBuildId(): string
 	return RTB_BUILD_ID
@@ -1260,6 +1260,20 @@ function RemoteToolBuilder.StartRuntime(tool: Tool, onStep: ((string) -> ())?)
 			ensureInterfacesFromLol(tool)
 			tool:SetAttribute("BT_InterfacesPending", nil)
 			scrubPlayerBtUi(coreEnv, "after lol")
+		end
+
+		do
+			local toolsFolder = tool:FindFirstChild("Tools")
+			local rotateScript = toolsFolder and toolsFolder:FindFirstChild("Rotate")
+			if rotateScript and rotateScript:IsA("ModuleScript") then
+				RemoteLoader.invalidateModule("Tools/Rotate.lua")
+				local okRot, rotOrErr = pcall(RemoteLoader.run, "Tools/Rotate.lua", tool, rotateScript)
+				if okRot and type(rotOrErr) == "table" and type(rotOrErr.SetPivot) == "function" then
+					print("[BT] Rotate r135: SetPivot OK")
+				else
+					warn(`[BT] Rotate r135 не загружен: {tostring(rotOrErr)}`)
+				end
+			end
 		end
 
 		scrubPlayerBtUi(coreEnv, "StartRuntime done")
