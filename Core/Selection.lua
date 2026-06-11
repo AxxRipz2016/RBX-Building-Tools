@@ -1,3 +1,4 @@
+-- BT_CORE_REV=150
 local Tool = script.Parent.Parent
 local History = require(script.Parent.History)
 
@@ -456,7 +457,7 @@ function CreateSelectionBoxes(Item)
 		-- Create the selection box
 		local SelectionBox = SelectionBoxPool:Get()
 		SelectionBox.Adornee = TargetItem
-		SelectionBox.Parent = TargetItem -- [ИСПРАВЛЕНИЕ]: Помещаем SelectionBox прямо внутрь выделяемого парта. Это гарантирует отображение обводки.
+		SelectionBox.Parent = GetCore().UI -- [ИСПРАВЛЕНИЕ]: Помещаем SelectionBox в ScreenGui динамически (как и TargetBox), гарантируя рендеринг в клиенте.
 		SelectionBox.Visible = true
 
 		-- Register the outline
