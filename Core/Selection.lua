@@ -1,4 +1,4 @@
--- BT_CORE_REV=151
+-- BT_CORE_REV=152
 local Tool = script.Parent.Parent
 local History = require(script.Parent.History)
 

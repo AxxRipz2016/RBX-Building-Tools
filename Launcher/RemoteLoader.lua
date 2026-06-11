@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 151
+local SOURCE_CACHE_REV = 152
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -143,7 +143,7 @@ end
 
 -- AssignHotkey/EquipTool объявляются позже — не экспортировать раньше (иначе Core.AssignHotkey = nil)
 local CORE_BT_UI_HELPERS = [[
-local BT_PANEL_KEEP = { Dock = true, Notifications = true }
+local BT_PANEL_KEEP = { Dock = true, Notifications = true, ScopeHUD = true }
 
 function Core.BT_SetGuiVisible(gui, visible)
 	if gui == nil or typeof(gui) ~= "Instance" then
@@ -2050,25 +2050,27 @@ local function getRawSource(path: string): string?
 end
 
 local TOOL_SOURCE_FINGERPRINTS: { [string]: string } = {
-	["Core/init.lua"] = "BT_CORE_REV=151",
-	["Core/Selection.lua"] = "BT_CORE_REV=151",
-	["UI/Dock/AboutPane.lua"] = "BT_UI_REV=151",
-	["Tools/Rotate.lua"] = "BT_ROTATE_REV=151",
-	["Tools/Move/init.lua"] = "BT_MOVE_REV=151",
-	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=151",
-	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=151",
-	["Tools/Anchor.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Collision.lua"] = "BT_TOOLS_REV=151",
-	["Tools/NewPart.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Paint/init.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Decorate.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Lighting.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Material.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Mesh.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Surface.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Texture.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Weld.lua"] = "BT_TOOLS_REV=151",
-	["Tools/Resize.lua"] = "BT_TOOLS_REV=151",
+	["Core/init.lua"] = "BT_CORE_REV=152",
+	["Core/Selection.lua"] = "BT_CORE_REV=152",
+	["Core/Targeting.lua"] = "BT_CORE_REV=152",
+	["UI/Dock/AboutPane.lua"] = "BT_UI_REV=152",
+	["UI/ScopeHUD/init.lua"] = "BT_UI_REV=152",
+	["Tools/Rotate.lua"] = "BT_ROTATE_REV=152",
+	["Tools/Move/init.lua"] = "BT_MOVE_REV=152",
+	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=152",
+	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=152",
+	["Tools/Anchor.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Collision.lua"] = "BT_TOOLS_REV=152",
+	["Tools/NewPart.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Paint/init.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Decorate.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Lighting.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Material.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Mesh.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Surface.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Texture.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Weld.lua"] = "BT_TOOLS_REV=152",
+	["Tools/Resize.lua"] = "BT_TOOLS_REV=152",
 }
 
 local function validateFetchedToolSource(path: string, body: string): (boolean, string?)

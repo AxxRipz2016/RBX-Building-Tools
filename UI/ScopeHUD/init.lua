@@ -1,3 +1,4 @@
+-- BT_UI_REV=152
 local Root = script.Parent.Parent
 local Libraries = Root:WaitForChild 'Libraries'
 local Vendor = Root:WaitForChild 'Vendor'
@@ -142,12 +143,8 @@ function ScopeHUD:render()
     return new('Frame', {
         Active = true;
         Draggable = true;
-        Position = self.state.IsToolModeEnabled and
-            UDim2.new(0, 10/2, 1, -8/2) or
-            UDim2.new(0, 10/2, 0, 8/2);
-        AnchorPoint = self.state.IsToolModeEnabled and
-            Vector2.new(0, 1) or
-            Vector2.new(0, 0);
+        Position = UDim2.new(0, 10/2, 0, 8/2);
+        AnchorPoint = Vector2.new(0, 0);
         Size = self.ContainerSize;
         BackgroundTransparency = 1;
         [Roact.Event.InputBegan] = self.OnInputBegin;

@@ -13,7 +13,7 @@ local Config = req("Config")
 local RemoteLoader = req("RemoteLoader")
 
 local RemoteToolBuilder = {}
-local RTB_BUILD_ID = "151"
+local RTB_BUILD_ID = "152"
 
 function RemoteToolBuilder.getBuildId(): string
 	return RTB_BUILD_ID
@@ -877,6 +877,52 @@ local function findToolListFrame(coreEnv: any): Frame?
 	return if dock then dock:FindFirstChild("ToolList") :: Frame? else nil
 end
 
+local DOCK_THEME_COLORS: { [string]: Color3 } = {
+	Move = Color3.fromRGB(255, 140, 60),
+	Resize = Color3.fromRGB(100, 180, 255),
+	Rotate = Color3.fromRGB(100, 220, 120),
+	Paint = Color3.fromRGB(255, 80, 80),
+	Surface = Color3.fromRGB(255, 220, 80),
+	Material = Color3.fromRGB(60, 160, 80),
+	Anchor = Color3.fromRGB(255, 160, 60),
+	Collision = Color3.fromRGB(160, 80, 255),
+	NewPart = Color3.fromRGB(240, 240, 240),
+	Mesh = Color3.fromRGB(255, 150, 200),
+	Texture = Color3.fromRGB(220, 80, 220),
+	Weld = Color3.fromRGB(30, 30, 30),
+	Lighting = Color3.fromRGB(255, 230, 100),
+	Decorate = Color3.fromRGB(255, 100, 180),
+}
+
+local function isSameDockTool(currentTool: any, moduleName: string): boolean
+	if type(currentTool) ~= "table" then
+		return false
+	end
+	if currentTool.__btModuleName == moduleName then
+		return true
+	end
+	if currentTool.Name and currentTool.Name:find(moduleName, 1, true) then
+		return true
+	end
+	return false
+end
+
+local function updateNativeDockHighlight(coreEnv: any)
+	local entries = coreEnv.__bt_nativeDockButtons
+	if type(entries) ~= "table" then
+		return
+	end
+	local current = coreEnv.CurrentTool
+	for moduleName, entry in pairs(entries) do
+		local btn = entry.btn
+		if btn and btn.Parent then
+			local theme = entry.themeColor or Color3.fromRGB(255, 140, 60)
+			btn.BackgroundColor3 = theme
+			btn.BackgroundTransparency = isSameDockTool(current, moduleName) and 0 or 1
+		end
+	end
+end
+
 local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]: string }): number
 	if _G.__bt_hide_ui_until_equip then
 		uiTrace(coreEnv, "syncDockButtons:skip", "hide until equip")
@@ -887,22 +933,29 @@ local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]
 		return 0
 	end
 
+	if coreEnv.__bt_nativeDockButtons and next(coreEnv.__bt_nativeDockButtons) then
+		updateNativeDockHighlight(coreEnv)
+		return coreEnv.__bt_dockButtonCount or 0
+	end
+
 	for _, child in toolListFrame:GetChildren() do
 		if child:IsA("ImageButton") then
 			child:Destroy()
 		end
 	end
 
+	coreEnv.__bt_nativeDockButtons = {}
 	local added = 0
 	for index, row in DOCK_TOOL_ROWS do
 		local iconKey, hotkey, moduleName = row[1], row[2], row[3]
 		local iconId = icons[iconKey]
 		if type(iconId) == "string" and findDockToolModule(tool, moduleName) then
+		local themeColor = DOCK_THEME_COLORS[moduleName] or Color3.fromRGB(255, 140, 60)
 		local btn = Instance.new("ImageButton")
 		btn.Name = "BT_ToolBtn_" .. moduleName
 		btn.LayoutOrder = index
 		btn.Size = UDim2.fromOffset(35, 35)
-		btn.BackgroundColor3 = Color3.fromRGB(255, 140, 60)
+		btn.BackgroundColor3 = themeColor
 		btn.BackgroundTransparency = 1
 		btn.BorderSizePixel = 0
 		btn.Image = iconId
@@ -926,6 +979,11 @@ local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]
 		hotkeyLabel.TextYAlignment = Enum.TextYAlignment.Top
 		hotkeyLabel.Parent = btn
 
+		coreEnv.__bt_nativeDockButtons[moduleName] = {
+			btn = btn,
+			themeColor = themeColor,
+		}
+
 		btn.Activated:Connect(function()
 			if type(coreEnv.EquipTool) ~= "function" then
 				return
@@ -943,14 +1001,25 @@ local function syncDockButtonsNative(coreEnv: any, tool: Tool, icons: { [string]
 				mod = coreEnv.ResolveBuildingToolModule(mod) or mod
 			end
 			coreEnv.EquipTool(mod)
+			updateNativeDockHighlight(coreEnv)
 		end)
 
 		added = added + 1
 		end
 	end
 
+	if not coreEnv.__bt_nativeDockToolChangedConn then
+		local toolChanged = coreEnv.ToolChanged
+		if type(toolChanged) == "table" and type(toolChanged.Connect) == "function" then
+			coreEnv.__bt_nativeDockToolChangedConn = toolChanged:Connect(function()
+				updateNativeDockHighlight(coreEnv)
+			end)
+		end
+	end
+
 	local rows = math.max(1, math.ceil(added / 2))
 	toolListFrame.Size = UDim2.fromOffset(70, 35 * rows)
+	updateNativeDockHighlight(coreEnv)
 	return added
 end
 

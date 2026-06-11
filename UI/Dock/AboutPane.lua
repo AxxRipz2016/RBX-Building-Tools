@@ -1,4 +1,4 @@
--- BT_UI_REV=151
+-- BT_UI_REV=152
 local Root = script:FindFirstAncestorWhichIsA('Tool')
 local Vendor = Root:WaitForChild('Vendor')
 local UI = Root:WaitForChild('UI')

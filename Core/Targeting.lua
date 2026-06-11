@@ -1,3 +1,4 @@
+-- BT_CORE_REV=152
 local Tool = script.Parent.Parent
 local Workspace = game:GetService 'Workspace'
 local UserInputService = game:GetService 'UserInputService'
@@ -496,52 +497,72 @@ function TargetingModule.FinishRectangleSelecting()
 end;
 
 function TargetingModule.PrismSelect()
-	-- Selects parts in the currently selected parts
+	-- Удаляет выделенные части и выбирает соседние (касающиеся)
 
-	-- Ensure parts are selected
-	if #Selection.Items == 0 then
+	local partsToDelete = {};
+	for _, Part in ipairs(Selection.Parts) do
+		if Part:IsA('BasePart') then
+			table.insert(partsToDelete, Part);
+		end;
+	end;
+
+	if #partsToDelete == 0 then
 		return;
 	end;
 
-	-- Get core API
 	local Core = GetCore();
+	local BoundingBoxMod = Core.BoundingBox
+		or require(Tool:WaitForChild('Core'):WaitForChild('BoundingBox'));
 
-	-- Get region for selection items and find potential parts
-	local Extents = require(Core.Tool.Core.BoundingBox).CalculateExtents(Selection.Items, nil, true);
+	-- Расширяем коллизии вокруг выделения, чтобы GetTouchingParts сработал
+	local Extents = BoundingBoxMod.CalculateExtents(partsToDelete, nil, true);
 	local Region = Region3.new(Extents.Min, Extents.Max);
-	local PotentialParts = Workspace:FindPartsInRegion3WithIgnoreList(Region, Selection.Items, math.huge);
+	local PotentialParts = Workspace:FindPartsInRegion3WithIgnoreList(Region, partsToDelete, math.huge);
 
-	-- Enable collision on all potential parts
 	local OriginalState = {};
+	for _, Part in ipairs(partsToDelete) do
+		OriginalState[Part] = { Anchored = Part.Anchored, CanCollide = Part.CanCollide };
+		Part.Anchored = true;
+		Part.CanCollide = true;
+	end;
 	for _, PotentialPart in pairs(PotentialParts) do
-		OriginalState[PotentialPart] = { Anchored = PotentialPart.Anchored, CanCollide = PotentialPart.CanCollide };
-		PotentialPart.Anchored = true;
-		PotentialPart.CanCollide = true;
+		if PotentialPart:IsA('BasePart') and not OriginalState[PotentialPart] then
+			OriginalState[PotentialPart] = { Anchored = PotentialPart.Anchored, CanCollide = PotentialPart.CanCollide };
+			PotentialPart.Anchored = true;
+			PotentialPart.CanCollide = true;
+		end
 	end;
 
-	local Parts = {};
+	local deletedPartsIndex = {}
+	for _, part in ipairs(partsToDelete) do
+		deletedPartsIndex[part] = true
+	end
 
-	-- Find all parts intersecting with selection
-	for _, Part in pairs(Selection.Items) do
-		local TouchingParts = Part:GetTouchingParts();
-		for _, TouchingPart in pairs(TouchingParts) do
-			if not Selection.IsSelected(TouchingPart) then
-				Parts[TouchingPart] = true;
+	local Neighbors = {};
+
+	for _, Part in ipairs(partsToDelete) do
+		for _, TouchingPart in ipairs(Part:GetTouchingParts()) do
+			if TouchingPart:IsA('BasePart')
+				and TouchingPart:IsDescendantOf(Workspace)
+				and not deletedPartsIndex[TouchingPart]
+			then
+				Neighbors[TouchingPart] = true;
 			end;
 		end;
 	end;
 
-	-- Restore all potential parts' original states
-	for PotentialPart, State in pairs(OriginalState) do
-		PotentialPart.CanCollide = State.CanCollide;
-		PotentialPart.Anchored = State.Anchored;
+	for Part, State in pairs(OriginalState) do
+		Part.CanCollide = State.CanCollide;
+		Part.Anchored = State.Anchored;
 	end;
 
-	-- Delete the selection parts
+	-- Удаляем только части, не родительские Model/Folder из Selection.Items
+	Selection.Replace(partsToDelete, false);
 	Core.DeleteSelection();
 
-	-- Select all found parts
-	Selection.Replace(Support.Keys(Parts), true);
+	if next(Neighbors) then
+		Selection.Replace(Support.Keys(Neighbors), true);
+	end;
 
 end;
 

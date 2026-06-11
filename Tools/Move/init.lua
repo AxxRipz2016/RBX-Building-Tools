@@ -1,4 +1,4 @@
--- BT_MOVE_REV=151
+-- BT_MOVE_REV=152
 local Tool = script.Parent.Parent
 local Core = require(Tool.Core)
 local SnapTracking = require(Tool.Core.Snapping)

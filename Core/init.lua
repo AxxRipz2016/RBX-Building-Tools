@@ -1,4 +1,4 @@
--- BT_CORE_REV=151
+-- BT_CORE_REV=152
 local Core = getfenv(0)
 Tool = script.Parent;
 Plugin = Tool.Parent and Tool.Parent:IsA("Plugin") and Tool.Parent or nil
@@ -98,6 +98,7 @@ end
 
 -- Core events
 ToolChanged = Signal.new()
+Core.ToolChanged = ToolChanged
 
 local function IsBuildingToolModule(ToolModule)
 	return type(ToolModule) == "table"
@@ -169,7 +170,7 @@ function ResolveBuildingToolModule(BuildingToolModule)
 	return nil
 end
 
-local BT_PANEL_KEEP = { Dock = true, Notifications = true }
+local BT_PANEL_KEEP = { Dock = true, Notifications = true, ScopeHUD = true }
 
 function Core.BT_SetGuiVisible(gui, visible)
 	if gui == nil or typeof(gui) ~= "Instance" then
@@ -375,7 +376,7 @@ end
 function Core.EnsureUI()
 	btTraceUI("EnsureUI", "enter")
 	if _G.__bt_hide_ui_until_equip or (Mode == 'Tool' and not isRobloxToolEquippedInCharacter()) then
-		btTraceUI("EnsureUI", "blocked (no cube in hands)")
+		btTraceUI("EnsureUI:FINAL_BLOCK", "no cube")
 		if needsUIInit() then
 			Core.EnsureDockReady()
 		end
@@ -404,6 +405,7 @@ end
 function EquipTool(BuildingToolModule)
 	-- __bt_equip_guard
 	-- Equips and switches to the given tool
+	local originalModule = BuildingToolModule
 	BuildingToolModule = ResolveBuildingToolModule(BuildingToolModule)
 	if not IsBuildingToolModule(BuildingToolModule) then
 		BuildingToolModule = DefaultBuildingToolModule()
@@ -415,7 +417,7 @@ function EquipTool(BuildingToolModule)
 
 	if Mode == 'Tool' and not isRobloxToolEquippedInCharacter() then
 		btTraceUI("EquipTool:blocked", BuildingToolModule.Name or "?")
-		_G.__bt_pending_equip_module = BuildingToolModule
+		_G.__bt_pending_equip_module = originalModule
 		local rbxTool = getRobloxTool()
 		if Player and Player.Character and rbxTool and rbxTool.Parent == Player.Backpack then
 			local hum = Player.Character:FindFirstChildOfClass("Humanoid")
@@ -453,11 +455,12 @@ function EquipTool(BuildingToolModule)
 	end;
 
 	-- Set building tool module as current
-	CurrentTool = BuildingToolModule;
-	CurrentTool.Equipped = true;
+	CurrentTool = originalModule;
+	Core.CurrentTool = originalModule;
+	BuildingToolModule.Equipped = true;
 
 	-- Fire relevant events
-	ToolChanged:Fire(BuildingToolModule);
+	ToolChanged:Fire(originalModule);
 
 	-- Equip the tool
 	if not SafeCallEquip(BuildingToolModule) then
@@ -724,6 +727,10 @@ function Enable(Mouse)
 		btTraceUI("Enable:show", "PlayerGui")
 		UI.Parent = UIContainer;
 		UI.Enabled = true;
+		ensureScopeHUDMounted()
+		if Core.BT_SetGuiVisible and UI:FindFirstChild('ScopeHUD') then
+			Core.BT_SetGuiVisible(UI.ScopeHUD, true)
+		end
 		task.defer(showPirateDisclaimerOnce)
 	end;
 
@@ -987,6 +994,8 @@ function InitializeUI()
 		end
 	end)
 
+	Core.__bt_scopeHudMounted = nil
+
 	-- Remote: ScreenGui никогда в PlayerGui до экипировки куба
 	if _G.__bt_hide_ui_until_equip or (Mode == 'Tool' and not isRobloxToolEquippedInCharacter()) then
 		UI.Enabled = false
@@ -1054,18 +1063,29 @@ function CloseExplorer()
 	Core.ExplorerVisibilityChanged:Fire()
 end
 
+local function ensureScopeHUDMounted()
+	if Core.__bt_scopeHudMounted or not UI then
+		return
+	end
+	local ok, err = pcall(function()
+		local ScopeHUDTemplate = require(UIElements:WaitForChild('ScopeHUD'))
+		local ScopeHUDElement = Roact.createElement(ScopeHUDTemplate, {
+			Core = Core;
+		})
+		Roact.mount(ScopeHUDElement, UI, 'ScopeHUD')
+		Core.__bt_scopeHudMounted = true
+	end)
+	if not ok then
+		warn("[BT] ScopeHUD mount:", err)
+	end
+end
+
 -- Create scope HUD when tool opens
 coroutine.wrap(function ()
-	Enabled:Wait()
-
-	-- Create scope HUD
-	local ScopeHUDTemplate = require(UIElements:WaitForChild 'ScopeHUD')
-	local ScopeHUD = Roact.createElement(ScopeHUDTemplate, {
-		Core = getfenv(0);
-	})
-
-	-- Mount scope HUD
-	Roact.mount(ScopeHUD, UI, 'ScopeHUD')
+	if not IsEnabled then
+		Enabled:Wait()
+	end
+	ensureScopeHUDMounted()
 end)()
 
 -- Register explorer pane toggling hotkeys
