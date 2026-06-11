@@ -1,4 +1,4 @@
--- BT_CORE_REV=153
+-- BT_CORE_REV=154
 local Core = getfenv(0)
 Tool = script.Parent;
 Plugin = Tool.Parent and Tool.Parent:IsA("Plugin") and Tool.Parent or nil

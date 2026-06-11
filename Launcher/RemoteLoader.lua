@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 153
+local SOURCE_CACHE_REV = 154
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -2050,27 +2050,27 @@ local function getRawSource(path: string): string?
 end
 
 local TOOL_SOURCE_FINGERPRINTS: { [string]: string } = {
-	["Core/init.lua"] = "BT_CORE_REV=153",
-	["Core/Selection.lua"] = "BT_CORE_REV=153",
-	["Core/Targeting.lua"] = "BT_CORE_REV=153",
-	["UI/Dock/AboutPane.lua"] = "BT_UI_REV=153",
-	["UI/ScopeHUD/init.lua"] = "BT_UI_REV=153",
-	["Tools/Rotate.lua"] = "BT_ROTATE_REV=153",
-	["Tools/Move/init.lua"] = "BT_MOVE_REV=153",
-	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=153",
-	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=153",
-	["Tools/Anchor.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Collision.lua"] = "BT_TOOLS_REV=153",
-	["Tools/NewPart.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Paint/init.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Decorate.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Lighting.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Material.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Mesh.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Surface.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Texture.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Weld.lua"] = "BT_TOOLS_REV=153",
-	["Tools/Resize.lua"] = "BT_TOOLS_REV=153",
+	["Core/init.lua"] = "BT_CORE_REV=154",
+	["Core/Selection.lua"] = "BT_CORE_REV=154",
+	["Core/Targeting.lua"] = "BT_CORE_REV=154",
+	["UI/Dock/AboutPane.lua"] = "BT_UI_REV=154",
+	["UI/ScopeHUD/init.lua"] = "BT_UI_REV=154",
+	["Tools/Rotate.lua"] = "BT_ROTATE_REV=154",
+	["Tools/Move/init.lua"] = "BT_MOVE_REV=154",
+	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=154",
+	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=154",
+	["Tools/Anchor.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Collision.lua"] = "BT_TOOLS_REV=154",
+	["Tools/NewPart.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Paint/init.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Decorate.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Lighting.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Material.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Mesh.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Surface.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Texture.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Weld.lua"] = "BT_TOOLS_REV=154",
+	["Tools/Resize.lua"] = "BT_TOOLS_REV=154",
 }
 
 local function validateFetchedToolSource(path: string, body: string): (boolean, string?)
