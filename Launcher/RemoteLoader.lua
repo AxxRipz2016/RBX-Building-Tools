@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 147
+local SOURCE_CACHE_REV = 148
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -2054,12 +2054,13 @@ local function getRawSource(path: string): string?
 end
 
 local TOOL_SOURCE_FINGERPRINTS: { [string]: string } = {
-	["Tools/Rotate.lua"] = "BT_ROTATE_REV=147",
-	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=147",
-	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=147",
-	["Tools/Anchor.lua"] = "BT_TOOLS_REV=147",
-	["Tools/Collision.lua"] = "BT_TOOLS_REV=147",
-	["Tools/NewPart.lua"] = "BT_TOOLS_REV=147",
+	["Tools/Rotate.lua"] = "BT_ROTATE_REV=148",
+	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=148",
+	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=148",
+	["Tools/Anchor.lua"] = "BT_TOOLS_REV=148",
+	["Tools/Collision.lua"] = "BT_TOOLS_REV=148",
+	["Tools/NewPart.lua"] = "BT_TOOLS_REV=148",
+	["Tools/Paint/init.lua"] = "BT_TOOLS_REV=148",
 }
 
 local function validateFetchedToolSource(path: string, body: string): (boolean, string?)
