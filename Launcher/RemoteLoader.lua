@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 148
+local SOURCE_CACHE_REV = 149
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -2054,13 +2054,22 @@ local function getRawSource(path: string): string?
 end
 
 local TOOL_SOURCE_FINGERPRINTS: { [string]: string } = {
-	["Tools/Rotate.lua"] = "BT_ROTATE_REV=148",
-	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=148",
-	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=148",
-	["Tools/Anchor.lua"] = "BT_TOOLS_REV=148",
-	["Tools/Collision.lua"] = "BT_TOOLS_REV=148",
-	["Tools/NewPart.lua"] = "BT_TOOLS_REV=148",
-	["Tools/Paint/init.lua"] = "BT_TOOLS_REV=148",
+	["Tools/Rotate.lua"] = "BT_ROTATE_REV=149",
+	["Tools/Move/init.lua"] = "BT_MOVE_REV=149",
+	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=149",
+	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=149",
+	["Tools/Anchor.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Collision.lua"] = "BT_TOOLS_REV=149",
+	["Tools/NewPart.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Paint/init.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Decorate.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Lighting.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Material.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Mesh.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Surface.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Texture.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Weld.lua"] = "BT_TOOLS_REV=149",
+	["Tools/Resize.lua"] = "BT_TOOLS_REV=149",
 }
 
 local function validateFetchedToolSource(path: string, body: string): (boolean, string?)

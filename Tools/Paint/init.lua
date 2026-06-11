@@ -1,4 +1,4 @@
--- BT_TOOLS_REV=148
+-- BT_TOOLS_REV=149
 local Tool = script.Parent.Parent;
 local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
@@ -7,7 +7,7 @@ local UI = Tool:WaitForChild('UI')
 -- Libraries
 local Libraries = Tool:WaitForChild 'Libraries'
 local Maid = require(Libraries:WaitForChild 'Maid')
-local PaintHistoryRecord = require(script.Parent:WaitForChild 'PaintHistoryRecord') -- [ИСПРАВЛЕНИЕ]: Ищем в script.Parent, так как модули соседи
+local PaintHistoryRecord = require(script:WaitForChild 'PaintHistoryRecord') -- [ИСПРАВЛЕНИЕ]: Возвращаем оригинальный путь (внутри script)
 local ListenForManualWindowTrigger = require(Tool.Core:WaitForChild('ListenForManualWindowTrigger'))
 local Roact = require(Vendor:WaitForChild('Roact'))
 local ColorPicker = require(UI:WaitForChild('ColorPicker'))
