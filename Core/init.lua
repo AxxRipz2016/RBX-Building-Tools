@@ -1,3 +1,4 @@
+-- BT_CORE_REV=151
 local Core = getfenv(0)
 Tool = script.Parent;
 Plugin = Tool.Parent and Tool.Parent:IsA("Plugin") and Tool.Parent or nil
@@ -572,6 +573,74 @@ function EnableHotkeys()
 
 end;
 
+local function showPirateDisclaimerOnce()
+	if Core.PirateDisclaimerDisplayed or Mode ~= "Tool" then
+		return
+	end
+	if not UI or not UI.Parent then
+		return
+	end
+
+	local uiTree = Tool:FindFirstChild("UI")
+	local vendor = Tool:FindFirstChild("Vendor")
+	if not uiTree or not vendor then
+		return
+	end
+
+	local okRoact, Roact = pcall(require, vendor:WaitForChild("Roact"))
+	if not okRoact then
+		return
+	end
+
+	local okDialog, NotificationDialog = pcall(require, uiTree:WaitForChild("Notifications"):WaitForChild("NotificationDialog"))
+	if not okDialog then
+		return
+	end
+
+	local new = Roact.createElement
+	local function onDismiss()
+		if Core.__bt_pirateNoticeHandle then
+			pcall(function()
+				Roact.unmount(Core.__bt_pirateNoticeHandle)
+			end)
+			Core.__bt_pirateNoticeHandle = nil
+		end
+	end
+
+	local noticeGui = new("ScreenGui", {
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
+		DisplayOrder = 10000;
+		ResetOnSpawn = false;
+	}, {
+		Container = new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5);
+			BackgroundTransparency = 1;
+			Position = UDim2.new(0.5, 0, 0.5, 0);
+			Size = UDim2.new(0, 320, 0, 0);
+		}, {
+			Layout = new("UIListLayout", {
+				Padding = UDim.new(0, 10);
+				SortOrder = Enum.SortOrder.LayoutOrder;
+			});
+			Disclaimer = new(NotificationDialog, {
+				LayoutOrder = 1;
+				ThemeColor = Color3.fromRGB(220, 50, 50);
+				NoticeText = "Это <b>неофициальная (пиратская)</b> копия Building Tools.";
+				DetailText = "Не от F3X Team. Возможны баги и отсутствие поддержки.<font size=\"6\"><br /></font>Remote-версия с GitHub — используйте на свой риск.";
+				OnDismiss = onDismiss;
+			});
+		});
+	})
+
+	local okMount, handle = pcall(function()
+		return Roact.mount(noticeGui, UI, "BTPirateDisclaimer")
+	end)
+	if okMount and handle then
+		Core.__bt_pirateNoticeHandle = handle
+		Core.PirateDisclaimerDisplayed = true
+	end
+end
+
 function Enable(Mouse)
 
 	if Mode == 'Tool' then
@@ -655,6 +724,7 @@ function Enable(Mouse)
 		btTraceUI("Enable:show", "PlayerGui")
 		UI.Parent = UIContainer;
 		UI.Enabled = true;
+		task.defer(showPirateDisclaimerOnce)
 	end;
 
 	if type(Core.RefreshToolDock) == "function" then

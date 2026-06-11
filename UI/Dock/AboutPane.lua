@@ -1,3 +1,4 @@
+-- BT_UI_REV=151
 local Root = script:FindFirstAncestorWhichIsA('Tool')
 local Vendor = Root:WaitForChild('Vendor')
 local UI = Root:WaitForChild('UI')
@@ -31,105 +32,127 @@ Install the import plugin in <b>Roblox Studio</b> to import your creation:
 <font color="rgb(150, 150, 150)">roblox.com/library/142485815</font>]]
 
 -- Create component
-local AboutPane = Roact.PureComponent:extend(script.Name)
+local AboutPane = Roact.Component:extend(script.Name)
 
 function AboutPane:init()
-    self.DockSize, self.SetDockSize = Roact.createBinding(UDim2.new())
-    self.Maid = Maid.new()
+	self.DockSize, self.SetDockSize = Roact.createBinding(UDim2.new())
+	self.Maid = Maid.new()
+	self.ManualHandle = nil
+	self:setState({
+		IsManualOpen = false;
+	})
+end
+
+function AboutPane:getManualMountTarget()
+	local mountTarget = self.props.UIRoot
+		or (self.props.Core and self.props.Core.UI)
+	if mountTarget == nil then
+		local player = game:GetService("Players").LocalPlayer
+		if player then
+			mountTarget = player:FindFirstChild("PlayerGui")
+		end
+	end
+	return mountTarget
+end
+
+function AboutPane:toggleManual()
+	local mountTarget = self:getManualMountTarget()
+	if not mountTarget then
+		return
+	end
+
+	local nextOpen = not self.state.IsManualOpen
+	if nextOpen then
+		local ManualElement = new(ToolManualWindow, {
+			Text = MANUAL_CONTENT;
+			ThemeColor = Color3.fromRGB(255, 176, 0);
+		})
+		self.ManualHandle = Roact.mount(ManualElement, mountTarget, 'DockToolManualWindow')
+	else
+		if self.ManualHandle then
+			Roact.unmount(self.ManualHandle)
+			self.ManualHandle = nil
+		end
+	end
+
+	self:setState({
+		IsManualOpen = nextOpen;
+	})
 end
 
 function AboutPane:willUnmount()
-    self.Maid:Destroy()
+	self.Maid:Destroy()
+	if self.ManualHandle then
+		Roact.unmount(self.ManualHandle)
+		self.ManualHandle = nil
+	end
 end
 
 function AboutPane:render()
-    return new('ImageButton', {
-        Image = '';
-        BackgroundTransparency = 0.75;
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0);
-        LayoutOrder = self.props.LayoutOrder;
-        Size = UDim2.new(1, 0, 0, 32);
-        [Roact.Event.Activated] = function (rbx)
-            self:setState({
-                IsManualOpen = not self.state.IsManualOpen;
-            })
-        end;
-        [Roact.Event.MouseButton1Down] = function (rbx)
-            local Dock = rbx.Parent
-            local InitialAbsolutePosition = UserInputService:GetMouseLocation() - GuiService:GetGuiInset()
-            local InitialPosition = Dock.Position
+	return new('ImageButton', {
+		Image = '';
+		BackgroundTransparency = 0.75;
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+		LayoutOrder = self.props.LayoutOrder;
+		Size = UDim2.new(1, 0, 0, 32);
+		[Roact.Event.Activated] = function ()
+			self:toggleManual()
+		end;
+		[Roact.Event.MouseButton1Down] = function (rbx)
+			local Dock = rbx.Parent
+			local InitialAbsolutePosition = UserInputService:GetMouseLocation() - GuiService:GetGuiInset()
+			local InitialPosition = Dock.Position
 
-            self.Maid.DockDragging = UserInputService.InputChanged:Connect(function (Input)
-                if (Input.UserInputType.Name == 'MouseMovement') or (Input.UserInputType.Name == 'Touch') then
+			self.Maid.DockDragging = UserInputService.InputChanged:Connect(function (Input)
+				if (Input.UserInputType.Name == 'MouseMovement') or (Input.UserInputType.Name == 'Touch') then
 
-                    -- Suppress activation response if dragging detected
-                    if (Vector2.new(Input.Position.X, Input.Position.Y) - InitialAbsolutePosition).Magnitude > 3 then
-                        rbx.Active = false
-                    end
+					-- Suppress activation response if dragging detected
+					if (Vector2.new(Input.Position.X, Input.Position.Y) - InitialAbsolutePosition).Magnitude > 3 then
+						rbx.Active = false
+					end
 
-                    -- Reposition dock
-                    Dock.Position = UDim2.new(
-                        InitialPosition.X.Scale,
-                        InitialPosition.X.Offset + (Input.Position.X - InitialAbsolutePosition.X),
-                        InitialPosition.Y.Scale,
-                        InitialPosition.Y.Offset + (Input.Position.Y - InitialAbsolutePosition.Y)
-                    )
-                end
-            end)
+					-- Reposition dock
+					Dock.Position = UDim2.new(
+						InitialPosition.X.Scale,
+						InitialPosition.X.Offset + (Input.Position.X - InitialAbsolutePosition.X),
+						InitialPosition.Y.Scale,
+						InitialPosition.Y.Offset + (Input.Position.Y - InitialAbsolutePosition.Y)
+					)
+				end
+			end)
 
-            self.Maid.DockDraggingEnd = UserInputService.InputEnded:Connect(function (Input)
-                if (Input.UserInputType.Name == 'MouseButton1') or (Input.UserInputType.Name == 'Touch') then
-                    self.Maid.DockDragging = nil
-                    self.Maid.DockDraggingEnd = nil
-                    rbx.Active = true
-                end
-            end)
-        end;
-    }, {
-        Corners = new('UICorner', {
-            CornerRadius = UDim.new(0, 3);
-        });
-        Signature = new('ImageLabel', {
-            AnchorPoint = Vector2.new(0, 0.5);
-            BackgroundTransparency = 1;
-            Size = UDim2.new(1, 0, 0, 13);
-            Image = 'rbxassetid://2326685066';
-            Position = UDim2.new(0, 6, 0.5, 0);
-        }, {
-            AspectRatio = new('UIAspectRatioConstraint', {
-                AspectRatio = 2.385;
-            });
-        });
-        HelpIcon = new('ImageLabel', {
-            AnchorPoint = Vector2.new(1, 0.5);
-            BackgroundTransparency = 1;
-            Position = UDim2.new(1, 0, 0.5, 0);
-            Size = UDim2.new(0, 30, 0, 30);
-            Image = 'rbxassetid://141911973';
+			self.Maid.DockDraggingEnd = UserInputService.InputEnded:Connect(function (Input)
+				if (Input.UserInputType.Name == 'MouseButton1') or (Input.UserInputType.Name == 'Touch') then
+					self.Maid.DockDragging = nil
+					self.Maid.DockDraggingEnd = nil
+					rbx.Active = true
+				end
+			end)
+		end;
+	}, {
+		Corners = new('UICorner', {
+			CornerRadius = UDim.new(0, 3);
+		});
+		Signature = new('ImageLabel', {
+			AnchorPoint = Vector2.new(0, 0.5);
+			BackgroundTransparency = 1;
+			Size = UDim2.new(1, 0, 0, 13);
+			Image = 'rbxassetid://2326685066';
+			Position = UDim2.new(0, 6, 0.5, 0);
+		}, {
+			AspectRatio = new('UIAspectRatioConstraint', {
+				AspectRatio = 2.385;
+			});
+		});
+		HelpIcon = new('ImageLabel', {
+			AnchorPoint = Vector2.new(1, 0.5);
+			BackgroundTransparency = 1;
+			Position = UDim2.new(1, 0, 0.5, 0);
+			Size = UDim2.new(0, 30, 0, 30);
+			Image = 'rbxassetid://141911973';
 
-        });
-        ManualWindowPortal = (function()
-            local portalTarget = self.props.UIRoot
-                or (self.props.Core and self.props.Core.UI)
-            if portalTarget == nil then
-                local player = game:GetService("Players").LocalPlayer
-                if player then
-                    portalTarget = player:FindFirstChild("PlayerGui")
-                end
-            end
-            if portalTarget == nil then
-                return nil
-            end
-            return new(Roact.Portal, {
-                target = portalTarget;
-            }, {
-                ManualWindow = (self.state.IsManualOpen or nil) and new(ToolManualWindow, {
-                    Text = MANUAL_CONTENT;
-                    ThemeColor = Color3.fromRGB(255, 176, 0);
-                });
-            })
-        end)();
-    })
+		});
+	})
 end
 
 return AboutPane
