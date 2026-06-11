@@ -1,4 +1,4 @@
--- BT_TOOLS_REV=144
+-- BT_TOOLS_REV=145
 local Tool = script.Parent.Parent;
 local Core = require(Tool.Core);
 local Vendor = Tool:WaitForChild('Vendor')
