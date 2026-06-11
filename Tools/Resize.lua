@@ -1,4 +1,4 @@
--- BT_TOOLS_REV=152
+-- BT_TOOLS_REV=153
 Tool = script.Parent.Parent;
 Core = require(Tool.Core);
 SnapTracking = require(Tool.Core.Snapping);
