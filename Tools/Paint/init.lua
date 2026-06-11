@@ -56,9 +56,6 @@ local function btScheduleUI(fn, interval)
 end
 
 local function btSetGuiVisible(gui, visible)
-	if type(Core.BT_SetGuiVisible) == "function" then
-		return Core.BT_SetGuiVisible(gui, visible)
-	end
 	if gui == nil or typeof(gui) ~= "Instance" then
 		return
 	end

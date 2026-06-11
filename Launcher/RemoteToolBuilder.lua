@@ -13,7 +13,7 @@ local Config = req("Config")
 local RemoteLoader = req("RemoteLoader")
 
 local RemoteToolBuilder = {}
-local RTB_BUILD_ID = "145"
+local RTB_BUILD_ID = "146"
 
 function RemoteToolBuilder.getBuildId(): string
 	return RTB_BUILD_ID

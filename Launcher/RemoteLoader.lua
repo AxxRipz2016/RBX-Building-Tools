@@ -8,7 +8,7 @@ local RemoteLoader = if type(_G.BT_RemoteLoader) == "table" then _G.BT_RemoteLoa
 _G.BT_RemoteLoader = RemoteLoader
 
 -- Меняй при правках пайплайна Core/init (сброс кэша при hot-reload лаунчера)
-local SOURCE_CACHE_REV = 145
+local SOURCE_CACHE_REV = 146
 local sourceCache: { [string]: string } = {}
 local rawSourceCache: { [string]: string } = {}
 local moduleCache: { [string]: any } = {}
@@ -915,8 +915,8 @@ local function patchToolBtGuiHelper(path: string, source: string): string
 			inserted = source:gsub("(Core = require%([^\n]+%)\n)", "%1\n" .. BT_TOOL_GUI_HELPER .. "\n", 1)
 		end
 		source = inserted
+		source = source:gsub("Core%.BT_SetGuiVisible%(", "btSetGuiVisible(")
 	end
-	source = source:gsub("Core%.BT_SetGuiVisible%(", "btSetGuiVisible(")
 	return source
 end
 
@@ -2054,12 +2054,12 @@ local function getRawSource(path: string): string?
 end
 
 local TOOL_SOURCE_FINGERPRINTS: { [string]: string } = {
-	["Tools/Rotate.lua"] = "BT_ROTATE_REV=145",
-	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=145",
-	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=145",
-	["Tools/Anchor.lua"] = "BT_TOOLS_REV=145",
-	["Tools/Collision.lua"] = "BT_TOOLS_REV=145",
-	["Tools/NewPart.lua"] = "BT_TOOLS_REV=145",
+	["Tools/Rotate.lua"] = "BT_ROTATE_REV=146",
+	["Tools/Move/HandleDragging.lua"] = "BT_MOVE_REV=146",
+	["Tools/Move/FreeDragging.lua"] = "BT_MOVE_REV=146",
+	["Tools/Anchor.lua"] = "BT_TOOLS_REV=146",
+	["Tools/Collision.lua"] = "BT_TOOLS_REV=146",
+	["Tools/NewPart.lua"] = "BT_TOOLS_REV=146",
 }
 
 local function validateFetchedToolSource(path: string, body: string): (boolean, string?)
